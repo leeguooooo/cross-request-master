@@ -114,13 +114,28 @@ async function handleCrossOriginRequest(request) {
 
 // 监听来自内容脚本的消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // 检查消息发送者是否有效
+  if (!sender || !sender.tab) {
+    console.warn('Message received from invalid sender');
+    return false;
+  }
+
   if (request.action === 'crossOriginRequest') {
     handleCrossOriginRequest(request.data)
       .then(response => {
-        sendResponse({ success: true, data: response });
+        // 检查是否仍然可以发送响应
+        try {
+          sendResponse({ success: true, data: response });
+        } catch (e) {
+          console.warn('Failed to send response, port might be closed:', e);
+        }
       })
       .catch(error => {
-        sendResponse({ success: false, error: error.message });
+        try {
+          sendResponse({ success: false, error: error.message });
+        } catch (e) {
+          console.warn('Failed to send error response, port might be closed:', e);
+        }
       });
     
     // 返回 true 表示异步响应
@@ -129,16 +144,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   // 处理白名单管理
   if (request.action === 'getAllowedDomains') {
-    sendResponse({ domains: Array.from(allowedDomains) });
-    return true;
+    try {
+      sendResponse({ domains: Array.from(allowedDomains) });
+    } catch (e) {
+      console.warn('Failed to send domains, port might be closed:', e);
+    }
+    return false; // 同步响应
   }
   
   if (request.action === 'setAllowedDomains') {
     chrome.storage.local.set({ allowedDomains: request.domains }, () => {
-      sendResponse({ success: true });
+      try {
+        sendResponse({ success: true });
+      } catch (e) {
+        console.warn('Failed to send success response, port might be closed:', e);
+      }
     });
     return true;
   }
+  
+  return false;
 });
 
 // 处理扩展安装或更新

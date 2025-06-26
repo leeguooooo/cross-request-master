@@ -96,18 +96,43 @@
     // 发送请求到 background script
     sendRequest(requestData) {
       return new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({
-          action: 'crossOriginRequest',
-          data: requestData
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else if (response.success) {
-            resolve(response.data);
-          } else {
-            reject(new Error(response.error || 'Unknown error'));
-          }
-        });
+        // 检查扩展是否仍然有效
+        if (!chrome.runtime?.id) {
+          reject(new Error('Extension context invalidated'));
+          return;
+        }
+        
+        try {
+          chrome.runtime.sendMessage({
+            action: 'crossOriginRequest',
+            data: requestData
+          }, (response) => {
+            // 检查是否有错误
+            if (chrome.runtime.lastError) {
+              // 忽略 back/forward cache 错误
+              const errorMessage = chrome.runtime.lastError.message;
+              if (errorMessage.includes('back/forward cache') || 
+                  errorMessage.includes('message channel is closed')) {
+                console.warn('Page in bfcache, request cancelled');
+                reject(new Error('Request cancelled: page in cache'));
+              } else {
+                reject(new Error(errorMessage));
+              }
+              return;
+            }
+            
+            // 检查响应
+            if (!response) {
+              reject(new Error('No response received'));
+            } else if (response.success) {
+              resolve(response.data);
+            } else {
+              reject(new Error(response.error || 'Unknown error'));
+            }
+          });
+        } catch (e) {
+          reject(new Error('Failed to send message: ' + e.message));
+        }
       });
     },
     

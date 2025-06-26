@@ -38,9 +38,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // 加载域名列表
 function loadDomains() {
+  // 检查扩展是否有效
+  if (!chrome.runtime?.id) {
+    showStatus('扩展已失效，请重新加载', 'error');
+    return;
+  }
+  
   chrome.runtime.sendMessage({ action: 'getAllowedDomains' }, (response) => {
     if (chrome.runtime.lastError) {
-      showStatus('加载失败: ' + chrome.runtime.lastError.message, 'error');
+      const errorMessage = chrome.runtime.lastError.message;
+      // 忽略 bfcache 相关错误
+      if (!errorMessage.includes('back/forward cache') && 
+          !errorMessage.includes('message channel is closed')) {
+        showStatus('加载失败: ' + errorMessage, 'error');
+      }
+      return;
+    }
+
+    if (!response) {
+      showStatus('无响应，请重试', 'error');
       return;
     }
 
@@ -137,12 +153,23 @@ function handleDeleteDomain(e) {
 
 // 保存域名列表
 function saveDomains(domains) {
+  // 检查扩展是否有效
+  if (!chrome.runtime?.id) {
+    showStatus('扩展已失效，请重新加载', 'error');
+    return;
+  }
+  
   chrome.runtime.sendMessage({
     action: 'setAllowedDomains',
     domains: domains
   }, (response) => {
     if (chrome.runtime.lastError) {
-      showStatus('保存失败: ' + chrome.runtime.lastError.message, 'error');
+      const errorMessage = chrome.runtime.lastError.message;
+      // 忽略 bfcache 相关错误
+      if (!errorMessage.includes('back/forward cache') && 
+          !errorMessage.includes('message channel is closed')) {
+        showStatus('保存失败: ' + errorMessage, 'error');
+      }
       return;
     }
     
