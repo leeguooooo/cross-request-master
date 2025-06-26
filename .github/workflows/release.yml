@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,23 +25,23 @@ jobs:
           -x "*.zip"
     
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: ncipollo/release-action@v1
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        body_path: RELEASE_NOTES.md
+        artifacts: "cross-request-${{ github.ref_name }}.zip"
+        tag: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## 🐛 Bug 修复
+          - 修复了 Chrome back/forward cache 错误
+          - 添加了全面的错误处理机制
+          
+          ## 🎉 新功能  
+          - 新增油猴脚本版本支持
+          - 提供图形化的域名管理界面
+          
+          ## 📦 下载
+          - Chrome 扩展：下载下方的 ZIP 文件
+          - 油猴脚本：[点击安装](https://raw.githubusercontent.com/leeguooooo/cross-request-master/main/cross-request.user.js)
         draft: false
         prerelease: false
-    
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./cross-request-${{ github.ref_name }}.zip
-        asset_name: cross-request-${{ github.ref_name }}.zip
-        asset_content_type: application/zip
+        token: ${{ secrets.GITHUB_TOKEN }}
