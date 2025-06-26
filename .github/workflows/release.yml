@@ -1,0 +1,44 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Create Release ZIP
+      run: |
+        zip -r cross-request-${{ github.ref_name }}.zip . \
+          -x "*.git*" \
+          -x ".github/*" \
+          -x ".DS_Store" \
+          -x "CHROME_STORE_GUIDE.md" \
+          -x "RELEASE_NOTES.md" \
+          -x "*.zip"
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body_path: RELEASE_NOTES.md
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./cross-request-${{ github.ref_name }}.zip
+        asset_name: cross-request-${{ github.ref_name }}.zip
+        asset_content_type: application/zip
