@@ -1,11 +1,25 @@
 {
     "manifest_version": 3,
     "name": "cross-request",
-    "description": "YApi 跨域请求",
-    "version": "4.0",
+    "short_name": "cross-request",
+    "description": "YApi 跨域请求扩展，支持安全的域名白名单管理",
+    "version": "4.0.0",
+    "author": "leeguooooo",
+    "homepage_url": "https://github.com/leeguooooo/cross-request-master",
     "action": {
-        "default_icon": "icon.png",
+        "default_icon": {
+            "16": "icons/icon-16.png",
+            "32": "icons/icon-32.png",
+            "48": "icons/icon-48.png",
+            "128": "icons/icon-128.png"
+        },
         "default_popup": "popup.html"
+    },
+    "icons": {
+        "16": "icons/icon-16.png",
+        "32": "icons/icon-32.png",
+        "48": "icons/icon-48.png",
+        "128": "icons/icon-128.png"
     },
     "permissions": [ 
         "declarativeNetRequest",
