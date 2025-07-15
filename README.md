@@ -45,7 +45,7 @@ git clone git@github.com:leeguooooo/cross-request-master.git
 
 如果遇到跨域请求失败的问题，请按照以下步骤操作：
 
-![扩展设置截图](https://prodsuppart-s3.suppart.app/artworkCover/CleanShot_2025-07-15_at_15_36_13_2025-07-15_06-36-30-150Z.png)
+![扩展设置截图](./images/extension-popup.png)
 
 **重要提示**：如果遇到跨域问题，需要在插件弹出页面中勾选相关选项：
 
