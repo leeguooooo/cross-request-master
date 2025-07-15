@@ -11,6 +11,8 @@
 - ✅ 专为 YApi 接口测试优化
 - ✅ 已迁移至 Chrome Manifest V3
 
+![cURL 生成效果](./images/curl-generation-demo-new.png)
+
 ## 安装方法
 
 1. 下载此仓库
@@ -25,8 +27,6 @@
 2. 扩展会自动在页面右上角显示对应的 cURL 命令
 3. 点击"复制"按钮即可复制完整的 cURL 命令
 4. 如遇跨域问题，点击扩展图标进行域名白名单设置
-
-![cURL 生成效果](./images/curl-generation-demo-new.png)
 
 ![扩展设置截图](./images/extension-popup.png)
 
