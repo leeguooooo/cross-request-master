@@ -19,6 +19,7 @@
       console.log('[Cross-Request] 开始初始化扩展');
       this.observeDOM();
       this.injectScript();
+      this.listenToRequestHistory();
       console.log('[Cross-Request] 扩展初始化完成');
     },
     
@@ -206,6 +207,100 @@
       
       // 清理节点
       node.remove();
+    },
+    
+    // 监听请求历史记录事件
+    listenToRequestHistory() {
+      console.log('[Response] 开始监听请求历史记录事件');
+      
+      document.addEventListener('y-request-history', (event) => {
+        const historyItem = event.detail;
+        console.log('[Response] 收到请求历史记录:', historyItem);
+        
+        try {
+          // 获取当前的请求历史
+          chrome.storage.local.get(['requestHistory'], (result) => {
+            if (chrome.runtime.lastError) {
+              console.error('[Response] 获取请求历史失败:', chrome.runtime.lastError);
+              return;
+            }
+            
+            const history = result.requestHistory || [];
+            
+            // 添加到历史记录开头（最新的在前面）
+            history.unshift(historyItem);
+            
+            // 只保留最近的 50 条记录
+            if (history.length > 50) {
+              history.splice(50);
+            }
+            
+            // 保存到存储
+            chrome.storage.local.set({ requestHistory: history }, () => {
+              if (chrome.runtime.lastError) {
+                console.error('[Response] 保存请求历史失败:', chrome.runtime.lastError);
+              } else {
+                console.log('[Response] 请求已保存到历史记录:', historyItem);
+              }
+            });
+          });
+        } catch (error) {
+          console.error('[Response] 处理请求历史时出错:', error);
+        }
+      });
+      
+      // 定期同步 localStorage 到 Chrome 存储
+      setInterval(() => {
+        try {
+          const localHistory = JSON.parse(localStorage.getItem('crossRequestHistory') || '[]');
+          if (localHistory.length > 0) {
+            console.log('[Response] 同步 localStorage 到 Chrome 存储:', localHistory.length, '条记录');
+            
+            chrome.storage.local.get(['requestHistory'], (result) => {
+              if (chrome.runtime.lastError) {
+                console.error('[Response] 获取现有历史失败:', chrome.runtime.lastError);
+                return;
+              }
+              
+              const chromeHistory = result.requestHistory || [];
+              
+              // 合并历史记录，去重
+              const allHistory = [...chromeHistory, ...localHistory];
+              const uniqueHistory = [];
+              const seen = new Set();
+              
+              allHistory.forEach(item => {
+                const key = `${item.url}_${item.method}_${item.timestamp}`;
+                if (!seen.has(key)) {
+                  seen.add(key);
+                  uniqueHistory.push(item);
+                }
+              });
+              
+              // 按时间戳排序（最新的在前面）
+              uniqueHistory.sort((a, b) => b.timestamp - a.timestamp);
+              
+              // 只保留最近的 50 条记录
+              if (uniqueHistory.length > 50) {
+                uniqueHistory.splice(50);
+              }
+              
+              // 保存到 Chrome 存储
+              chrome.storage.local.set({ requestHistory: uniqueHistory }, () => {
+                if (chrome.runtime.lastError) {
+                  console.error('[Response] 同步保存失败:', chrome.runtime.lastError);
+                } else {
+                  console.log('[Response] 历史记录已同步:', uniqueHistory.length, '条');
+                  // 清空 localStorage
+                  localStorage.removeItem('crossRequestHistory');
+                }
+              });
+            });
+          }
+        } catch (error) {
+          console.error('[Response] 同步 localStorage 时出错:', error);
+        }
+      }, 5000); // 每 5 秒同步一次
     }
   };
   
@@ -217,7 +312,67 @@
   });
   
   // 启动
-  console.log('[Cross-Request] Content script 已加载');
+  console.log('[Cross-Request] Content script 已加载 - 版本 2025-01-15-v2');
+  console.log('[Cross-Request] 当前页面:', window.location.href);
+  
+  // 立即开始监听请求历史记录事件，不等待 DOM 完全加载
+  console.log('[Cross-Request] 准备调用 listenToRequestHistory');
+  CrossRequest.listenToRequestHistory();
+  console.log('[Cross-Request] listenToRequestHistory 调用完成');
+  
+  // 定期同步 localStorage 到 Chrome 存储
+  setInterval(() => {
+    try {
+      const localHistory = JSON.parse(localStorage.getItem('crossRequestHistory') || '[]');
+      if (localHistory.length > 0) {
+        console.log('[Cross-Request] 同步 localStorage 到 Chrome 存储:', localHistory.length, '条记录');
+        
+        chrome.storage.local.get(['requestHistory'], (result) => {
+          if (chrome.runtime.lastError) {
+            console.error('[Cross-Request] 获取现有历史失败:', chrome.runtime.lastError);
+            return;
+          }
+          
+          const chromeHistory = result.requestHistory || [];
+          
+          // 合并历史记录，去重
+          const allHistory = [...chromeHistory, ...localHistory];
+          const uniqueHistory = [];
+          const seen = new Set();
+          
+          allHistory.forEach(item => {
+            const key = `${item.url}_${item.method}_${item.timestamp}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              uniqueHistory.push(item);
+            }
+          });
+          
+          // 按时间戳排序（最新的在前面）
+          uniqueHistory.sort((a, b) => b.timestamp - a.timestamp);
+          
+          // 只保留最近的 50 条记录
+          if (uniqueHistory.length > 50) {
+            uniqueHistory.splice(50);
+          }
+          
+          // 保存到 Chrome 存储
+          chrome.storage.local.set({ requestHistory: uniqueHistory }, () => {
+            if (chrome.runtime.lastError) {
+              console.error('[Cross-Request] 同步保存失败:', chrome.runtime.lastError);
+            } else {
+              console.log('[Cross-Request] 历史记录已同步:', uniqueHistory.length, '条');
+              // 清空 localStorage
+              localStorage.removeItem('crossRequestHistory');
+            }
+          });
+        });
+      }
+    } catch (error) {
+      console.error('[Cross-Request] 同步 localStorage 时出错:', error);
+    }
+  }, 3000); // 每 3 秒同步一次
+  
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       console.log('[Cross-Request] DOM 加载完成，开始初始化');

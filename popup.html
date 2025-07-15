@@ -216,6 +216,184 @@
       color: #721c24;
       display: block;
     }
+
+    .request-history {
+      margin-bottom: 16px;
+    }
+
+    .history-list {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+    }
+
+    .history-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background-color 0.2s;
+    }
+
+    .history-item:hover {
+      background-color: #f8f9fa;
+    }
+
+    .history-item:last-child {
+      border-bottom: none;
+    }
+
+    .history-info {
+      flex: 1;
+    }
+
+    .history-url {
+      font-family: monospace;
+      font-size: 13px;
+      color: #333;
+      margin-bottom: 4px;
+      word-break: break-all;
+    }
+
+    .history-meta {
+      font-size: 12px;
+      color: #6c757d;
+    }
+
+    .history-method {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-right: 8px;
+    }
+
+    .history-method.GET {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .history-method.POST {
+      background: #cce5ff;
+      color: #0056b3;
+    }
+
+    .history-method.PUT {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .history-method.DELETE {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .history-actions {
+      text-align: center;
+    }
+
+    .clear-btn {
+      padding: 6px 12px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
+
+    .clear-btn:hover {
+      background: #c82333;
+    }
+
+    .generate-curl-btn {
+      padding: 4px 8px;
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
+
+    .generate-curl-btn:hover {
+      background: #218838;
+    }
+
+    .curl-output {
+      margin-top: 16px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 16px;
+    }
+
+    .curl-output label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #555;
+      font-size: 14px;
+    }
+
+    .curl-output pre {
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 12px;
+      margin: 0 0 12px 0;
+      font-family: monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .curl-actions {
+      text-align: right;
+    }
+
+    .copy-btn {
+      padding: 6px 12px;
+      background: #6c757d;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: #5a6268;
+    }
+
+    .test-btn {
+      padding: 6px 12px;
+      background: #17a2b8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background-color 0.2s;
+      margin-left: 8px;
+    }
+
+    .test-btn:hover {
+      background: #138496;
+    }
   </style>
 </head>
 
@@ -237,6 +415,31 @@
         
         <div class="warning" id="securityWarning" style="display: none;">
           ⚠️ 警告：允许所有域名会带来安全风险。建议只添加信任的域名。
+        </div>
+      </div>
+
+      <div class="section">
+        <h3 class="section-title">请求历史 & cURL 生成</h3>
+        <div class="request-history">
+          <div class="debug-info" id="debugInfo" style="background: #f0f0f0; padding: 8px; margin-bottom: 8px; font-size: 12px; border-radius: 4px; display: none;">
+            <strong>调试信息:</strong><br>
+            <span id="debugText">加载中...</span>
+          </div>
+          <div class="history-list" id="historyList">
+            <div class="empty-state">暂无请求记录</div>
+          </div>
+          
+          <div class="history-actions">
+            <button class="clear-btn" id="clearHistory">清空历史</button>
+          </div>
+        </div>
+        
+        <div class="curl-output" id="curlOutput" style="display: none;">
+          <label>生成的 cURL 命令</label>
+          <pre id="curlCommand"></pre>
+          <div class="curl-actions">
+            <button class="copy-btn" id="copyCurl">复制</button>
+          </div>
         </div>
       </div>
 
