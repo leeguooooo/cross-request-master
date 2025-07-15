@@ -2,7 +2,7 @@
 
 一个用于绕过 CORS 限制的 Chrome 扩展，主要用于 YApi 接口管理平台。已升级至 Manifest V3。
 
-🎉 **新增**：现已支持油猴脚本版本！
+🎉 **专业版Chrome扩展**：企业级跨域解决方案！
 
 ## 功能特性
 
@@ -11,28 +11,11 @@
 - ✅ 支持 jQuery Ajax 和原生 Fetch API
 - ✅ 已迁移至 Chrome Manifest V3
 - ✅ 更安全的权限管理
-- ✅ **新增油猴脚本版本**，支持更多浏览器
+- ✅ 专业级Chrome扩展解决方案
 
 ## 安装方法
 
-### 方式一：油猴脚本版本（推荐）
-
-1. 安装油猴扩展
-   - Chrome: [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
-   - Firefox: [Greasemonkey](https://addons.mozilla.org/firefox/addon/greasemonkey/)
-   - Edge: [Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
-
-2. 安装脚本
-   - [点击这里安装脚本](https://raw.githubusercontent.com/leeguooooo/cross-request-master/main/cross-request.user.js)
-   - 或访问 [Greasy Fork](https://greasyfork.org/) 搜索 "Cross Request"
-
-3. 配置域名
-   - 点击油猴图标 → Cross Request → "管理跨域域名"
-   - 添加需要允许跨域的域名
-
-### 方式二：Chrome 扩展版本
-
-适用于需要更强大功能或企业环境的用户。
+### Chrome 扩展版本
 
 1. 克隆或下载此仓库
 ```bash
@@ -93,6 +76,21 @@ crossRequest.fetch({
 3. 可以添加特定域名或使用通配符（如 `*.example.com`）
 4. 不建议使用"允许所有域名"选项，存在安全风险
 
+### 跨域问题解决
+
+如果遇到跨域请求失败的问题，请按照以下步骤操作：
+
+![扩展设置截图](https://share.cleanshot.com/s9fxWkTm)
+
+**重要提示**：如果遇到跨域问题，需要在插件弹出页面中勾选相关选项：
+
+1. 点击浏览器工具栏中的 Cross Request 扩展图标
+2. 在弹出的管理页面中，勾选"允许所有域名"选项
+3. 或者添加特定的域名到白名单中
+4. 刷新需要跨域请求的页面
+
+⚠️ **注意**：勾选"允许所有域名"存在安全风险，建议仅在开发环境使用。
+
 ## 安全注意事项
 
 ⚠️ **重要安全提示**：
@@ -102,16 +100,12 @@ crossRequest.fetch({
 3. **定期审查权限**：定期检查并清理不需要的域名权限
 4. **不要在敏感网站使用**：避免在银行、支付等敏感网站启用此扩展
 
-## 版本对比
+## 技术优势
 
-| 特性 | Chrome 扩展版 | 油猴脚本版 |
-|------|--------------|------------|
-| 安装方式 | 开发者模式加载 | 一键安装 |
-| 浏览器支持 | 仅 Chrome/Edge | Chrome/Firefox/Edge/Safari |
-| 自动更新 | 需手动更新 | 自动更新 |
-| 性能 | 更好 | 良好 |
-| 配置界面 | 独立弹窗 | 集成在页面 |
-| 适用场景 | 企业/专业开发 | 个人开发者 |
+- **企业级稳定性**：基于Chrome Manifest V3，更加稳定可靠
+- **高性能处理**：原生扩展架构，性能优异
+- **专业配置**：独立的管理界面，功能全面
+- **安全可控**：严格的域名白名单管理
 
 ## 技术细节
 
@@ -126,16 +120,13 @@ crossRequest.fetch({
 
 ### 工作原理
 
-**Chrome 扩展版**：
+**Chrome 扩展工作原理**：
 1. 内容脚本注入到页面中，拦截跨域请求
 2. 将请求转发到扩展的 Service Worker
 3. Service Worker 使用 fetch API 发起实际请求（不受 CORS 限制）
 4. 将响应返回给页面
 
-**油猴脚本版**：
-1. 利用 GM_xmlhttpRequest API 直接发起跨域请求
-2. 不受浏览器同源策略限制
-3. 直接返回结果给页面
+该扩展通过Service Worker架构实现安全可靠的跨域请求处理。
 
 ## 开发
 
@@ -149,7 +140,6 @@ cross-request-master/
 ├── index.js               # 注入到页面的脚本
 ├── popup.html             # 扩展弹出窗口
 ├── popup.js               # 弹出窗口脚本
-├── cross-request.user.js  # 油猴脚本版本
 ├── icon.png               # 扩展图标
 └── README.md              # 本文件
 ```
@@ -170,4 +160,4 @@ MIT License
 - 重构代码以提高安全性
 - 移除不安全的请求头修改功能
 - 使用现代 JavaScript 语法重写
-- 🎉 新增油猴脚本版本支持
+- 🎉 专注Chrome扩展专业版本
