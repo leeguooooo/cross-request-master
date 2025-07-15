@@ -2,16 +2,14 @@
 
 一个用于绕过 CORS 限制的 Chrome 扩展，主要用于 YApi 接口管理平台。已升级至 Manifest V3。
 
-🎉 **专业版Chrome扩展**：企业级跨域解决方案！
+🔧 **专为YApi定制的Chrome扩展**
 
 ## 功能特性
 
 - ✅ 支持跨域请求，绕过浏览器 CORS 限制
 - ✅ 域名白名单管理，提高安全性
-- ✅ 支持 jQuery Ajax 和原生 Fetch API
 - ✅ 已迁移至 Chrome Manifest V3
-- ✅ 更安全的权限管理
-- ✅ 专业级Chrome扩展解决方案
+- ✅ 专为YApi接口测试优化
 
 ## 安装方法
 
@@ -34,40 +32,7 @@ git clone git@github.com:leeguooooo/cross-request-master.git
 
 ## 使用方法
 
-### 基本使用
-
-扩展会自动注入跨域请求功能到页面中。你可以通过以下方式使用：
-
-```javascript
-// 使用 crossRequest.ajax (jQuery 风格)
-crossRequest.ajax({
-  url: 'https://api.example.com/data',
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer token'
-  },
-  data: { key: 'value' },
-  success: function(data) {
-    console.log('Success:', data);
-  },
-  error: function(err) {
-    console.error('Error:', err);
-  }
-});
-
-// 使用 crossRequest.fetch (Promise 风格)
-crossRequest.fetch({
-  url: 'https://api.example.com/data',
-  method: 'GET',
-  headers: {
-    'Authorization': 'Bearer token'
-  }
-}).then(response => {
-  console.log('Response:', response);
-}).catch(error => {
-  console.error('Error:', error);
-});
-```
+扩展安装后会自动为页面提供跨域请求功能，主要用于YApi等接口管理平台。
 
 ### 域名白名单管理
 
@@ -100,12 +65,6 @@ crossRequest.fetch({
 3. **定期审查权限**：定期检查并清理不需要的域名权限
 4. **不要在敏感网站使用**：避免在银行、支付等敏感网站启用此扩展
 
-## 技术优势
-
-- **企业级稳定性**：基于Chrome Manifest V3，更加稳定可靠
-- **高性能处理**：原生扩展架构，性能优异
-- **专业配置**：独立的管理界面，功能全面
-- **安全可控**：严格的域名白名单管理
 
 ## 技术细节
 
@@ -154,10 +113,16 @@ MIT License
 
 ## 更新日志
 
-### v4.0.0 (2025-06-26)
+### v4.0.2 (2025-07-15)
+- 📖 更新README为Chrome扩展专版
+- 📋 添加详细的跨域问题解决说明
+- 🖼️ 提供插件设置界面截图指导
+- 🛡️ 增强安全提醒和最佳实践说明
+- 🧹 简化文档结构，提高易读性
+
+### v4.0.1 (2025-06-26)
 - 迁移到 Manifest V3
 - 添加域名白名单管理功能
 - 重构代码以提高安全性
 - 移除不安全的请求头修改功能
 - 使用现代 JavaScript 语法重写
-- 🎉 专注Chrome扩展专业版本
