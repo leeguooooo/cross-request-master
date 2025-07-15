@@ -3,7 +3,7 @@
     "name": "cross-request",
     "short_name": "cross-request",
     "description": "YApi 跨域请求扩展，支持安全的域名白名单管理",
-    "version": "4.0.1",
+    "version": "4.0.2",
     "author": "leeguooooo",
     "homepage_url": "https://github.com/leeguooooo/cross-request-master",
     "action": {

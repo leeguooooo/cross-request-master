@@ -16,8 +16,10 @@
     
     // 初始化
     init() {
+      console.log('[Cross-Request] 开始初始化扩展');
       this.observeDOM();
       this.injectScript();
+      console.log('[Cross-Request] 扩展初始化完成');
     },
     
     // 注入脚本到页面
@@ -65,6 +67,13 @@
         const requestData = this.parseRequestData(node);
         if (!requestData) return;
         
+        console.log('[Response] 处理请求节点:', {
+          id: requestData.id,
+          url: requestData.url,
+          method: requestData.method,
+          hasBody: !!requestData.body
+        });
+        
         // 标记为处理中
         node.setAttribute('data-status', 'processing');
         
@@ -75,7 +84,10 @@
         this.handleResponse(node, response, requestData);
         
       } catch (error) {
-        console.error('Cross-request error:', error);
+        console.error('[Response] 处理请求出错:', {
+          error: error.message,
+          stack: error.stack
+        });
         this.handleError(node, error);
       }
     },
@@ -123,10 +135,18 @@
             
             // 检查响应
             if (!response) {
+              console.error('[Response] 未收到响应');
               reject(new Error('No response received'));
             } else if (response.success) {
+              console.log('[Response] 收到成功响应:', {
+                hasData: !!response.data,
+                dataType: typeof response.data,
+                status: response.data?.status,
+                bodyLength: response.data?.body?.length
+              });
               resolve(response.data);
             } else {
+              console.error('[Response] 收到错误响应:', response.error);
               reject(new Error(response.error || 'Unknown error'));
             }
           });
@@ -138,6 +158,15 @@
     
     // 处理响应
     handleResponse(node, response, requestData) {
+      console.log('[Response] 准备发送响应事件:', {
+        requestId: requestData.id,
+        responseStatus: response.status,
+        hasBody: !!response.body,
+        bodyType: typeof response.body,
+        bodyLength: response.body?.length,
+        bodyPreview: response.body?.substring(0, 100)
+      });
+      
       // 构建响应事件
       const responseEvent = new CustomEvent('y-request-response', {
         detail: {
@@ -146,13 +175,17 @@
             status: response.status,
             statusText: response.statusText,
             headers: response.headers,
-            body: response.body
+            body: response.body,
+            ok: response.ok,
+            // 添加 YApi 可能需要的字段
+            url: requestData.url
           }
         }
       });
       
       // 触发事件
       document.dispatchEvent(responseEvent);
+      console.log('[Response] 响应事件已触发');
       
       // 清理节点
       node.remove();
@@ -176,10 +209,22 @@
     }
   };
   
+  // 监听来自 background 的调试消息
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'debug_log') {
+      console.log(`[${message.source}] ${message.message}:`, message.data);
+    }
+  });
+  
   // 启动
+  console.log('[Cross-Request] Content script 已加载');
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => CrossRequest.init());
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('[Cross-Request] DOM 加载完成，开始初始化');
+      CrossRequest.init();
+    });
   } else {
+    console.log('[Cross-Request] DOM 已就绪，立即初始化');
     CrossRequest.init();
   }
 })();

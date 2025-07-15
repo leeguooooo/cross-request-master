@@ -1,4 +1,4 @@
-# Release v4.0.1
+# Release v4.0.2
 
 ## 🐛 Bug 修复
 
@@ -15,7 +15,7 @@
 ### 📦 安装
 
 **Chrome 扩展版本**：
-1. 下载 `cross-request-v4.0.1.zip`
+1. 下载 `cross-request-v4.0.2.zip`
 2. 解压到本地文件夹
 3. Chrome 扩展管理页面加载解压后的文件夹
 
@@ -29,4 +29,4 @@
 
 ---
 
-**完整更新日志**: https://github.com/leeguooooo/cross-request-master/compare/v4.0.0...v4.0.1
+**完整更新日志**: https://github.com/leeguooooo/cross-request-master/compare/v4.0.0...v4.0.2

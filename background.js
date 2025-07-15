@@ -83,6 +83,27 @@ async function handleCrossOriginRequest(request) {
   fetchOptions.signal = controller.signal;
   
   try {
+    console.log('[Background] 发送请求:', {
+      url,
+      method,
+      headers: Object.fromEntries(fetchOptions.headers.entries()),
+      hasBody: !!fetchOptions.body
+    });
+    
+    // 将日志也发送到所有标签页，方便在网页控制台查看
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'debug_log',
+            source: 'Background',
+            message: '发送请求',
+            data: { url, method, hasBody: !!fetchOptions.body }
+          }).catch(() => {}); // 忽略错误
+        }
+      });
+    });
+    
     const response = await fetch(url, fetchOptions);
     clearTimeout(timeoutId);
     
@@ -94,6 +115,54 @@ async function handleCrossOriginRequest(request) {
     
     // 获取响应体
     const responseBody = await response.text();
+    
+    // 添加调试日志
+    console.log('[Background] 响应详情:', {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      contentType: responseHeaders['content-type'] || 'unknown',
+      bodyLength: responseBody.length,
+      bodyPreview: responseBody.substring(0, 200)
+    });
+    
+    // 同样发送到网页控制台
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'debug_log',
+            source: 'Background',
+            message: '响应详情',
+            data: {
+              url,
+              status: response.status,
+              contentType: responseHeaders['content-type'] || 'unknown',
+              bodyLength: responseBody.length,
+              bodyPreview: responseBody.substring(0, 200)
+            }
+          }).catch(() => {});
+        }
+      });
+    });
+    
+    // 尝试解析 JSON 以验证格式
+    let parsedBody = null;
+    let isJson = false;
+    if (responseHeaders['content-type']?.includes('application/json')) {
+      try {
+        parsedBody = JSON.parse(responseBody);
+        isJson = true;
+        console.log('[Background] JSON 解析成功:', {
+          dataType: typeof parsedBody,
+          isArray: Array.isArray(parsedBody),
+          keys: parsedBody && typeof parsedBody === 'object' ? Object.keys(parsedBody).slice(0, 10) : []
+        });
+      } catch (e) {
+        console.error('[Background] JSON 解析失败:', e.message);
+        console.log('[Background] 原始响应体:', responseBody);
+      }
+    }
     
     return {
       status: response.status,
@@ -114,9 +183,16 @@ async function handleCrossOriginRequest(request) {
 
 // 监听来自内容脚本的消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  // 检查消息发送者是否有效
-  if (!sender || !sender.tab) {
-    console.warn('Message received from invalid sender');
+  console.log('[Background] 收到消息:', {
+    action: request.action,
+    fromTab: !!sender?.tab,
+    fromPopup: !sender?.tab && !!sender,
+    sender: sender
+  });
+  
+  // 对于跨域请求，需要检查发送者是否来自标签页
+  if (request.action === 'crossOriginRequest' && (!sender || !sender.tab)) {
+    console.warn('Cross-origin request from invalid sender');
     return false;
   }
 
@@ -144,23 +220,53 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   // 处理白名单管理
   if (request.action === 'getAllowedDomains') {
+    console.log('[Background] 处理 getAllowedDomains 请求');
+    const domainsArray = Array.from(allowedDomains);
+    console.log('[Background] 当前域名列表:', domainsArray);
+    
     try {
-      sendResponse({ domains: Array.from(allowedDomains) });
+      sendResponse({ domains: domainsArray });
+      console.log('[Background] 域名列表已发送');
     } catch (e) {
-      console.warn('Failed to send domains, port might be closed:', e);
+      console.warn('[Background] 发送域名列表失败:', e);
     }
     return false; // 同步响应
   }
   
   if (request.action === 'setAllowedDomains') {
+    console.log('[Background] 处理 setAllowedDomains 请求:', request.domains);
+    
     chrome.storage.local.set({ allowedDomains: request.domains }, () => {
+      if (chrome.runtime.lastError) {
+        console.error('[Background] 保存域名失败:', chrome.runtime.lastError);
+        try {
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } catch (e) {
+          console.warn('[Background] 发送错误响应失败:', e);
+        }
+        return;
+      }
+      
+      console.log('[Background] 域名保存成功');
       try {
         sendResponse({ success: true });
       } catch (e) {
-        console.warn('Failed to send success response, port might be closed:', e);
+        console.warn('[Background] 发送成功响应失败:', e);
       }
     });
     return true;
+  }
+  
+  // 处理重新加载域名列表的请求
+  if (request.action === 'reloadAllowedDomains') {
+    console.log('[Background] 重新加载域名列表');
+    chrome.storage.local.get(['allowedDomains'], (result) => {
+      if (result.allowedDomains) {
+        allowedDomains = new Set(result.allowedDomains);
+        console.log('[Background] 域名列表已更新:', Array.from(allowedDomains));
+      }
+    });
+    return false;
   }
   
   return false;
@@ -184,6 +290,27 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 // Service Worker 保活（Manifest V3 需要）
-const keepAlive = () => setInterval(chrome.runtime.getPlatformInfo, 20e3);
+const keepAlive = () => {
+  const interval = setInterval(() => {
+    chrome.runtime.getPlatformInfo(() => {
+      if (chrome.runtime.lastError) {
+        clearInterval(interval);
+      }
+    });
+  }, 20e3);
+  return interval;
+};
+
 chrome.runtime.onStartup.addListener(keepAlive);
+chrome.runtime.onInstalled.addListener(keepAlive);
+
+// 立即启动保活
 keepAlive();
+
+// 添加更强的保活机制
+chrome.runtime.onMessage.addListener(() => {
+  // 每次收到消息都重新保活
+  keepAlive();
+});
+
+console.log('[Background] Service Worker 已启动');

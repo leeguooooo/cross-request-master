@@ -38,29 +38,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // 加载域名列表
 function loadDomains() {
-  // 检查扩展是否有效
-  if (!chrome.runtime?.id) {
-    showStatus('扩展已失效，请重新加载', 'error');
-    return;
-  }
+  console.log('[Popup] 开始加载域名列表');
   
-  chrome.runtime.sendMessage({ action: 'getAllowedDomains' }, (response) => {
+  // 直接从存储读取，避免 Service Worker 消息传递问题
+  chrome.storage.local.get(['allowedDomains'], (result) => {
+    console.log('[Popup] 存储读取结果:', result);
+    
     if (chrome.runtime.lastError) {
-      const errorMessage = chrome.runtime.lastError.message;
-      // 忽略 bfcache 相关错误
-      if (!errorMessage.includes('back/forward cache') && 
-          !errorMessage.includes('message channel is closed')) {
-        showStatus('加载失败: ' + errorMessage, 'error');
-      }
+      console.error('[Popup] 存储读取错误:', chrome.runtime.lastError);
+      showStatus('加载失败: ' + chrome.runtime.lastError.message, 'error');
+      elements.domainList.innerHTML = '<div class="empty-state">加载失败，请重试</div>';
       return;
     }
 
-    if (!response) {
-      showStatus('无响应，请重试', 'error');
-      return;
-    }
-
-    currentDomains = response.domains || [];
+    console.log('[Popup] 解析域名列表:', result.allowedDomains);
+    currentDomains = result.allowedDomains || ['*']; // 默认允许所有域名
     renderDomains();
     
     // 更新允许所有域名的复选框状态
@@ -70,6 +62,8 @@ function loadDomains() {
     
     // 如果允许所有域名，禁用添加功能
     updateAddControls(!hasWildcard);
+    
+    console.log('[Popup] 域名列表加载完成');
   });
 }
 
@@ -153,28 +147,27 @@ function handleDeleteDomain(e) {
 
 // 保存域名列表
 function saveDomains(domains) {
-  // 检查扩展是否有效
-  if (!chrome.runtime?.id) {
-    showStatus('扩展已失效，请重新加载', 'error');
-    return;
-  }
+  console.log('[Popup] 保存域名列表:', domains);
   
-  chrome.runtime.sendMessage({
-    action: 'setAllowedDomains',
-    domains: domains
-  }, (response) => {
+  // 直接保存到存储，避免 Service Worker 消息传递问题
+  chrome.storage.local.set({ allowedDomains: domains }, () => {
     if (chrome.runtime.lastError) {
-      const errorMessage = chrome.runtime.lastError.message;
-      // 忽略 bfcache 相关错误
-      if (!errorMessage.includes('back/forward cache') && 
-          !errorMessage.includes('message channel is closed')) {
-        showStatus('保存失败: ' + errorMessage, 'error');
-      }
+      console.error('[Popup] 保存失败:', chrome.runtime.lastError);
+      showStatus('保存失败: ' + chrome.runtime.lastError.message, 'error');
       return;
     }
     
+    console.log('[Popup] 保存成功');
     currentDomains = domains;
     renderDomains();
+    
+    // 通知 background script 更新内存中的域名列表
+    chrome.runtime.sendMessage({
+      action: 'reloadAllowedDomains'
+    }).catch(() => {
+      // 忽略通知失败，因为域名已经保存到存储了
+      console.log('[Popup] 通知 background script 失败，但域名已保存');
+    });
   });
 }
 

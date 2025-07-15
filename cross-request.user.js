@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cross Request - 跨域请求工具
 // @namespace    https://github.com/leeguooooo/cross-request-master
-// @version      4.0.1
+// @version      4.0.2
 // @description  支持跨域请求的油猴脚本，兼容 jQuery Ajax 和 Fetch API
 // @author       leeguooooo
 // @match        *://*/*
