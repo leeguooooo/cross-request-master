@@ -47,7 +47,7 @@ git clone git@github.com:leeguooooo/cross-request-master.git
 3. 点击"复制"按钮即可复制完整的 cURL 命令
 4. 分享给其他开发者，他们可以直接在终端中执行
 
-![cURL 生成效果](./images/curl-generation-demo.png)
+![cURL 生成效果](./images/curl-generation-demo-new.png)
 
 ### 🔧 域名白名单管理
 
