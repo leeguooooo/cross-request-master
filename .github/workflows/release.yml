@@ -76,7 +76,8 @@ jobs:
           # 如果找不到对应版本，使用默认内容
           if [ -z "$RELEASE_NOTES" ] || [ "${RELEASE_NOTES// /}" = "" ]; then
             echo "未找到版本 $VERSION 的更新日志，使用默认内容"
-            RELEASE_NOTES="### ${{ github.ref_name }}
+            RELEASE_NOTES=$(cat << EOF
+### ${{ github.ref_name }}
 
 此版本的更新内容请查看 [提交历史](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }})。
 
@@ -91,7 +92,9 @@ jobs:
 - 跨域请求支持，绕过 CORS 限制
 - 自动生成 cURL 命令
 - 页面内实时显示结果
-- 专为 YApi 接口测试优化"
+- 专为 YApi 接口测试优化
+EOF
+)
           fi
           
           echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
