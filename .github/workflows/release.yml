@@ -24,24 +24,93 @@ jobs:
           -x "RELEASE_NOTES.md" \
           -x "*.zip"
     
+    - name: Extract release notes
+      id: extract_notes
+      run: |
+        # 尝试从 git tag annotation 获取发布说明
+        TAG_MESSAGE=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
+        
+        # 如果 tag 有 annotation，使用它
+        if [ ! -z "$TAG_MESSAGE" ]; then
+          echo "使用 git tag annotation 作为发布说明"
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          # 否则从 README.md 提取对应版本的更新日志
+          echo "从 README.md 提取更新日志"
+          VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
+          
+          # 提取版本对应的更新内容
+          RELEASE_NOTES=$(awk -v version="$VERSION" '
+            BEGIN { found=0; content=""; in_version=0 }
+            /^### v/ { 
+              if (in_version && found) exit;
+              if ($0 ~ "v" version "[ (]") {
+                found=1;
+                in_version=1;
+                # 包含版本标题行
+                content = $0 "\n";
+                next;
+              } else if (in_version && found) {
+                exit;
+              }
+            }
+            found && in_version && !/^### v/ { 
+              if (NF > 0 || $0 ~ /^$/) {
+                content = content $0 "\n"; 
+              }
+            }
+            END { 
+              # 清理末尾多余的换行符
+              gsub(/\n+$/, "", content);
+              print content;
+            }
+          ' README.md)
+          
+          echo "提取到的更新日志内容："
+          echo "---"
+          echo "$RELEASE_NOTES"
+          echo "---"
+          
+          # 如果找不到对应版本，使用默认内容
+          if [ -z "$RELEASE_NOTES" ] || [ "${RELEASE_NOTES// /}" = "" ]; then
+            echo "未找到版本 $VERSION 的更新日志，使用默认内容"
+            RELEASE_NOTES="### ${{ github.ref_name }}
+
+此版本的更新内容请查看 [提交历史](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }})。
+
+#### 📦 安装方法
+1. 下载下方的 \`cross-request-${{ github.ref_name }}.zip\` 文件
+2. 解压到本地文件夹
+3. 打开 Chrome 浏览器，进入 \`chrome://extensions/\`
+4. 开启"开发者模式"（右上角开关）
+5. 点击"加载已解压的扩展程序"，选择解压后的文件夹
+
+#### 🔧 主要功能
+- 跨域请求支持，绕过 CORS 限制
+- 自动生成 cURL 命令
+- 页面内实时显示结果
+- 专为 YApi 接口测试优化"
+          fi
+          
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "最终发布说明："
+        echo "==============="
+        echo "$RELEASE_NOTES"
+        echo "==============="
+    
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
         artifacts: "cross-request-${{ github.ref_name }}.zip"
         tag: ${{ github.ref_name }}
-        name: Release ${{ github.ref_name }}
-        body: |
-          ## 🐛 Bug 修复
-          - 修复了 Chrome back/forward cache 错误
-          - 添加了全面的错误处理机制
-          
-          ## 🎉 新功能  
-          - 新增油猴脚本版本支持
-          - 提供图形化的域名管理界面
-          
-          ## 📦 下载
-          - Chrome 扩展：下载下方的 ZIP 文件
-          - 油猴脚本：[点击安装](https://raw.githubusercontent.com/leeguooooo/cross-request-master/main/cross-request.user.js)
+        name: "${{ github.ref_name }} - Cross Request"
+        body: ${{ steps.extract_notes.outputs.RELEASE_NOTES }}
         draft: false
         prerelease: false
         token: ${{ secrets.GITHUB_TOKEN }}

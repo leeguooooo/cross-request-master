@@ -2,8 +2,8 @@
     "manifest_version": 3,
     "name": "cross-request",
     "short_name": "cross-request",
-    "description": "YApi 跨域请求扩展，支持域名白名单管理和自动生成 cURL 命令",
-    "version": "4.1.0",
+    "description": "YApi 跨域请求扩展",
+    "version": "4.3.1",
     "author": "leeguooooo",
     "homepage_url": "https://github.com/leeguooooo/cross-request-master",
     "action": {

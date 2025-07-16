@@ -288,18 +288,27 @@
                     if (options.success) {
                         // 根据 YApi postmanLib.js 源码，构建期望的数据结构
                         // YApi 期望第一个参数是响应内容（字符串或对象）
-                        // 如果是字符串，它会尝试解析；如果已经是对象，直接使用
-                        let yapiRes = response.body || '';  // 使用原始响应体
+                        // 优先使用已经解析好的 response.data，如果不存在再使用 response.body
+                        let yapiRes;
+                        const contentType = response.headers['content-type'] || '';
                         
-                        // 如果响应体是 JSON 字符串，尝试解析
-                        if (typeof yapiRes === 'string' && yapiRes.trim()) {
-                            try {
-                                const parsed = JSON.parse(yapiRes);
-                                yapiRes = parsed;  // 使用解析后的对象
-                            } catch (e) {
-                                // 保持字符串格式
-                                console.log('[Index] 响应体不是有效的 JSON，保持字符串格式');
+                        if (contentType.includes('application/json')) {
+                            // 对于 JSON 响应，优先使用已解析的 data，确保返回对象格式
+                            yapiRes = response.data;
+                            
+                            // 如果 data 不存在或为空，尝试解析 body
+                            if (!yapiRes && response.body) {
+                                try {
+                                    yapiRes = JSON.parse(response.body);
+                                    console.log('[Index] 从 body 重新解析 JSON 成功');
+                                } catch (e) {
+                                    console.warn('[Index] JSON 解析失败，使用原始响应:', e.message);
+                                    yapiRes = response.body;
+                                }
                             }
+                        } else {
+                            // 对于非 JSON 响应，使用原始响应体
+                            yapiRes = response.body || '';
                         }
                         
                         const yapiHeader = response.headers || {};  // 响应头
@@ -320,6 +329,10 @@
                         console.log('[Index] 准备调用 YApi success 回调，参数详情:', {
                             'yapiRes (第1个参数)': yapiRes,
                             'yapiRes 类型': typeof yapiRes,
+                            'yapiRes 是否为对象': yapiRes && typeof yapiRes === 'object',
+                            'content-type': contentType,
+                            'response.data': response.data,
+                            'response.body': response.body,
                             'yapiHeader (第2个参数)': yapiHeader,
                             'yapiData (第3个参数)': yapiData,
                             'status': yapiData.status,
