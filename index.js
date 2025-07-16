@@ -45,7 +45,17 @@
                 // 设置超时
                 setTimeout(() => {
                     if (this.pendingRequests.has(id)) {
-                        this.pendingRequests.get(id).reject(new Error('Request timeout'));
+                        const pending = this.pendingRequests.get(id);
+                        const timeoutResponse = {
+                            status: 0,
+                            statusText: '请求超时',
+                            headers: {},
+                            data: { error: '请求超时' },
+                            body: JSON.stringify({ error: '请求超时' }),
+                            ok: false,
+                            isError: true
+                        };
+                        pending.resolve(timeoutResponse);
                         this.pendingRequests.delete(id);
                     }
                 }, requestData.timeout);
@@ -58,6 +68,19 @@
             const pending = this.pendingRequests.get(id);
             
             if (pending) {
+                // 确保 response 对象存在
+                if (!response) {
+                    console.error('[Index] 收到空响应');
+                    pending.resolve({
+                        status: 0,
+                        statusText: 'No Response',
+                        headers: {},
+                        data: {},
+                        body: ''
+                    });
+                    this.pendingRequests.delete(id);
+                    return;
+                }
                 // 尝试解析 JSON，为 YApi 提供正确的数据格式
                 let parsedData = response.body;
                 const contentType = response.headers['content-type'] || '';
@@ -85,7 +108,7 @@
                 
                 pending.resolve({
                     status: response.status || 0,
-                    statusText: response.statusText || '',
+                    statusText: response.statusText || 'OK',  // 确保有默认值
                     headers: response.headers || {},
                     data: parsedData || {},  // 现在这里是解析后的对象，确保不为 undefined
                     body: response.body || ''  // 保留原始字符串，确保不为 undefined
@@ -182,6 +205,55 @@
                         headers: response.headers
                     });
                     
+                    // 检查是否是错误响应
+                    if (response.isError) {
+                        // 这是一个网络错误或其他错误
+                        const errorMsg = response.statusText || '请求失败';
+                        createErrorDisplay(errorMsg);
+                        
+                        if (options.error) {
+                            // 构建错误响应体
+                            let errorBody;
+                            try {
+                                errorBody = JSON.parse(response.body);
+                            } catch (e) {
+                                errorBody = {
+                                    data: {
+                                        success: false,
+                                        error: errorMsg,
+                                        message: errorMsg,
+                                        code: 'NETWORK_ERROR'
+                                    }
+                                };
+                            }
+                            
+                            const errorHeader = response.headers || { 'content-type': 'application/json' };
+                            const errorData = {
+                                res: {
+                                    body: response.body || JSON.stringify(errorBody),
+                                    header: errorHeader,
+                                    status: response.status || 0,  // 保留原始状态码，如果没有则用 0
+                                    statusText: response.statusText || 'Network Error',
+                                    success: false  // res 里面也需要 success
+                                },
+                                status: response.status || 0,  // 保留原始状态码，如果没有则用 0
+                                statusText: response.statusText || 'Network Error',
+                                success: false  // 顶层的 success 字段
+                            };
+                            
+                            console.log('[Index] 处理 isError 响应，调用 error 回调:', {
+                                'errorBody (第1个参数)': errorBody,
+                                'errorHeader (第2个参数)': errorHeader,
+                                'errorData (第3个参数)': errorData
+                            });
+                            
+                            options.error(errorBody, errorHeader, errorData);
+                            return;
+                        }
+                        // 如果没有错误回调，继续执行 success 回调，让 YApi 处理错误
+                        console.log('[Index] 没有 error 回调，将错误传递给 success 回调');
+                    }
+                    
                     // 检查HTTP状态码
                     if (response.status && response.status >= 400) {
                         let errorMsg = `HTTP ${response.status}`;
@@ -214,24 +286,46 @@
                     }
                     
                     if (options.success) {
-                        // 根据 YApi 源码，构建期望的数据结构
-                        const yapiRes = response.data || {};  // 实际的响应数据，确保不为 undefined
-                        const yapiHeader = response.headers || {};  // 响应头，确保不为 undefined
+                        // 根据 YApi postmanLib.js 源码，构建期望的数据结构
+                        // YApi 期望第一个参数是响应内容（字符串或对象）
+                        // 如果是字符串，它会尝试解析；如果已经是对象，直接使用
+                        let yapiRes = response.body || '';  // 使用原始响应体
+                        
+                        // 如果响应体是 JSON 字符串，尝试解析
+                        if (typeof yapiRes === 'string' && yapiRes.trim()) {
+                            try {
+                                const parsed = JSON.parse(yapiRes);
+                                yapiRes = parsed;  // 使用解析后的对象
+                            } catch (e) {
+                                // 保持字符串格式
+                                console.log('[Index] 响应体不是有效的 JSON，保持字符串格式');
+                            }
+                        }
+                        
+                        const yapiHeader = response.headers || {};  // 响应头
                         const yapiData = {
                             res: {
-                                body: response.body || '',       // 原始响应体字符串，确保不为 undefined
-                                header: response.headers || {},  // 响应头，确保不为 undefined
-                                status: response.status || 0     // 状态码，确保不为 undefined
+                                body: response.body || '',       // 原始响应体字符串
+                                header: response.headers || {},  // 响应头
+                                status: response.status || 0,    // 状态码
+                                statusText: response.statusText || 'OK',
+                                success: true  // 成功响应也需要 success
                             },
-                            // 可能还需要其他字段
+                            // 额外的顶层属性
                             status: response.status || 0,
-                            statusText: response.statusText || ''
+                            statusText: response.statusText || 'OK',
+                            success: true  // 顶层的 success 字段
                         };
                         
                         console.log('[Index] 准备调用 YApi success 回调，参数详情:', {
                             'yapiRes (第1个参数)': yapiRes,
+                            'yapiRes 类型': typeof yapiRes,
                             'yapiHeader (第2个参数)': yapiHeader,
-                            'yapiData (第3个参数)': yapiData
+                            'yapiData (第3个参数)': yapiData,
+                            'status': yapiData.status,
+                            'statusText': yapiData.statusText,
+                            'res.status': yapiData.res.status,
+                            'res.statusText': yapiData.res.statusText
                         });
                         
                         try {
@@ -250,60 +344,84 @@
                             }
                         }
                     }
-                },
-                (error) => {
-                    console.error('[Index] YApi 请求失败:', error.message);
-                    
-                    // 显示错误提示给用户
-                    let errorMsg = error.message || '请求失败，请检查网络连接';
-                    
-                    // 根据错误类型提供更友好的提示
-                    if (errorMsg.includes('Failed to fetch')) {
-                        errorMsg = '网络请求失败，请检查目标服务器是否可访问';
-                    } else if (errorMsg.includes('timeout')) {
-                        errorMsg = '请求超时，请稍后重试';
-                    } else if (errorMsg.includes('Extension context invalidated')) {
-                        errorMsg = '扩展已失效，请刷新页面';
-                    } else if (errorMsg.includes('Domain not allowed')) {
-                        errorMsg = '该域名未在白名单中，请在扩展设置中添加';
-                    }
-                    
-                    createErrorDisplay(errorMsg);
-                    
-                    if (options.error) {
-                        // YApi 期望的错误回调格式，需要传递一个包含 res 属性的对象
-                        const errorData = {
-                            res: {
-                                body: JSON.stringify({ error: error.message || 'Unknown error' }),
-                                header: {},
-                                status: 0
-                            },
-                            status: 0,
-                            statusText: error.message || 'Unknown error'
-                        };
-                        options.error(errorData, 'error', error.message);
-                    } else if (options.success) {
-                        // 如果没有错误回调，也调用 success 但传递错误信息
-                        const errorRes = { 
-                            status: 0, 
-                            statusText: error.message || 'Unknown error',
-                            ok: false,
-                            error: true
-                        };
-                        const errorHeader = {};
-                        const errorData = {
-                            res: {
-                                body: JSON.stringify({ error: error.message || 'Unknown error' }),
-                                header: {},
-                                status: 0
-                            },
-                            status: 0,
-                            statusText: error.message || 'Unknown error'
-                        };
-                        options.success(errorRes, errorHeader, errorData);
-                    }
                 }
-            );
+            ).catch((error) => {
+                // 处理 promise rejection
+                console.error('[Index] Promise rejected:', {
+                    error: error,
+                    message: error.message,
+                    stack: error.stack,
+                    name: error.name
+                });
+                
+                // 显示错误提示
+                let errorMsg = error.message || '请求失败';
+                
+                // 不要替换错误信息，保持 background.js 提供的详细信息
+                console.log('[Index] 原始错误信息:', errorMsg);
+                
+                createErrorDisplay(errorMsg);
+                
+                if (options.error) {
+                    // 与成功响应使用相同的参数结构
+                    // 网络错误时没有响应体
+                    const errorBody = undefined;
+                    const errorHeader = {
+                        'content-type': 'application/json'
+                    };
+                    // 使用 503 表示服务不可用
+                    const errorData = {
+                        res: {
+                            body: errorBody,  // 空字符串，因为网络错误没有响应体
+                            header: errorHeader,
+                            status: 503,  // 503 Service Unavailable
+                            statusText: 'Service Unavailable',
+                            success: false  // res 里面也需要 success
+                        },
+                        status: 503,  // 503 Service Unavailable
+                        statusText: 'Service Unavailable',
+                        success: false  // 顶层的 success 字段
+                    };
+                    
+                    console.log('[Index] 调用 error 回调，参数格式与成功响应一致:', {
+                        'errorBody (第1个参数)': errorBody,
+                        'errorHeader (第2个参数)': errorHeader,
+                        'errorData (第3个参数)': errorData
+                    });
+                    
+                    // 使用与 success 相同的三个参数
+                    options.error(errorBody, errorHeader, errorData);
+                } else if (options.success) {
+                    // 如果没有错误回调，调用 success 回调但传递错误信息
+                    // YApi 可能会检查第一个参数来判断是否有错误
+                    // 网络错误时没有响应体
+                    const errorBody = '';
+                    const errorHeader = {
+                        'content-type': 'application/json'
+                    };
+                    // 使用 503 表示服务不可用
+                    const errorData = {
+                        res: {
+                            body: errorBody,  // 空字符串，因为网络错误没有响应体
+                            header: errorHeader,
+                            status: 503,  // 503 Service Unavailable
+                            statusText: 'Service Unavailable',
+                            success: false  // res 里面也需要 success
+                        },
+                        status: 503,  // 503 Service Unavailable
+                        statusText: 'Service Unavailable',
+                        success: false  // 顶层的 success 字段
+                    };
+                    
+                    console.log('[Index] 使用 success 回调传递错误，参数:', {
+                        errorBody: errorBody,
+                        errorHeader: errorHeader,
+                        errorData: errorData
+                    });
+                    
+                    options.success(errorBody, errorHeader, errorData);
+                }
+            });
             
             return promise;
         };
@@ -412,7 +530,7 @@
                 </svg>
                 <div style="flex: 1;">
                     <div style="font-weight: 600; margin-bottom: 4px;">请求失败</div>
-                    <div style="opacity: 0.9; font-size: 13px;">${errorMessage}</div>
+                    <div style="opacity: 0.9; font-size: 13px; white-space: pre-line;">${errorMessage}</div>
                 </div>
                 <button onclick="this.parentElement.parentElement.remove()" style="background: transparent; border: none; color: white; cursor: pointer; font-size: 20px; line-height: 1; padding: 0; opacity: 0.7; hover:opacity: 1;">×</button>
             </div>

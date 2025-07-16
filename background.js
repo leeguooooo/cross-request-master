@@ -48,6 +48,35 @@ function isDomainAllowed(url) {
   return false;
 }
 
+// 获取标准的 HTTP 状态文本
+function getStatusText(status) {
+  const statusTexts = {
+    200: 'OK',
+    201: 'Created',
+    202: 'Accepted',
+    204: 'No Content',
+    301: 'Moved Permanently',
+    302: 'Found',
+    304: 'Not Modified',
+    400: 'Bad Request',
+    401: 'Unauthorized',
+    403: 'Forbidden',
+    404: 'Not Found',
+    405: 'Method Not Allowed',
+    408: 'Request Timeout',
+    409: 'Conflict',
+    410: 'Gone',
+    422: 'Unprocessable Entity',
+    429: 'Too Many Requests',
+    500: 'Internal Server Error',
+    502: 'Bad Gateway',
+    503: 'Service Unavailable',
+    504: 'Gateway Timeout'
+  };
+  
+  return statusTexts[status] || 'Unknown Status';
+}
+
 // 处理跨域请求
 async function handleCrossOriginRequest(request) {
   const { url, method = 'GET', headers = {}, body, timeout = 30000 } = request;
@@ -104,7 +133,27 @@ async function handleCrossOriginRequest(request) {
       });
     });
     
-    const response = await fetch(url, fetchOptions);
+    let response;
+    try {
+      response = await fetch(url, fetchOptions);
+    } catch (fetchError) {
+      // 捕获 fetch 的网络错误
+      console.error('[Background] Fetch 失败:', fetchError);
+      
+      // 判断错误类型
+      if (fetchError.message.includes('net::ERR_CONNECTION_REFUSED')) {
+        throw new Error(`无法连接到服务器 ${url}\n请确认：\n1. 服务器是否已启动\n2. 端口是否正确\n3. 防火墙设置`);
+      } else if (fetchError.message.includes('net::ERR_NAME_NOT_RESOLVED')) {
+        throw new Error(`无法解析域名 ${url}\n请检查域名是否正确`);
+      } else if (fetchError.message.includes('net::ERR_INTERNET_DISCONNECTED')) {
+        throw new Error('网络连接已断开，请检查网络设置');
+      } else if (fetchError.message.includes('net::ERR_TIMED_OUT')) {
+        throw new Error(`连接超时 ${url}\n服务器响应太慢或网络不稳定`);
+      }
+      
+      // 重新抛出原始错误
+      throw fetchError;
+    }
     clearTimeout(timeoutId);
     
     // 获取响应头
@@ -166,7 +215,7 @@ async function handleCrossOriginRequest(request) {
     
     return {
       status: response.status,
-      statusText: response.statusText,
+      statusText: response.statusText || getStatusText(response.status),
       headers: responseHeaders,
       body: responseBody,
       ok: response.ok
@@ -174,10 +223,54 @@ async function handleCrossOriginRequest(request) {
   } catch (error) {
     clearTimeout(timeoutId);
     
+    console.error('[Background] 请求失败:', {
+      url,
+      error: error.message,
+      errorType: error.name,
+      errorStack: error.stack
+    });
+    
+    // 为网页控制台也记录错误
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'debug_log',
+            source: 'Background',
+            message: '请求失败',
+            data: {
+              url,
+              error: error.message,
+              errorType: error.name
+            }
+          }).catch(() => {});
+        }
+      });
+    });
+    
     if (error.name === 'AbortError') {
-      throw new Error('Request timeout after ' + timeout + 'ms');
+      throw new Error('请求超时 (' + timeout + 'ms)');
     }
-    throw error;
+    
+    // 检测常见的网络错误
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      // 这通常意味着网络错误、CORS错误或服务器不可达
+      const detailedError = `无法连接到服务器 ${url}
+请检查：
+1. 目标服务器是否已启动
+2. 网络是否正常
+3. 防火墙设置
+4. CORS 配置是否正确`;
+      console.error('[Background] Failed to fetch 详细错误:', detailedError);
+      throw new Error(detailedError);
+    }
+    
+    if (error.name === 'NetworkError') {
+      throw new Error('网络错误：' + error.message);
+    }
+    
+    // 对于其他错误，提供更详细的信息
+    throw new Error('请求失败：' + (error.message || '未知错误'));
   }
 }
 
@@ -207,8 +300,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
       })
       .catch(error => {
+        console.error('[Background] 准备发送错误响应:', {
+          errorMessage: error.message,
+          errorType: error.name
+        });
+        
         try {
-          sendResponse({ success: false, error: error.message });
+          sendResponse({ 
+            success: false, 
+            error: error.message,
+            errorDetails: {
+              name: error.name,
+              message: error.message,
+              url: request.data?.url
+            }
+          });
         } catch (e) {
           console.warn('Failed to send error response, port might be closed:', e);
         }

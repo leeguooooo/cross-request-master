@@ -173,11 +173,11 @@
         detail: {
           id: requestData.id,
           response: {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-            body: response.body,
-            ok: response.ok,
+            status: response.status || 0,
+            statusText: response.statusText || 'OK',
+            headers: response.headers || {},
+            body: response.body || '',
+            ok: response.ok !== undefined ? response.ok : true,
             // 添加 YApi 可能需要的字段
             url: requestData.url
           }
@@ -196,10 +196,15 @@
     handleError(node, error) {
       const requestId = node.id.replace(this.config.container + '-', '');
       
+      console.error('[Response] 处理错误，准备发送错误事件:', {
+        requestId: requestId,
+        error: error.message
+      });
+      
       const errorEvent = new CustomEvent('y-request-error', {
         detail: {
           id: requestId,
-          error: error.message
+          error: error.message || 'Unknown error'
         }
       });
       
