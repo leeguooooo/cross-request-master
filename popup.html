@@ -79,6 +79,11 @@
       cursor: pointer;
     }
 
+    .allow-all input[type="checkbox"]:disabled {
+      cursor: not-allowed;
+      opacity: 0.8;
+    }
+
     .warning {
       background: #fff3cd;
       color: #856404;
@@ -400,31 +405,14 @@
 <body>
   <div class="main">
     <div class="header">
-      <h1>Cross Request 域名管理</h1>
-      <p>管理允许发起跨域请求的域名</p>
+      <h1>Cross Request</h1>
+      <p>跨域请求助手 - 请求历史与 cURL 生成</p>
     </div>
 
     <div class="content">
       <div class="section">
-        <div class="allow-all">
-          <label>
-            <input type="checkbox" id="allowAll" />
-            允许所有域名（不推荐）
-          </label>
-        </div>
-        
-        <div class="warning" id="securityWarning" style="display: none;">
-          ⚠️ 警告：允许所有域名会带来安全风险。建议只添加信任的域名。
-        </div>
-      </div>
-
-      <div class="section">
         <h3 class="section-title">请求历史 & cURL 生成</h3>
         <div class="request-history">
-          <div class="debug-info" id="debugInfo" style="background: #f0f0f0; padding: 8px; margin-bottom: 8px; font-size: 12px; border-radius: 4px; display: none;">
-            <strong>调试信息:</strong><br>
-            <span id="debugText">加载中...</span>
-          </div>
           <div class="history-list" id="historyList">
             <div class="empty-state">暂无请求记录</div>
           </div>
@@ -442,24 +430,8 @@
           </div>
         </div>
       </div>
-
-      <div class="section">
-        <h3 class="section-title">已允许的域名</h3>
-        <div class="domain-list" id="domainList">
-          <div class="empty-state">加载中...</div>
-        </div>
-
-        <div class="add-domain">
-          <input 
-            type="text" 
-            id="newDomain" 
-            placeholder="输入域名，如: *.example.com" 
-          />
-          <button class="add-btn" id="addBtn">添加</button>
-        </div>
-
-        <div class="status" id="status"></div>
-      </div>
+      
+      <div class="status" id="status"></div>
     </div>
 
     <div class="footer">

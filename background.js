@@ -3,22 +3,26 @@
 // 域名白名单管理
 let allowedDomains = new Set(['*']); // 默认允许所有域名，后续可以限制
 
-// 初始化白名单
+// 初始化白名单 - 强制使用允许所有域名
 chrome.storage.local.get(['allowedDomains'], (result) => {
-  if (result.allowedDomains) {
-    allowedDomains = new Set(result.allowedDomains);
-  }
+  // 忽略存储的值，始终使用 ['*']
+  allowedDomains = new Set(['*']);
 });
 
-// 监听白名单更新
+// 监听白名单更新 - 强制使用允许所有域名
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local' && changes.allowedDomains) {
-    allowedDomains = new Set(changes.allowedDomains.newValue || ['*']);
+    // 忽略更新，始终使用 ['*']
+    allowedDomains = new Set(['*']);
   }
 });
 
 // 检查域名是否在白名单中
 function isDomainAllowed(url) {
+  // 强制允许所有域名
+  return true;
+  
+  // 以下是原有逻辑（已禁用）
   if (allowedDomains.has('*')) {
     return true;
   }
