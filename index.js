@@ -84,11 +84,11 @@
                 }
                 
                 pending.resolve({
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers: response.headers,
-                    data: parsedData,  // 现在这里是解析后的对象
-                    body: response.body  // 保留原始字符串
+                    status: response.status || 0,
+                    statusText: response.statusText || '',
+                    headers: response.headers || {},
+                    data: parsedData || {},  // 现在这里是解析后的对象，确保不为 undefined
+                    body: response.body || ''  // 保留原始字符串，确保不为 undefined
                 });
                 this.pendingRequests.delete(id);
             }
@@ -182,19 +182,50 @@
                         headers: response.headers
                     });
                     
+                    // 检查HTTP状态码
+                    if (response.status && response.status >= 400) {
+                        let errorMsg = `HTTP ${response.status}`;
+                        switch(response.status) {
+                            case 400:
+                                errorMsg = '请求参数错误 (400)';
+                                break;
+                            case 401:
+                                errorMsg = '未授权，请检查认证信息 (401)';
+                                break;
+                            case 403:
+                                errorMsg = '访问被拒绝 (403)';
+                                break;
+                            case 404:
+                                errorMsg = '请求的资源不存在 (404)';
+                                break;
+                            case 500:
+                                errorMsg = '服务器内部错误 (500)';
+                                break;
+                            case 502:
+                                errorMsg = '网关错误 (502)';
+                                break;
+                            case 503:
+                                errorMsg = '服务暂时不可用 (503)';
+                                break;
+                        }
+                        
+                        // 显示错误提示
+                        createErrorDisplay(errorMsg);
+                    }
+                    
                     if (options.success) {
                         // 根据 YApi 源码，构建期望的数据结构
-                        const yapiRes = response.data;  // 实际的响应数据
-                        const yapiHeader = response.headers;  // 响应头
+                        const yapiRes = response.data || {};  // 实际的响应数据，确保不为 undefined
+                        const yapiHeader = response.headers || {};  // 响应头，确保不为 undefined
                         const yapiData = {
                             res: {
-                                body: response.body,      // 原始响应体字符串
-                                header: response.headers, // 响应头
-                                status: response.status   // 状态码
+                                body: response.body || '',       // 原始响应体字符串，确保不为 undefined
+                                header: response.headers || {},  // 响应头，确保不为 undefined
+                                status: response.status || 0     // 状态码，确保不为 undefined
                             },
                             // 可能还需要其他字段
-                            status: response.status,
-                            statusText: response.statusText
+                            status: response.status || 0,
+                            statusText: response.statusText || ''
                         };
                         
                         console.log('[Index] 准备调用 YApi success 回调，参数详情:', {
@@ -223,15 +254,53 @@
                 (error) => {
                     console.error('[Index] YApi 请求失败:', error.message);
                     
+                    // 显示错误提示给用户
+                    let errorMsg = error.message || '请求失败，请检查网络连接';
+                    
+                    // 根据错误类型提供更友好的提示
+                    if (errorMsg.includes('Failed to fetch')) {
+                        errorMsg = '网络请求失败，请检查目标服务器是否可访问';
+                    } else if (errorMsg.includes('timeout')) {
+                        errorMsg = '请求超时，请稍后重试';
+                    } else if (errorMsg.includes('Extension context invalidated')) {
+                        errorMsg = '扩展已失效，请刷新页面';
+                    } else if (errorMsg.includes('Domain not allowed')) {
+                        errorMsg = '该域名未在白名单中，请在扩展设置中添加';
+                    }
+                    
+                    createErrorDisplay(errorMsg);
+                    
                     if (options.error) {
-                        options.error(error, 'error', error.message);
+                        // YApi 期望的错误回调格式，需要传递一个包含 res 属性的对象
+                        const errorData = {
+                            res: {
+                                body: JSON.stringify({ error: error.message || 'Unknown error' }),
+                                header: {},
+                                status: 0
+                            },
+                            status: 0,
+                            statusText: error.message || 'Unknown error'
+                        };
+                        options.error(errorData, 'error', error.message);
                     } else if (options.success) {
                         // 如果没有错误回调，也调用 success 但传递错误信息
-                        options.success({ 
+                        const errorRes = { 
                             status: 0, 
-                            statusText: error.message,
-                            ok: false 
-                        }, {}, { error: error.message });
+                            statusText: error.message || 'Unknown error',
+                            ok: false,
+                            error: true
+                        };
+                        const errorHeader = {};
+                        const errorData = {
+                            res: {
+                                body: JSON.stringify({ error: error.message || 'Unknown error' }),
+                                header: {},
+                                status: 0
+                            },
+                            status: 0,
+                            statusText: error.message || 'Unknown error'
+                        };
+                        options.success(errorRes, errorHeader, errorData);
                     }
                 }
             );
@@ -240,34 +309,41 @@
         };
     }
     
-    // 复制到剪贴板的兼容函数
-    function copyToClipboard(text) {
-        // 尝试使用现代 Clipboard API
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            try {
-                navigator.clipboard.writeText(text);
-                return true;
-            } catch (err) {
-                console.warn('[Index] Clipboard API 失败，使用降级方法:', err);
-            }
-        }
-        
-        // 降级方法：使用 execCommand
+    // 复制到剪贴板的现代函数
+    async function copyToClipboard(text) {
         try {
+            // 优先使用现代 Clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+                return true;
+            }
+            
+            // 备用方法：创建临时文本区域
             const textarea = document.createElement('textarea');
             textarea.value = text;
             textarea.style.position = 'fixed';
             textarea.style.left = '-999999px';
             textarea.style.top = '-999999px';
+            textarea.setAttribute('readonly', '');
             document.body.appendChild(textarea);
-            textarea.focus();
-            textarea.select();
             
-            const result = document.execCommand('copy');
+            // 选择文本
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // 移动设备兼容
+            
+            // 尝试复制
+            let success = false;
+            try {
+                // 虽然 execCommand 已废弃，但在 Clipboard API 不可用时仍然是唯一选择
+                success = document.execCommand('copy');
+            } catch (err) {
+                console.warn('[Index] 复制命令执行失败:', err);
+            }
+            
             document.body.removeChild(textarea);
-            return result;
+            return success;
         } catch (err) {
-            console.error('[Index] 复制失败:', err);
+            console.error('[Index] 复制到剪贴板失败:', err);
             return false;
         }
     }
@@ -302,11 +378,81 @@
         return curl;
     }
 
+    // 创建错误提示框
+    function createErrorDisplay(errorMessage) {
+        // 移除已存在的错误提示
+        const existingError = document.getElementById('cross-request-error-display');
+        if (existingError) {
+            existingError.remove();
+        }
+        
+        const errorDisplay = document.createElement('div');
+        errorDisplay.id = 'cross-request-error-display';
+        errorDisplay.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 300px;
+            max-width: 500px;
+            background: #f56565;
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 14px;
+            z-index: 10001;
+            animation: slideDown 0.3s ease-out;
+        `;
+        
+        errorDisplay.innerHTML = `
+            <div style="padding: 16px; display: flex; align-items: center; gap: 12px;">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style="flex-shrink: 0;">
+                    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 7v4a1 1 0 102 0V7a1 1 0 10-2 0zm0 8a1 1 0 102 0 1 1 0 00-2 0z" fill="currentColor"/>
+                </svg>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; margin-bottom: 4px;">请求失败</div>
+                    <div style="opacity: 0.9; font-size: 13px;">${errorMessage}</div>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" style="background: transparent; border: none; color: white; cursor: pointer; font-size: 20px; line-height: 1; padding: 0; opacity: 0.7; hover:opacity: 1;">×</button>
+            </div>
+        `;
+        
+        // 添加动画样式
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    transform: translate(-50%, -20px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translate(-50%, 0);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        document.body.appendChild(errorDisplay);
+        
+        // 5秒后自动隐藏
+        setTimeout(() => {
+            errorDisplay.style.opacity = '0';
+            errorDisplay.style.transform = 'translate(-50%, -20px)';
+            setTimeout(() => errorDisplay.remove(), 300);
+        }, 5000);
+    }
+
+    // 自动隐藏定时器
+    let curlHideTimer = null;
+    
     // 创建页面内的 cURL 显示框
     function createCurlDisplay() {
         // 检查是否已经存在
-        if (document.getElementById('cross-request-curl-display')) {
-            return;
+        const existingDisplay = document.getElementById('cross-request-curl-display');
+        if (existingDisplay) {
+            return existingDisplay;
         }
         
         const curlDisplay = document.createElement('div');
@@ -326,6 +472,8 @@
             z-index: 10000;
             display: none;
             overflow: hidden;
+            opacity: 1;
+            transition: opacity 0.3s ease-out;
         `;
         
         curlDisplay.innerHTML = `
@@ -342,12 +490,13 @@
         document.body.appendChild(curlDisplay);
         
         // 绑定事件
-        document.getElementById('curl-copy-btn').addEventListener('click', () => {
+        document.getElementById('curl-copy-btn').addEventListener('click', async () => {
             const curlText = document.getElementById('curl-command-text').textContent;
             const copyBtn = document.getElementById('curl-copy-btn');
             
-            // 使用降级复制方法
-            if (copyToClipboard(curlText)) {
+            // 使用现代复制方法
+            const success = await copyToClipboard(curlText);
+            if (success) {
                 copyBtn.textContent = '已复制';
                 setTimeout(() => {
                     copyBtn.textContent = '复制';
@@ -361,18 +510,48 @@
         });
         
         document.getElementById('curl-close-btn').addEventListener('click', () => {
-            curlDisplay.style.display = 'none';
+            hideCurlDisplay();
         });
         
-        // 5秒后自动隐藏
-        setTimeout(() => {
-            curlDisplay.style.display = 'none';
-        }, 5000);
+        return curlDisplay;
+    }
+    
+    // 隐藏 cURL 显示框
+    function hideCurlDisplay() {
+        const curlDisplay = document.getElementById('cross-request-curl-display');
+        if (curlDisplay) {
+            // 清除现有定时器
+            if (curlHideTimer) {
+                clearTimeout(curlHideTimer);
+                curlHideTimer = null;
+            }
+            
+            // 淡出动画
+            curlDisplay.style.opacity = '0';
+            setTimeout(() => {
+                curlDisplay.style.display = 'none';
+                curlDisplay.style.opacity = '1'; // 重置透明度，为下次显示做准备
+            }, 300);
+        }
+    }
+    
+    // 设置自动隐藏定时器
+    function setAutoHideTimer() {
+        // 清除现有定时器
+        if (curlHideTimer) {
+            clearTimeout(curlHideTimer);
+        }
+        
+        // 设置新的3秒定时器
+        curlHideTimer = setTimeout(() => {
+            hideCurlDisplay();
+            curlHideTimer = null;
+        }, 3000);
     }
 
     // 显示 cURL 命令
     function showCurlCommand(requestData) {
-        createCurlDisplay();
+        const curlDisplay = createCurlDisplay();
         
         const curlCommand = generateCurlCommand(
             requestData.url,
@@ -381,11 +560,15 @@
             requestData.data || requestData.body
         );
         
-        const curlDisplay = document.getElementById('cross-request-curl-display');
         const curlText = document.getElementById('curl-command-text');
         
+        // 更新内容并显示
         curlText.textContent = curlCommand;
         curlDisplay.style.display = 'block';
+        curlDisplay.style.opacity = '1'; // 确保透明度正确
+        
+        // 设置自动隐藏定时器
+        setAutoHideTimer();
         
         console.log('[Index] 显示 cURL 命令:', curlCommand);
     }
