@@ -39,6 +39,21 @@
 
 ## 更新日志
 
+### v4.2.0 (2025-07-16)
+- 🐛 修复 YApi 错误处理和响应格式问题
+  - 解决 "Cannot read properties of undefined" 错误
+  - 确保所有响应对象都包含必需的 status、statusText 等属性
+  - 网络错误使用 503 状态码，避免显示为空
+  - 错误响应不再包含虚构的响应体
+- 🎨 添加用户友好的错误提示界面
+  - 页面顶部显示错误提示框
+  - 支持多种错误类型的详细提示信息
+  - 5秒后自动消失
+- 📝 支持 application/x-www-form-urlencoded 请求格式
+  - 根据 Content-Type 自动选择请求体序列化方式
+  - form-urlencoded 使用 URLSearchParams 进行编码
+  - 保持 JSON 格式作为默认选项
+
 ### v4.1.0 (2025-07-15)
 - 🚀 新增 cURL 命令自动生成功能
 - 📱 页面内实时显示 cURL 命令弹窗
