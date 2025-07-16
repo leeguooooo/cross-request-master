@@ -76,22 +76,7 @@ jobs:
           # 如果找不到对应版本，使用默认内容
           if [ -z "$RELEASE_NOTES" ] || [ "${RELEASE_NOTES// /}" = "" ]; then
             echo "未找到版本 $VERSION 的更新日志，使用默认内容"
-            RELEASE_NOTES="### ${{ github.ref_name }}
-
-此版本的更新内容请查看 [提交历史](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }})。
-
-#### 📦 安装方法
-1. 下载下方的 \\\`cross-request-${{ github.ref_name }}.zip\\\` 文件
-2. 解压到本地文件夹
-3. 打开 Chrome 浏览器，进入 \\\`chrome://extensions/\\\`
-4. 开启"开发者模式"（右上角开关）
-5. 点击"加载已解压的扩展程序"，选择解压后的文件夹
-
-#### 🔧 主要功能
-- 跨域请求支持，绕过 CORS 限制
-- 自动生成 cURL 命令
-- 页面内实时显示结果
-- 专为 YApi 接口测试优化"
+            RELEASE_NOTES=$(printf "### %s\n\n此版本的更新内容请查看 [提交历史](https://github.com/%s/commits/%s)。\n\n#### 📦 安装方法\n1. 下载下方的 \`cross-request-%s.zip\` 文件\n2. 解压到本地文件夹\n3. 打开 Chrome 浏览器，进入 \`chrome://extensions/\`\n4. 开启\"开发者模式\"（右上角开关）\n5. 点击\"加载已解压的扩展程序\"，选择解压后的文件夹\n\n#### 🔧 主要功能\n- 跨域请求支持，绕过 CORS 限制\n- 自动生成 cURL 命令\n- 页面内实时显示结果\n- 专为 YApi 接口测试优化" "${{ github.ref_name }}" "${{ github.repository }}" "${{ github.ref_name }}" "${{ github.ref_name }}")
           fi
           
           echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
