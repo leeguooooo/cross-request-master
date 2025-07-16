@@ -97,9 +97,18 @@ async function handleCrossOriginRequest(request) {
   // 添加请求体（如果有）
   if (body && method !== 'GET' && method !== 'HEAD') {
     if (typeof body === 'object' && !(body instanceof FormData)) {
-      fetchOptions.body = JSON.stringify(body);
-      if (!fetchOptions.headers.has('Content-Type')) {
-        fetchOptions.headers.set('Content-Type', 'application/json');
+      // 检查 Content-Type 以决定如何序列化 body
+      const contentType = fetchOptions.headers.get('Content-Type') || '';
+      
+      if (contentType.includes('application/x-www-form-urlencoded')) {
+        // 对于 form-urlencoded，使用 URLSearchParams
+        fetchOptions.body = new URLSearchParams(body).toString();
+      } else {
+        // 默认使用 JSON
+        fetchOptions.body = JSON.stringify(body);
+        if (!fetchOptions.headers.has('Content-Type')) {
+          fetchOptions.headers.set('Content-Type', 'application/json');
+        }
       }
     } else {
       fetchOptions.body = body;
