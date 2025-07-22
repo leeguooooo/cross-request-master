@@ -1,8 +1,10 @@
 (function (win) {
     'use strict';
     
+    console.log('[Index] index.js 脚本开始执行');
+    
     // 检查是否已经加载过
-    if (!document.getElementById('cross-request-sign') || win.__crossRequestLoaded) {
+    if (win.__crossRequestLoaded) {
         console.log('[Cross-Request] 脚本已加载，跳过重复加载');
         return;
     }
@@ -189,8 +191,8 @@
             
             console.log('[Index] 捕获的请求数据:', requestData);
             
-            // 保存请求到历史记录
-            saveRequestToHistory(requestData);
+            // 显示 cURL 命令
+            showCurlCommand(requestData);
             
             // 发送请求
             const promise = CrossRequestAPI.request(requestData);
@@ -583,6 +585,8 @@
         // 检查是否已经存在
         const existingDisplay = document.getElementById('cross-request-curl-display');
         if (existingDisplay) {
+            // 重新绑定事件监听器，防止事件丢失
+            bindCurlDisplayEvents();
             return existingDisplay;
         }
         
@@ -611,7 +615,8 @@
             <div style="padding: 12px; background: #4a5568; border-bottom: 1px solid #718096; display: flex; justify-content: space-between; align-items: center;">
                 <span style="font-weight: bold; color: #68d391;">cURL 命令</span>
                 <div>
-                    <button id="curl-copy-btn" style="background: #48bb78; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 11px;">复制</button>
+                    <button id="curl-copy-btn" style="background: #48bb78; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-right: 4px; font-size: 11px;">复制</button>
+                    <button id="curl-disable-btn" style="background: #e53e3e; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-right: 4px; font-size: 11px;">永久关闭</button>
                     <button id="curl-close-btn" style="background: #f56565; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">×</button>
                 </div>
             </div>
@@ -621,10 +626,32 @@
         document.body.appendChild(curlDisplay);
         
         // 绑定事件
-        document.getElementById('curl-copy-btn').addEventListener('click', async () => {
+        bindCurlDisplayEvents();
+        
+        return curlDisplay;
+    }
+    
+    // 绑定 cURL 显示框事件（防止事件丢失）
+    function bindCurlDisplayEvents() {
+        const copyBtn = document.getElementById('curl-copy-btn');
+        const closeBtn = document.getElementById('curl-close-btn');
+        const disableBtn = document.getElementById('curl-disable-btn');
+        
+        if (!copyBtn || !closeBtn || !disableBtn) {
+            console.warn('[Index] cURL 显示框按钮元素未找到');
+            return;
+        }
+        
+        // 清除旧的事件监听器（如果存在）
+        copyBtn.onclick = null;
+        closeBtn.onclick = null;
+        disableBtn.onclick = null;
+        
+        // 重新绑定事件
+        copyBtn.addEventListener('click', async () => {
             const curlText = document.getElementById('curl-command-text').textContent;
-            const copyBtn = document.getElementById('curl-copy-btn');
             
+            console.log('[Index] 复制按钮被点击');
             // 使用现代复制方法
             const success = await copyToClipboard(curlText);
             if (success) {
@@ -640,11 +667,22 @@
             }
         });
         
-        document.getElementById('curl-close-btn').addEventListener('click', () => {
+        closeBtn.addEventListener('click', () => {
+            console.log('[Index] 关闭按钮被点击');
             hideCurlDisplay();
         });
         
-        return curlDisplay;
+        disableBtn.addEventListener('click', () => {
+            console.log('[Index] 永久关闭按钮被点击');
+            // 通过 DOM 事件发送消息给 content script
+            const event = new CustomEvent('curl-disable-request', {
+                detail: { disabled: true }
+            });
+            document.dispatchEvent(event);
+            hideCurlDisplay();
+        });
+        
+        console.log('[Index] cURL 显示框事件已重新绑定');
     }
     
     // 隐藏 cURL 显示框
@@ -682,7 +720,25 @@
 
     // 显示 cURL 命令
     function showCurlCommand(requestData) {
+        // 检查是否已被永久关闭
+        console.log('[Index] 准备检查 cURL 禁用状态，发送事件:', requestData);
+        const event = new CustomEvent('curl-check-disabled', {
+            detail: { requestData: requestData }
+        });
+        document.dispatchEvent(event);
+        console.log('[Index] curl-check-disabled 事件已发送');
+    }
+
+    // 显示 cURL 弹窗（由 content script 调用）
+    function displayCurlCommand(requestData) {
+        console.log('[Index] displayCurlCommand 被调用，参数:', requestData);
+        
         const curlDisplay = createCurlDisplay();
+        if (!curlDisplay) {
+            console.error('[Index] 创建 cURL 显示框失败');
+            return;
+        }
+        console.log('[Index] cURL 显示框已创建/获取');
         
         const curlCommand = generateCurlCommand(
             requestData.url,
@@ -690,65 +746,45 @@
             requestData.headers,
             requestData.data || requestData.body
         );
+        console.log('[Index] cURL 命令已生成:', curlCommand);
         
         const curlText = document.getElementById('curl-command-text');
+        if (!curlText) {
+            console.error('[Index] 找不到 curl-command-text 元素');
+            return;
+        }
         
         // 更新内容并显示
         curlText.textContent = curlCommand;
         curlDisplay.style.display = 'block';
         curlDisplay.style.opacity = '1'; // 确保透明度正确
         
+        console.log('[Index] cURL 显示框样式已更新:', {
+            display: curlDisplay.style.display,
+            opacity: curlDisplay.style.opacity,
+            visibility: window.getComputedStyle(curlDisplay).visibility
+        });
+        
+        // 确保事件监听器已绑定
+        setTimeout(() => {
+            bindCurlDisplayEvents();
+        }, 100);
+        
         // 设置自动隐藏定时器
         setAutoHideTimer();
         
-        console.log('[Index] 显示 cURL 命令:', curlCommand);
+        console.log('[Index] cURL 弹窗显示完成');
     }
-
-    // 保存请求到历史记录
-    function saveRequestToHistory(requestData) {
-        try {
-            // 创建历史记录项
-            const historyItem = {
-                url: requestData.url,
-                method: requestData.method,
-                headers: requestData.headers,
-                body: requestData.data || requestData.body, // 统一使用 data 字段
-                timestamp: Date.now()
-            };
-            
-            console.log('[Index] 准备保存请求到历史记录:', historyItem);
-            
-            // 显示 cURL 命令
-            showCurlCommand(requestData);
-            
-            // 首先尝试通过 DOM 事件将请求数据传递给 content script
-            const event = new CustomEvent('y-request-history', {
-                detail: historyItem
-            });
-            console.log('[Index] 发送请求历史事件:', event);
-            document.dispatchEvent(event);
-            console.log('[Index] 请求历史事件已发送');
-            
-            // 同时保存到 localStorage 作为备用
-            try {
-                const existingHistory = JSON.parse(localStorage.getItem('crossRequestHistory') || '[]');
-                existingHistory.unshift(historyItem);
-                
-                // 只保留最近的 50 条记录
-                if (existingHistory.length > 50) {
-                    existingHistory.splice(50);
-                }
-                
-                localStorage.setItem('crossRequestHistory', JSON.stringify(existingHistory));
-                console.log('[Index] 请求已保存到 localStorage:', historyItem);
-            } catch (localStorageError) {
-                console.warn('[Index] 保存到 localStorage 失败:', localStorageError);
-            }
-            
-        } catch (error) {
-            console.error('[Index] 保存请求历史时出错:', error);
-        }
-    }
+    
+    // 监听来自 content script 的响应事件
+    document.addEventListener('curl-show-command', (event) => {
+        const requestData = event.detail;
+        console.log('[Index] 收到 curl-show-command 事件:', requestData);
+        displayCurlCommand(requestData);
+    });
+    
+    // 添加调试：确认事件监听器已注册
+    console.log('[Index] curl-show-command 事件监听器已注册');
 
     // 创建兼容的 jQuery ajax 方法
     function createAjaxMethod() {
@@ -794,8 +830,8 @@
             
             console.log('[Index] 捕获的请求数据:', requestData);
             
-            // 保存请求到历史记录
-            saveRequestToHistory(requestData);
+            // 显示 cURL 命令
+            showCurlCommand(requestData);
             
             // 转换 jQuery 的 success/error 回调为 Promise
             const promise = CrossRequestAPI.request(requestData);
@@ -870,5 +906,7 @@
     sign.id = 'cross-request-loaded';
     sign.style.display = 'none';
     document.body.appendChild(sign);
+    
+    console.log('[Index] index.js 脚本执行完成，所有功能已注册');
     
 })(window);

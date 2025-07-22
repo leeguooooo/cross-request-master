@@ -3,12 +3,7 @@
 // DOM 元素
 const elements = {
   status: null,
-  // 请求历史相关元素
-  historyList: null,
-  clearHistory: null,
-  curlOutput: null,
-  curlCommand: null,
-  copyCurl: null
+  enableCurlBtn: null
 };
 
 // 初始化
@@ -17,39 +12,36 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // 获取 DOM 元素
   elements.status = document.getElementById('status');
-  
-  // 请求历史相关元素
-  elements.historyList = document.getElementById('historyList');
-  elements.clearHistory = document.getElementById('clearHistory');
-  elements.curlOutput = document.getElementById('curlOutput');
-  elements.curlCommand = document.getElementById('curlCommand');
-  elements.copyCurl = document.getElementById('copyCurl');
+  elements.enableCurlBtn = document.getElementById('enable-curl-btn');
 
   console.log('[Popup] DOM 元素获取完成');
 
   // 强制设置允许所有域名（后台处理）
   chrome.storage.local.set({ allowedDomains: ['*'] }, () => {
     console.log('[Popup] 已设置允许所有域名');
+    showStatus('扩展已启用，支持所有域名跨域请求', 'success');
   });
-
-  // 加载请求历史
-  loadRequestHistory();
-
+  
+  // 加载 cURL 弹窗设置状态
+  loadCurlDisplaySettings();
+  
   // 绑定事件
-  elements.clearHistory.addEventListener('click', handleClearHistory);
-  elements.copyCurl.addEventListener('click', handleCopyCurl);
+  elements.enableCurlBtn.addEventListener('click', handleEnableCurl);
   
   console.log('[Popup] 初始化完成');
 });
 
-// 显示状态消息
-function showStatus(message, type) {
-  elements.status.textContent = message;
-  elements.status.className = 'status ' + type;
+// 显示状态信息
+function showStatus(message, type = 'info', duration = 3000) {
+  console.log('[Popup] 显示状态:', { message, type });
   
+  elements.status.textContent = message;
+  elements.status.className = `status ${type}`;
+  
+  // 自动隐藏
   setTimeout(() => {
-    elements.status.className = 'status';
-  }, 3000);
+    elements.status.style.display = 'none';
+  }, duration);
 }
 
 // HTML 转义
@@ -59,165 +51,77 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// 请求历史相关功能
-
-// 加载请求历史
-function loadRequestHistory() {
-  console.log('[Popup] 开始加载请求历史');
-  
-  // 从 Chrome 存储读取历史记录
-  chrome.storage.local.get(['requestHistory'], (result) => {
-    console.log('[Popup] Chrome 存储读取结果:', result);
-    
-    if (chrome.runtime.lastError) {
-      console.error('[Popup] Chrome 存储读取错误:', chrome.runtime.lastError);
-      elements.historyList.innerHTML = '<div class="empty-state">加载失败，请重试</div>';
-      return;
-    }
-
-    const chromeHistory = result.requestHistory || [];
-    
-    // 先显示已有的数据
-    renderRequestHistory(chromeHistory);
-    
-    // 如果 Chrome 存储中没有数据，等待 3 秒后重新检查
-    if (chromeHistory.length === 0) {
-      setTimeout(() => {
-        chrome.storage.local.get(['requestHistory'], (result2) => {
-          if (!chrome.runtime.lastError) {
-            const newHistory = result2.requestHistory || [];
-            if (newHistory.length > 0) {
-              renderRequestHistory(newHistory);
-            }
-          }
-        });
-      }, 3000);
-    }
-  });
-}
-
-// 渲染请求历史
-function renderRequestHistory(history) {
-  if (history.length === 0) {
-    elements.historyList.innerHTML = '<div class="empty-state">暂无请求记录</div>';
-    return;
-  }
-
-  elements.historyList.innerHTML = history.map((request, index) => {
-    const timestamp = new Date(request.timestamp).toLocaleString();
-    return `
-      <div class="history-item">
-        <div class="history-info">
-          <div class="history-url">${escapeHtml(request.url)}</div>
-          <div class="history-meta">
-            <span class="history-method ${request.method}">${request.method}</span>
-            <span class="history-time">${timestamp}</span>
-          </div>
-        </div>
-        <button class="generate-curl-btn" data-index="${index}">生成 cURL</button>
-      </div>
-    `;
-  }).join('');
-
-  // 绑定生成 cURL 按钮事件
-  document.querySelectorAll('.generate-curl-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const index = parseInt(e.target.dataset.index);
-      generateCurlFromHistory(history[index]);
-    });
-  });
-}
-
-// 从历史记录生成 cURL 命令
-function generateCurlFromHistory(request) {
-  const curl = generateCurlCommand(request.url, request.method, request.headers, request.body);
-  
-  // 显示生成的命令
-  elements.curlCommand.textContent = curl;
-  elements.curlOutput.style.display = 'block';
-  
-  showStatus('cURL 命令生成成功', 'success');
-}
-
-// 生成 cURL 命令字符串
-function generateCurlCommand(url, method, headers, body) {
-  let curl = `curl -X ${method}`;
-  
-  // 添加请求头
-  if (headers && typeof headers === 'object') {
-    Object.entries(headers).forEach(([key, value]) => {
-      // 过滤掉空值
-      if (value && value.trim && value.trim() !== '') {
-        curl += ` \\\n  -H "${key}: ${value}"`;
+// 加载 cURL 弹窗设置状态
+function loadCurlDisplaySettings() {
+  try {
+    chrome.runtime.sendMessage({
+      action: 'getCurlDisplayDisabled'
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[Popup] 获取 cURL 显示状态失败:', chrome.runtime.lastError);
+        // 默认为未禁用状态（启用）
+        updateCurlButtonState(false);
+        return;
       }
+      
+      const isDisabled = response && response.disabled;
+      console.log('[Popup] cURL 显示状态:', isDisabled ? '已禁用' : '已启用');
+      updateCurlButtonState(isDisabled);
     });
+  } catch (error) {
+    console.error('[Popup] 发送消息失败:', error);
+    // 默认为未禁用状态（启用）
+    updateCurlButtonState(false);
   }
-  
-  // 添加请求体（只有非 GET 请求且有数据时才添加）
-  if (body && (method !== 'GET' && method !== 'DELETE')) {
-    // 如果 body 是对象，转换为 JSON 字符串
-    let bodyStr = body;
-    if (typeof body === 'object') {
-      bodyStr = JSON.stringify(body);
-    }
-    curl += ` \\\n  -d '${bodyStr}'`;
-  }
-  
-  // 添加 URL（放在最后）
-  curl += ` \\\n  "${url}"`;
-  
-  return curl;
 }
 
-// 清空请求历史
-function handleClearHistory() {
-  chrome.storage.local.remove(['requestHistory'], () => {
-    if (chrome.runtime.lastError) {
-      console.error('[Popup] 清空历史失败:', chrome.runtime.lastError);
-      showStatus('清空失败: ' + chrome.runtime.lastError.message, 'error');
-      return;
-    }
-    
-    console.log('[Popup] 请求历史已清空');
-    elements.historyList.innerHTML = '<div class="empty-state">暂无请求记录</div>';
-    elements.curlOutput.style.display = 'none';
-    showStatus('请求历史已清空', 'success');
-  });
-}
-
-// 复制 cURL 命令到剪贴板
-function handleCopyCurl() {
-  const curlText = elements.curlCommand.textContent;
-  
-  // 使用 Clipboard API
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(curlText).then(() => {
-      showStatus('cURL 命令已复制到剪贴板', 'success');
-    }).catch(() => {
-      // 降级到旧的复制方法
-      fallbackCopy(curlText);
-    });
+// 更新 cURL 按钮状态
+function updateCurlButtonState(isDisabled) {
+  if (isDisabled) {
+    elements.enableCurlBtn.textContent = '启用弹窗';
+    elements.enableCurlBtn.className = 'btn btn-success';
+    elements.enableCurlBtn.disabled = false;
   } else {
-    // 降级到旧的复制方法
-    fallbackCopy(curlText);
+    elements.enableCurlBtn.textContent = '已启用';
+    elements.enableCurlBtn.className = 'btn btn-primary';
+    elements.enableCurlBtn.disabled = true;
   }
 }
 
-// 降级复制方法
-function fallbackCopy(text) {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
+// 处理启用 cURL 弹窗
+function handleEnableCurl() {
+  // 先更新 UI 状态，提供即时反馈
+  elements.enableCurlBtn.disabled = true;
+  elements.enableCurlBtn.textContent = '启用中...';
   
   try {
-    document.execCommand('copy');
-    showStatus('cURL 命令已复制到剪贴板', 'success');
-  } catch (e) {
-    showStatus('复制失败，请手动复制', 'error');
-  } finally {
-    document.body.removeChild(textarea);
+    chrome.runtime.sendMessage({
+      action: 'setCurlDisplayDisabled',
+      disabled: false
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[Popup] 启用 cURL 显示失败:', chrome.runtime.lastError);
+        showStatus('启用失败，请重试', 'error');
+        // 恢复按钮状态
+        updateCurlButtonState(true);
+        return;
+      }
+      
+      if (response && response.success) {
+        console.log('[Popup] cURL 显示已启用');
+        updateCurlButtonState(false);
+        showStatus('cURL 弹窗已启用', 'success');
+      } else {
+        console.warn('[Popup] 未收到成功响应:', response);
+        showStatus('启用可能失败，请检查扩展状态', 'error');
+        // 恢复按钮状态
+        updateCurlButtonState(true);
+      }
+    });
+  } catch (error) {
+    console.error('[Popup] 发送消息失败:', error);
+    showStatus('发送消息失败，请重试', 'error');
+    // 恢复按钮状态
+    updateCurlButtonState(true);
   }
 }

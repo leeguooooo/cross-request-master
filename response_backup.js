@@ -19,7 +19,7 @@
       console.log('[Cross-Request] 开始初始化扩展');
       this.observeDOM();
       this.injectScript();
-      this.listenToRequestHistory();
+      this.listenToCurlEvents();
       console.log('[Cross-Request] 扩展初始化完成');
     },
     
@@ -28,7 +28,15 @@
       const script = document.createElement('script');
       script.src = chrome.runtime.getURL('index.js');
       script.onload = function() {
+        console.log('[Response] index.js 脚本已加载完成');
         this.remove();
+        
+        // 脚本加载完成后，通知页面
+        const event = new CustomEvent('cross-request-script-loaded');
+        document.dispatchEvent(event);
+      };
+      script.onerror = function() {
+        console.error('[Response] index.js 脚本加载失败');
       };
       (document.head || document.documentElement).appendChild(script);
     },
@@ -214,98 +222,71 @@
       node.remove();
     },
     
-    // 监听请求历史记录事件
-    listenToRequestHistory() {
-      console.log('[Response] 开始监听请求历史记录事件');
+    // 监听 cURL 相关事件
+    listenToCurlEvents() {
+      console.log('[Response] 开始监听 cURL 事件');
       
-      document.addEventListener('y-request-history', (event) => {
-        const historyItem = event.detail;
-        console.log('[Response] 收到请求历史记录:', historyItem);
+      // 监听检查禁用状态事件
+      document.addEventListener('curl-check-disabled', (event) => {
+        const requestData = event.detail.requestData;
+        console.log('[Response] 收到检查 cURL 禁用状态请求:', requestData);
         
-        try {
-          // 获取当前的请求历史
-          chrome.storage.local.get(['requestHistory'], (result) => {
-            if (chrome.runtime.lastError) {
-              console.error('[Response] 获取请求历史失败:', chrome.runtime.lastError);
-              return;
-            }
-            
-            const history = result.requestHistory || [];
-            
-            // 添加到历史记录开头（最新的在前面）
-            history.unshift(historyItem);
-            
-            // 只保留最近的 50 条记录
-            if (history.length > 50) {
-              history.splice(50);
-            }
-            
-            // 保存到存储
-            chrome.storage.local.set({ requestHistory: history }, () => {
-              if (chrome.runtime.lastError) {
-                console.error('[Response] 保存请求历史失败:', chrome.runtime.lastError);
-              } else {
-                console.log('[Response] 请求已保存到历史记录:', historyItem);
-              }
-            });
-          });
-        } catch (error) {
-          console.error('[Response] 处理请求历史时出错:', error);
-        }
+        // 向 background script 查询状态
+        chrome.runtime.sendMessage({
+          action: 'getCurlDisplayDisabled'
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.warn('[Response] 获取 cURL 状态失败，默认显示:', chrome.runtime.lastError);
+            // 失败时默认显示
+            CrossRequest.showCurlCommand(requestData);
+            return;
+          }
+          
+          console.log('[Response] cURL 禁用状态查询结果:', response);
+          
+          if (response && response.disabled === true) {
+            console.log('[Response] cURL 显示已被永久关闭');
+            return;
+          }
+          
+          // 显示 cURL 弹窗
+          console.log('[Response] cURL 显示未被禁用，准备显示弹窗');
+          CrossRequest.showCurlCommand(requestData);
+        });
       });
       
-      // 定期同步 localStorage 到 Chrome 存储
-      setInterval(() => {
-        try {
-          const localHistory = JSON.parse(localStorage.getItem('crossRequestHistory') || '[]');
-          if (localHistory.length > 0) {
-            console.log('[Response] 同步 localStorage 到 Chrome 存储:', localHistory.length, '条记录');
-            
-            chrome.storage.local.get(['requestHistory'], (result) => {
-              if (chrome.runtime.lastError) {
-                console.error('[Response] 获取现有历史失败:', chrome.runtime.lastError);
-                return;
-              }
-              
-              const chromeHistory = result.requestHistory || [];
-              
-              // 合并历史记录，去重
-              const allHistory = [...chromeHistory, ...localHistory];
-              const uniqueHistory = [];
-              const seen = new Set();
-              
-              allHistory.forEach(item => {
-                const key = `${item.url}_${item.method}_${item.timestamp}`;
-                if (!seen.has(key)) {
-                  seen.add(key);
-                  uniqueHistory.push(item);
-                }
-              });
-              
-              // 按时间戳排序（最新的在前面）
-              uniqueHistory.sort((a, b) => b.timestamp - a.timestamp);
-              
-              // 只保留最近的 50 条记录
-              if (uniqueHistory.length > 50) {
-                uniqueHistory.splice(50);
-              }
-              
-              // 保存到 Chrome 存储
-              chrome.storage.local.set({ requestHistory: uniqueHistory }, () => {
-                if (chrome.runtime.lastError) {
-                  console.error('[Response] 同步保存失败:', chrome.runtime.lastError);
-                } else {
-                  console.log('[Response] 历史记录已同步:', uniqueHistory.length, '条');
-                  // 清空 localStorage
-                  localStorage.removeItem('crossRequestHistory');
-                }
-              });
-            });
+      // 监听禁用请求事件
+      document.addEventListener('curl-disable-request', (event) => {
+        const disabled = event.detail.disabled;
+        console.log('[Response] 收到 cURL 禁用请求:', disabled);
+        
+        // 向 background script 保存设置
+        chrome.runtime.sendMessage({
+          action: 'setCurlDisplayDisabled',
+          disabled: disabled
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.warn('[Response] 保存 cURL 禁用设置失败:', chrome.runtime.lastError);
+          } else {
+            console.log('[Response] cURL 禁用设置已保存');
           }
-        } catch (error) {
-          console.error('[Response] 同步 localStorage 时出错:', error);
-        }
-      }, 5000); // 每 5 秒同步一次
+        });
+      });
+    },
+    
+    // 显示 cURL 命令弹窗
+    showCurlCommand(requestData) {
+      console.log('[Response] 准备发送 curl-show-command 事件:', requestData);
+      
+      // 直接发送事件，让页面脚本处理
+      // 使用 setTimeout 确保事件在下一个事件循环中触发
+      setTimeout(() => {
+        const event = new CustomEvent('curl-show-command', {
+          detail: requestData
+        });
+        document.dispatchEvent(event);
+        console.log('[Response] curl-show-command 事件已发送');
+      }, 0);
     }
   };
   
@@ -317,66 +298,10 @@
   });
   
   // 启动
-  console.log('[Cross-Request] Content script 已加载 - 版本 2025-01-15-v2');
+  console.log('[Cross-Request] Content script 已加载 - 版本 2025-01-22-v4');
   console.log('[Cross-Request] 当前页面:', window.location.href);
   
-  // 立即开始监听请求历史记录事件，不等待 DOM 完全加载
-  console.log('[Cross-Request] 准备调用 listenToRequestHistory');
-  CrossRequest.listenToRequestHistory();
-  console.log('[Cross-Request] listenToRequestHistory 调用完成');
-  
-  // 定期同步 localStorage 到 Chrome 存储
-  setInterval(() => {
-    try {
-      const localHistory = JSON.parse(localStorage.getItem('crossRequestHistory') || '[]');
-      if (localHistory.length > 0) {
-        console.log('[Cross-Request] 同步 localStorage 到 Chrome 存储:', localHistory.length, '条记录');
-        
-        chrome.storage.local.get(['requestHistory'], (result) => {
-          if (chrome.runtime.lastError) {
-            console.error('[Cross-Request] 获取现有历史失败:', chrome.runtime.lastError);
-            return;
-          }
-          
-          const chromeHistory = result.requestHistory || [];
-          
-          // 合并历史记录，去重
-          const allHistory = [...chromeHistory, ...localHistory];
-          const uniqueHistory = [];
-          const seen = new Set();
-          
-          allHistory.forEach(item => {
-            const key = `${item.url}_${item.method}_${item.timestamp}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              uniqueHistory.push(item);
-            }
-          });
-          
-          // 按时间戳排序（最新的在前面）
-          uniqueHistory.sort((a, b) => b.timestamp - a.timestamp);
-          
-          // 只保留最近的 50 条记录
-          if (uniqueHistory.length > 50) {
-            uniqueHistory.splice(50);
-          }
-          
-          // 保存到 Chrome 存储
-          chrome.storage.local.set({ requestHistory: uniqueHistory }, () => {
-            if (chrome.runtime.lastError) {
-              console.error('[Cross-Request] 同步保存失败:', chrome.runtime.lastError);
-            } else {
-              console.log('[Cross-Request] 历史记录已同步:', uniqueHistory.length, '条');
-              // 清空 localStorage
-              localStorage.removeItem('crossRequestHistory');
-            }
-          });
-        });
-      }
-    } catch (error) {
-      console.error('[Cross-Request] 同步 localStorage 时出错:', error);
-    }
-  }, 3000); // 每 3 秒同步一次
+  console.log('[Cross-Request] Content script 已简化，移除历史记录功能');
   
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {

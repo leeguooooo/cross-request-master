@@ -388,6 +388,68 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
   
+  // 处理 cURL 显示设置
+  if (request.action === 'setCurlDisplayDisabled') {
+    console.log('[Background] 设置 cURL 显示状态:', request.disabled);
+    
+    // 使用 setTimeout 确保异步操作
+    setTimeout(() => {
+      chrome.storage.local.set({ curlDisplayDisabled: request.disabled }, () => {
+        if (chrome.runtime.lastError) {
+          console.error('[Background] 保存 cURL 显示设置失败:', chrome.runtime.lastError);
+          try {
+            sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          } catch (e) {
+            console.warn('[Background] 发送错误响应失败:', e);
+          }
+          return;
+        }
+        
+        console.log('[Background] cURL 显示设置保存成功');
+        try {
+          sendResponse({ success: true });
+        } catch (e) {
+          console.warn('[Background] 发送成功响应失败:', e);
+        }
+      });
+    }, 0);
+    
+    return true; // 表示异步响应
+  }
+  
+  if (request.action === 'getCurlDisplayDisabled') {
+    console.log('[Background] 获取 cURL 显示状态');
+    
+    // 使用 setTimeout 确保异步操作
+    setTimeout(() => {
+      chrome.storage.local.get(['curlDisplayDisabled'], (result) => {
+        if (chrome.runtime.lastError) {
+          console.error('[Background] 获取 cURL 显示设置失败:', chrome.runtime.lastError);
+          try {
+            sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          } catch (e) {
+            console.warn('[Background] 发送错误响应失败:', e);
+          }
+          return;
+        }
+        
+        const disabled = result.curlDisplayDisabled || false;
+        console.log('[Background] 当前 cURL 显示状态:', {
+          curlDisplayDisabled: result.curlDisplayDisabled,
+          disabled: disabled,
+          isDisabled: disabled === true
+        });
+        try {
+          sendResponse({ disabled: disabled });
+        } catch (e) {
+          console.warn('[Background] 发送 cURL 状态响应失败:', e);
+        }
+      });
+    }, 0);
+    
+    return true; // 表示异步响应
+  }
+  
   return false;
 });
 
@@ -397,14 +459,23 @@ chrome.runtime.onInstalled.addListener((details) => {
     // 首次安装时设置默认配置
     chrome.storage.local.set({
       allowedDomains: ['*'],
+      curlDisplayDisabled: false,  // 默认启用 cURL 显示
       settings: {
         enableLogging: false,
         maxTimeout: 60000
       }
     });
+    console.log('[Background] 扩展已安装，cURL 显示默认启用');
   } else if (details.reason === 'update') {
     // 处理版本更新
     console.log('Extension updated from', details.previousVersion, 'to', chrome.runtime.getManifest().version);
+    // 确保 cURL 设置存在
+    chrome.storage.local.get(['curlDisplayDisabled'], (result) => {
+      if (result.curlDisplayDisabled === undefined) {
+        chrome.storage.local.set({ curlDisplayDisabled: false });
+        console.log('[Background] 更新后设置 cURL 显示默认启用');
+      }
+    });
   }
 });
 
