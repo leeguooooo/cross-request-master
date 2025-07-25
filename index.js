@@ -298,8 +298,9 @@
                             // 对于 JSON 响应，优先使用已解析的 data，确保返回对象格式
                             yapiRes = response.data;
                             
-                            // 如果 data 不存在或为空，尝试解析 body
-                            if (!yapiRes && response.body) {
+                            // 只有当 data 明确为 undefined 或 null 时才尝试重新解析 body
+                            // 避免将有效的 falsy 值（如 0, false, "", {}, []）误判为需要重新解析
+                            if ((yapiRes === undefined || yapiRes === null) && response.body) {
                                 try {
                                     yapiRes = JSON.parse(response.body);
                                     console.log('[Index] 从 body 重新解析 JSON 成功');
