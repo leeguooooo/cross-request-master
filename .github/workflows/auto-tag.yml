@@ -1,0 +1,114 @@
+name: Auto Tag on Version Change
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'manifest.json' ]
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Get current version from manifest.json
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' manifest.json)
+          echo "current_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=v$VERSION" >> $GITHUB_OUTPUT
+          echo "当前版本: $VERSION"
+      
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git tag -l | grep -q "^${{ steps.version.outputs.tag_name }}$"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "标签 ${{ steps.version.outputs.tag_name }} 已存在"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "标签 ${{ steps.version.outputs.tag_name }} 不存在，将创建新标签"
+          fi
+      
+      - name: Get previous version from git history
+        id: prev_version
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          # 获取上一次修改 manifest.json 的提交中的版本号
+          PREV_VERSION=$(git show HEAD~1:manifest.json 2>/dev/null | jq -r '.version' 2>/dev/null || echo "unknown")
+          echo "previous_version=$PREV_VERSION" >> $GITHUB_OUTPUT
+          echo "上一个版本: $PREV_VERSION"
+      
+      - name: Create tag and release notes
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          # 配置 git 用户信息
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 从 README.md 提取版本更新日志
+          VERSION="${{ steps.version.outputs.current_version }}"
+          
+          # 尝试从 README.md 提取对应版本的更新日志
+          CHANGELOG=$(awk -v version="$VERSION" '
+            BEGIN { found=0; content=""; in_version=0 }
+            /^### v/ { 
+              if (in_version && found) exit;
+              if ($0 ~ "v" version "[ (]") {
+                found=1;
+                in_version=1;
+                # 跳过版本标题行，只提取内容
+                next;
+              } else if (in_version && found) {
+                exit;
+              }
+            }
+            found && in_version && !/^### v/ { 
+              if (NF > 0 || $0 ~ /^$/) {
+                content = content $0 "\n"; 
+              }
+            }
+            END { 
+              # 清理末尾多余的换行符
+              gsub(/\n+$/, "", content);
+              if (content == "") {
+                print "版本更新";
+              } else {
+                print content;
+              }
+            }
+          ' README.md)
+          
+          echo "提取到的更新日志:"
+          echo "$CHANGELOG"
+          
+          # 创建带注释的标签
+          git tag -a "${{ steps.version.outputs.tag_name }}" -m "Cross Request Master v$VERSION
+          
+          $CHANGELOG
+          
+          自动发布于 $(date +'%Y-%m-%d %H:%M:%S')"
+          
+          # 推送标签到远程仓库
+          git push origin "${{ steps.version.outputs.tag_name }}"
+          
+          echo "✅ 成功创建并推送标签: ${{ steps.version.outputs.tag_name }}"
+      
+      - name: Summary
+        run: |
+          if [ "${{ steps.check_tag.outputs.exists }}" = "true" ]; then
+            echo "⚠️ 标签 ${{ steps.version.outputs.tag_name }} 已存在，跳过创建"
+            echo "如需重新发布，请删除现有标签后重新推送代码"
+          else
+            echo "✅ 自动创建标签完成！"
+            echo "📋 版本: ${{ steps.version.outputs.current_version }}"
+            echo "🏷️ 标签: ${{ steps.version.outputs.tag_name }}"
+            echo "🚀 发布工作流将自动触发，请稍候查看 Releases 页面"
+          fi
