@@ -138,6 +138,10 @@
 - 添加域名白名单管理功能
 - 重构代码以提高安全性
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=leeguooooo/cross-request-master&type=Date)](https://www.star-history.com/#leeguooooo/cross-request-master&Date)
+
 ## 许可证
 
 MIT License
