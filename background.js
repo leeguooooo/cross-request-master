@@ -99,7 +99,7 @@ async function handleCrossOriginRequest(request) {
   };
   
   // 添加请求体（如果有）
-  if (body && method !== 'GET' && method !== 'HEAD') {
+  if (body && method.toLowerCase() !== 'get' && method.toLowerCase() !== 'head') {
     if (typeof body === 'object' && !(body instanceof FormData)) {
       // 检查 Content-Type 以决定如何序列化 body
       const contentType = fetchOptions.headers.get('Content-Type') || '';
