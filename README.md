@@ -1,5 +1,9 @@
 # Cross Request Master
 
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/leeguooooo?logo=github)](https://github.com/sponsors/leeguooooo)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-brightgreen.svg)](https://chrome.google.com/webstore)
+
 一个专为 YApi 接口管理平台定制的 Chrome 扩展，用于绕过 CORS 限制并自动生成 cURL 命令。
 
 ## 功能特性
@@ -282,6 +286,25 @@ cross-request-master/
 1. 请先查看已知问题和更新日志
 2. 提供详细的错误信息和复现步骤
 3. 说明使用的 Chrome 版本和插件版本
+
+## 支持项目
+
+如果这个项目对你有帮助，欢迎支持：
+
+- **Star** 本仓库以表示支持
+- **反馈问题** 或建议功能通过 [Issues](https://github.com/leeguooooo/cross-request-master/issues)
+- **贡献代码** 或文档通过 [Pull Requests](https://github.com/leeguooooo/cross-request-master/pulls)
+- **赞助开发** 通过 [GitHub Sponsors](https://github.com/sponsors/leeguooooo)
+
+### 微信 / 支付宝赞助
+
+如果你想通过微信或支付宝支持本项目：
+
+<div align="center">
+  <p><i>添加赞助二维码请联系项目维护者</i></p>
+</div>
+
+你的支持是项目持续维护和改进的动力！
 
 ## 许可证
 
