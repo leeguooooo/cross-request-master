@@ -2,20 +2,26 @@
 
 本文档记录 Cross Request Master 的技术改进计划，从当前"开源合格"状态提升到"优秀开源项目"。
 
-## 当前状态 (v4.4.13)
+## 当前状态 (v4.4.14)
 
 ✅ **已完成**
-- 修复关键 bug（Issue #19，falsy 值处理）
+- 修复关键 bug（Issue #19 falsy 值处理，Issue #20 GET 参数丢失）
 - 添加贡献指南和 Issue/PR 模板
 - 添加 ESLint 和 Prettier 配置
-- 添加测试框架（Jest）和示例测试
+- 添加测试框架（Jest）和 68 个测试用例
 - 完善文档（技术文档、发布说明）
+
+⚠️ **已知技术债**
+- 测试使用 mock helper 实现，不能真正测试生产代码
+- 原因：index.js 使用 IIFE 模式，不支持 export
+- 缓解：tests/helpers.test.js 顶部有明确 TODO 注释
+- 计划：v4.5.0 通过模块化重构彻底解决
 
 ## 短期目标 (v4.5.x - 下一个 minor 版本)
 
 ### 1. 代码质量改进
 
-#### 1.1 模块化重构 🔥 **高优先级**
+#### 1.1 模块化重构 🔥 **高优先级** - **解决测试技术债**
 
 **当前问题**:
 - `index.js` (962行) 混合了多种职责：
@@ -24,6 +30,10 @@
   - Helper 函数
   - YApi 适配器
   - jQuery 拦截
+- **关键问题**: IIFE 模式不支持 export，导致测试只能 mock helper 实现
+  - tests/helpers.test.js 重新实现了 buildQueryString、bodyToString 等
+  - 如果 index.js 退化，测试仍然通过（虚假绿灯）
+  - 无法真正保护生产代码
 
 **改进计划**:
 ```
@@ -33,7 +43,8 @@ src/
 │   ├── request.js         # 请求编排
 │   └── response.js        # 响应处理
 ├── helpers/
-│   ├── body-parser.js     # bodyToString, ensureJsonParsed
+│   ├── body-parser.js     # bodyToString, ensureJsonParsed (可导出)
+│   ├── query-string.js    # buildQueryString (可导出)
 │   ├── error-builder.js   # buildErrorResponse
 │   └── url-resolver.js    # 相对 URL 解析
 ├── ui/
@@ -44,6 +55,11 @@ src/
 │   └── jquery.js         # jQuery 拦截
 └── index.js              # 主入口，组装各模块
 ```
+
+**关键改进**:
+1. 提取 helpers 到独立模块，支持 CommonJS/ESM 导出
+2. tests/ 导入真实 helper，而不是 mock 实现
+3. 生产代码和测试使用同一份逻辑，消除虚假通过风险
 
 **挑战**:
 - Chrome 扩展需要在 `manifest.json` 中声明所有脚本
@@ -354,6 +370,23 @@ __tests__/
 ---
 
 **最后更新**: 2025-10-17  
-**当前版本**: v4.4.13  
+**当前版本**: v4.4.14  
 **下一个版本**: v4.5.0 (预计 2-3 个月)
+
+---
+
+## 版本历史
+
+### v4.4.14 (2025-10-17)
+- 修复 jQuery $.get 参数丢失（Issue #20）
+- 方法名规范化（大小写不敏感）
+- 增强 buildQueryString 支持数组和嵌套对象
+- 新增 29 个测试（总计 68 个）
+- **技术债**: 测试使用 mock 实现（计划 v4.5.0 修复）
+
+### v4.4.13 (2025-10-17)
+- 修复 YApi 兼容性（Issue #19）
+- 修复 falsy 值处理
+- 添加 ESLint、Prettier、Jest
+- 完善开源项目基础设施
 

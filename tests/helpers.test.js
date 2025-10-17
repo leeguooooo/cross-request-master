@@ -1,8 +1,9 @@
 /**
  * Tests for helper functions
  * 
- * These tests focus on the critical falsy-value handling
- * that was fixed in v4.4.13
+ * These tests focus on critical bug fixes:
+ * - v4.4.13: Falsy-value handling
+ * - v4.4.14: GET request parameter handling (Issue #20)
  * 
  * NOTE: Currently these tests re-implement the helper logic
  * instead of importing from index.js because index.js uses
@@ -241,6 +242,286 @@ describe('JSON parsing guards', () => {
 
     test('should handle empty string', () => {
         expect(parseJsonSafely('')).toEqual({});
+    });
+});
+
+// Tests for GET request parameter handling (Issue #20)
+describe('buildQueryString helper', () => {
+    // Mock the buildQueryString function (extracted from index.js:42-70)
+    function buildQueryString(params) {
+        if (!params || typeof params !== 'object') {
+            return '';
+        }
+        const pairs = [];
+        for (const key in params) {
+            if (Object.prototype.hasOwnProperty.call(params, key)) {
+                const value = params[key];
+                if (value !== undefined && value !== null) {
+                    // 处理数组
+                    if (Array.isArray(value)) {
+                        value.forEach((item) => {
+                            pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(item)}`);
+                        });
+                    }
+                    // 处理嵌套对象
+                    else if (typeof value === 'object') {
+                        pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(JSON.stringify(value))}`);
+                    }
+                    // 处理基本类型
+                    else {
+                        pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+                    }
+                }
+            }
+        }
+        return pairs.length > 0 ? pairs.join('&') : '';
+    }
+
+    describe('basic functionality', () => {
+        test('should convert simple object to query string', () => {
+            const params = { a: '1', b: '2' };
+            expect(buildQueryString(params)).toBe('a=1&b=2');
+        });
+
+        test('should handle single parameter', () => {
+            const params = { name: 'test' };
+            expect(buildQueryString(params)).toBe('name=test');
+        });
+
+        test('should encode special characters', () => {
+            const params = { search: 'hello world', type: 'test&value' };
+            const result = buildQueryString(params);
+            expect(result).toContain('search=hello%20world');
+            expect(result).toContain('type=test%26value');
+        });
+
+        test('should handle Chinese characters', () => {
+            const params = { name: '测试' };
+            expect(buildQueryString(params)).toContain(encodeURIComponent('测试'));
+        });
+
+        test('should handle array values', () => {
+            const params = { ids: [1, 2, 3] };
+            const result = buildQueryString(params);
+            expect(result).toBe('ids=1&ids=2&ids=3');
+        });
+
+        test('should handle nested objects', () => {
+            const params = { filter: { status: 'active', type: 'user' } };
+            const result = buildQueryString(params);
+            const decoded = decodeURIComponent(result);
+            expect(decoded).toContain('filter={"status":"active","type":"user"}');
+        });
+
+        test('should handle mixed types', () => {
+            const params = {
+                name: 'test',
+                ids: [1, 2],
+                filter: { status: 'active' },
+                count: 5
+            };
+            const result = buildQueryString(params);
+            expect(result).toContain('name=test');
+            expect(result).toContain('ids=1&ids=2');
+            expect(result).toContain('count=5');
+            expect(result).toContain('filter=');
+        });
+    });
+
+    describe('edge cases', () => {
+        test('should return empty string for null', () => {
+            expect(buildQueryString(null)).toBe('');
+        });
+
+        test('should return empty string for undefined', () => {
+            expect(buildQueryString(undefined)).toBe('');
+        });
+
+        test('should return empty string for empty object', () => {
+            expect(buildQueryString({})).toBe('');
+        });
+
+        test('should return empty string for non-object', () => {
+            expect(buildQueryString('string')).toBe('');
+            expect(buildQueryString(123)).toBe('');
+            expect(buildQueryString(true)).toBe('');
+        });
+    });
+
+    describe('falsy values in params (Issue #20)', () => {
+        test('should preserve number zero', () => {
+            const params = { count: 0 };
+            expect(buildQueryString(params)).toBe('count=0');
+        });
+
+        test('should preserve boolean false', () => {
+            const params = { active: false };
+            expect(buildQueryString(params)).toBe('active=false');
+        });
+
+        test('should preserve empty string', () => {
+            const params = { text: '' };
+            expect(buildQueryString(params)).toBe('text=');
+        });
+
+        test('should skip undefined values', () => {
+            const params = { a: '1', b: undefined, c: '2' };
+            const result = buildQueryString(params);
+            expect(result).not.toContain('b=');
+            expect(result).toContain('a=1');
+            expect(result).toContain('c=2');
+        });
+
+        test('should skip null values', () => {
+            const params = { a: '1', b: null, c: '2' };
+            const result = buildQueryString(params);
+            expect(result).not.toContain('b=');
+            expect(result).toContain('a=1');
+            expect(result).toContain('c=2');
+        });
+
+        test('should handle mixed falsy values', () => {
+            const params = { 
+                zero: 0, 
+                false: false, 
+                empty: '', 
+                undef: undefined, 
+                nothing: null,
+                real: 'value'
+            };
+            const result = buildQueryString(params);
+            expect(result).toContain('zero=0');
+            expect(result).toContain('false=false');
+            expect(result).toContain('empty=');
+            expect(result).not.toContain('undef=');
+            expect(result).not.toContain('nothing=');
+            expect(result).toContain('real=value');
+        });
+    });
+
+    describe('Issue #20 regression test', () => {
+        test('should convert jQuery $.get params correctly', () => {
+            // Simulating: $.get("/feedback/list", { types: "0,2" })
+            const params = { types: "0,2" };
+            const queryString = buildQueryString(params);
+            expect(queryString).toBe('types=0%2C2');
+        });
+
+        test('should handle multiple params like jQuery', () => {
+            const params = {
+                page: 1,
+                pageSize: 10,
+                types: "0,2",
+                status: "active"
+            };
+            const queryString = buildQueryString(params);
+            expect(queryString).toContain('page=1');
+            expect(queryString).toContain('pageSize=10');
+            expect(queryString).toContain('types=0%2C2');
+            expect(queryString).toContain('status=active');
+        });
+    });
+});
+
+describe('GET request parameter handling', () => {
+    // Mock GET request processing logic
+    function processGetRequest(url, method, data) {
+        // 规范化 method 为大写
+        const normalizedMethod = (method || 'GET').toUpperCase();
+        
+        if ((normalizedMethod === 'GET' || normalizedMethod === 'HEAD') && data) {
+            function buildQueryString(params) {
+                if (!params || typeof params !== 'object') {
+                    return '';
+                }
+                const pairs = [];
+                for (const key in params) {
+                    if (Object.prototype.hasOwnProperty.call(params, key)) {
+                        const value = params[key];
+                        if (value !== undefined && value !== null) {
+                            pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+                        }
+                    }
+                }
+                return pairs.length > 0 ? pairs.join('&') : '';
+            }
+
+            const queryString = typeof data === 'object' ? buildQueryString(data) : String(data);
+            if (queryString) {
+                url = url + (url.includes('?') ? '&' : '?') + queryString;
+            }
+            return { url, body: undefined };
+        }
+        return { url, body: data };
+    }
+
+    test('should append params to URL for GET request', () => {
+        const result = processGetRequest('/api/users', 'GET', { id: 1 });
+        expect(result.url).toBe('/api/users?id=1');
+        expect(result.body).toBeUndefined();
+    });
+
+    test('should not modify body for POST request', () => {
+        const result = processGetRequest('/api/users', 'POST', { id: 1 });
+        expect(result.url).toBe('/api/users');
+        expect(result.body).toEqual({ id: 1 });
+    });
+
+    test('should handle URL with existing query params', () => {
+        const result = processGetRequest('/api/users?page=1', 'GET', { id: 1 });
+        expect(result.url).toBe('/api/users?page=1&id=1');
+        expect(result.body).toBeUndefined();
+    });
+
+    test('should handle empty data for GET', () => {
+        const result = processGetRequest('/api/users', 'GET', null);
+        expect(result.url).toBe('/api/users');
+        expect(result.body).toBeNull();
+    });
+
+    describe('Issue #20 - Fetch API compatibility', () => {
+        test('GET request should not have body', () => {
+            // This was the bug: GET request had body, causing fetch error
+            const result = processGetRequest('/feedback/list', 'GET', { types: "0,2" });
+            
+            expect(result.url).toContain('types=0%2C2');
+            expect(result.body).toBeUndefined(); // Critical: body must be undefined for GET
+        });
+
+        test('POST request should keep body', () => {
+            const result = processGetRequest('/api/create', 'POST', { name: 'test' });
+            
+            expect(result.url).toBe('/api/create');
+            expect(result.body).toEqual({ name: 'test' });
+        });
+
+        test('lowercase "get" should work', () => {
+            const result = processGetRequest('/api/list', 'get', { id: 1 });
+            
+            expect(result.url).toBe('/api/list?id=1');
+            expect(result.body).toBeUndefined();
+        });
+
+        test('mixed case "Get" should work', () => {
+            const result = processGetRequest('/api/list', 'Get', { id: 1 });
+            
+            expect(result.url).toBe('/api/list?id=1');
+            expect(result.body).toBeUndefined();
+        });
+
+        test('HEAD request should also not have body', () => {
+            const result = processGetRequest('/api/check', 'HEAD', { id: 1 });
+            
+            expect(result.url).toBe('/api/check?id=1');
+            expect(result.body).toBeUndefined();
+        });
+
+        test('lowercase "head" should work', () => {
+            const result = processGetRequest('/api/check', 'head', { id: 1 });
+            
+            expect(result.url).toBe('/api/check?id=1');
+            expect(result.body).toBeUndefined();
+        });
     });
 });
 

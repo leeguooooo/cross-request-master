@@ -7,7 +7,34 @@
 
 ## [未发布]
 
-_当前没有未发布的变更_
+### 计划中（v4.5.0）
+
+- **技术债清理** - 模块化重构
+  - 将 helpers (buildQueryString, bodyToString 等) 提取到独立模块 `src/helpers/`
+  - 修改测试以导入真实 helper 而不是 mock 实现
+  - 当前测试使用 mock 实现可能导致虚假通过（已在 tests/helpers.test.js 标注 TODO）
+
+## [4.4.14] - 2025-10-17
+
+### 修复
+
+- **修复 jQuery $.get 参数丢失问题**（Issue #20）
+  - **问题**: GET 请求的参数被当作 body 发送，导致 Fetch API 报错 "Request with GET/HEAD method cannot have body"
+  - **根本原因**: 
+    1. GET 请求的 data 被直接赋值给 body
+    2. method 比较区分大小写，`'get'` 不匹配 `'GET'`
+  - **修复内容**:
+    - **method 规范化**: `(options.method || 'GET').toUpperCase()` 确保大小写不敏感
+    - **GET 参数处理**: 将 data 转换为查询字符串附加到 URL，body 设为 undefined
+    - **增强 buildQueryString**: 支持数组（`ids=[1,2,3]` → `ids=1&ids=2&ids=3`）和嵌套对象（JSON 序列化）
+  - **测试覆盖**: 新增 29 个测试（总计 68 个），覆盖大小写、数组、对象等场景
+
+### 已知限制
+
+- 测试使用 mock helper 实现而非真实代码（技术债，计划 v4.5.0 修复）
+- 原因：index.js 使用 IIFE 模式，不支持 export
+- 风险：如果 index.js 退化，测试可能仍然通过
+- 缓解：在测试文件顶部有明确的 TODO 注释
 
 ## [4.4.13] - 2025-10-17
 

@@ -38,6 +38,37 @@
     // 待处理的请求
     pendingRequests: new Map(),
 
+    // 辅助函数：将对象转换为查询字符串
+    buildQueryString(params) {
+      if (!params || typeof params !== 'object') {
+        return '';
+      }
+      const pairs = [];
+      for (const key in params) {
+        if (Object.prototype.hasOwnProperty.call(params, key)) {
+          const value = params[key];
+          if (value !== undefined && value !== null) {
+            // 处理数组：转换为多个同名参数 (key=val1&key=val2)
+            if (Array.isArray(value)) {
+              value.forEach((item) => {
+                pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(item)}`);
+              });
+            }
+            // 处理嵌套对象：JSON 序列化（或者跳过，取决于 API 约定）
+            else if (typeof value === 'object') {
+              // 对于嵌套对象，序列化为 JSON 字符串
+              pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(JSON.stringify(value))}`);
+            }
+            // 处理基本类型
+            else {
+              pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+            }
+          }
+        }
+      }
+      return pairs.length > 0 ? pairs.join('&') : '';
+    },
+
     // 发送跨域请求
     async request(options) {
       return new Promise((resolve, reject) => {
@@ -46,13 +77,28 @@
         // 保存回调
         this.pendingRequests.set(id, { resolve, reject });
 
+        // 规范化 method 为大写，确保大小写不敏感的比较
+        const method = (options.method || 'GET').toUpperCase();
+        const data = options.data || options.body;
+        let url = options.url;
+        let body = data;
+
+        // 对于 GET/HEAD 请求，将参数转换为查询字符串附加到 URL
+        if ((method === 'GET' || method === 'HEAD') && data) {
+          const queryString = typeof data === 'object' ? this.buildQueryString(data) : String(data);
+          if (queryString) {
+            url = url + (url.includes('?') ? '&' : '?') + queryString;
+          }
+          body = undefined; // GET/HEAD 请求不应该有 body
+        }
+
         // 创建请求数据
         const requestData = {
           id,
-          url: options.url,
-          method: options.method || 'GET',
+          url,
+          method,
           headers: options.headers || {},
-          body: options.data || options.body,
+          body,
           timeout: options.timeout || 30000
         };
 
