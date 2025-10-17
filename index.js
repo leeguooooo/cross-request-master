@@ -1,15 +1,19 @@
 (function (win) {
     'use strict';
     
-    console.log('[Index] index.js 脚本开始执行');
-    
     // 检查是否已经加载过
     if (win.__crossRequestLoaded) {
-        console.log('[Cross-Request] 脚本已加载，跳过重复加载');
         return;
     }
     win.__crossRequestLoaded = true;
-    console.log('[Cross-Request] 网页脚本开始加载');
+    
+    // 检查是否为静默模式
+    const isSilentMode = win.__crossRequestSilentMode || false;
+    
+    // 静默模式下不输出调试日志
+    const debugLog = isSilentMode ? () => {} : console.log.bind(console);
+    
+    debugLog('[Index] index.js 脚本开始执行（' + (isSilentMode ? '静默' : '完整') + '模式）');
 
     // 创建跨域请求的 API
     const CrossRequestAPI = {
@@ -42,7 +46,7 @@
                 container.id = `y-request-${id}`;
                 container.style.display = 'none';
                 container.textContent = btoa(encodeURIComponent(JSON.stringify(requestData)));
-                document.body.appendChild(container);
+                (document.body || document.documentElement).appendChild(container);
                 
                 // 设置超时
                 setTimeout(() => {
@@ -90,7 +94,7 @@
                 if (contentType.includes('application/json') && response.body) {
                     try {
                         parsedData = JSON.parse(response.body);
-                        console.log('[Index] 为 YApi 解析 JSON 成功:', {
+                        debugLog('[Index] 为 YApi 解析 JSON 成功:', {
                             originalType: typeof response.body,
                             parsedType: typeof parsedData,
                             isObject: parsedData && typeof parsedData === 'object'
@@ -143,20 +147,16 @@
     // YApi 兼容的 crossRequest 方法
     function createCrossRequestMethod() {
         return function(options) {
-            console.log('[Index] YApi crossRequest 被调用:', {
-                url: options.url,
-                method: options.method || 'GET',
-                hasSuccess: !!options.success,
-                hasError: !!options.error
-            });
             
-            // 处理 YApi 参数格式
-            if (typeof options === 'string') {
-                options = { url: options };
-            }
-            
-            // 准备请求数据
-            const requestData = {
+        debugLog('[Index] YApi crossRequest 被调用:', options?.url);
+        
+        // 处理 YApi 参数格式
+        if (typeof options === 'string') {
+            options = { url: options };
+        }
+        
+        // 准备请求数据
+        const requestData = {
                 url: options.url,
                 method: options.method || options.type || 'GET',
                 headers: options.headers || {},
@@ -169,12 +169,14 @@
                 requestData.headers['User-Agent'] = navigator.userAgent;
             }
             
-            // 如果没有指定 Content-Type 且有数据，自动添加
-            if (requestData.data && !requestData.headers['Content-Type'] && !requestData.headers['content-type']) {
-                if (typeof requestData.data === 'object') {
-                    requestData.headers['Content-Type'] = 'application/json';
-                } else {
-                    requestData.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+            // 只为非 GET/HEAD 请求添加 Content-Type（有数据时）
+            if (requestData.data && requestData.method !== 'GET' && requestData.method !== 'HEAD') {
+                if (!requestData.headers['Content-Type'] && !requestData.headers['content-type']) {
+                    if (typeof requestData.data === 'object') {
+                        requestData.headers['Content-Type'] = 'application/json';
+                    } else {
+                        requestData.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+                    }
                 }
             }
             
@@ -189,10 +191,12 @@
                 requestData.headers['Cookie'] = cookies;
             }
             
-            console.log('[Index] 捕获的请求数据:', requestData);
+            debugLog('[Index] 捕获的请求数据:', requestData);
             
-            // 显示 cURL 命令
-            showCurlCommand(requestData);
+            // 只在非静默模式下显示 cURL 命令
+            if (!isSilentMode) {
+                showCurlCommand(requestData);
+            }
             
             // 发送请求
             const promise = CrossRequestAPI.request(requestData);
@@ -200,18 +204,15 @@
             // YApi 期望的回调格式
             promise.then(
                 (response) => {
-                    console.log('[Index] YApi 请求成功，调用 success 回调:', {
-                        status: response.status,
-                        dataType: typeof response.data,
-                        isObject: response.data && typeof response.data === 'object',
-                        headers: response.headers
-                    });
+                    debugLog('[Index] YApi 请求成功，状态:', response.status);
                     
                     // 检查是否是错误响应
                     if (response.isError) {
                         // 这是一个网络错误或其他错误
                         const errorMsg = response.statusText || '请求失败';
-                        createErrorDisplay(errorMsg);
+                        if (!isSilentMode) {
+                            createErrorDisplay(errorMsg);
+                        }
                         
                         if (options.error) {
                             // 构建错误响应体
@@ -243,17 +244,13 @@
                                 success: false  // 顶层的 success 字段
                             };
                             
-                            console.log('[Index] 处理 isError 响应，调用 error 回调:', {
-                                'errorBody (第1个参数)': errorBody,
-                                'errorHeader (第2个参数)': errorHeader,
-                                'errorData (第3个参数)': errorData
-                            });
+                            debugLog('[Index] 处理 isError 响应，调用 error 回调');
                             
                             options.error(errorBody, errorHeader, errorData);
                             return;
                         }
                         // 如果没有错误回调，继续执行 success 回调，让 YApi 处理错误
-                        console.log('[Index] 没有 error 回调，将错误传递给 success 回调');
+                        debugLog('[Index] 没有 error 回调，将错误传递给 success 回调');
                     }
                     
                     // 检查HTTP状态码
@@ -283,8 +280,10 @@
                                 break;
                         }
                         
-                        // 显示错误提示
-                        createErrorDisplay(errorMsg);
+                        // 显示错误提示（仅非静默模式）
+                        if (!isSilentMode) {
+                            createErrorDisplay(errorMsg);
+                        }
                     }
                     
                     if (options.success) {
@@ -303,7 +302,7 @@
                             if ((yapiRes === undefined || yapiRes === null) && response.body) {
                                 try {
                                     yapiRes = JSON.parse(response.body);
-                                    console.log('[Index] 从 body 重新解析 JSON 成功');
+                                    debugLog('[Index] 从 body 重新解析 JSON 成功');
                                 } catch (e) {
                                     console.warn('[Index] JSON 解析失败，使用原始响应:', e.message);
                                     yapiRes = response.body;
@@ -329,31 +328,17 @@
                             success: true  // 顶层的 success 字段
                         };
                         
-                        console.log('[Index] 准备调用 YApi success 回调，参数详情:', {
-                            'yapiRes (第1个参数)': yapiRes,
-                            'yapiRes 类型': typeof yapiRes,
-                            'yapiRes 是否为对象': yapiRes && typeof yapiRes === 'object',
-                            'content-type': contentType,
-                            'response.data': response.data,
-                            'response.body': response.body,
-                            'yapiHeader (第2个参数)': yapiHeader,
-                            'yapiData (第3个参数)': yapiData,
-                            'status': yapiData.status,
-                            'statusText': yapiData.statusText,
-                            'res.status': yapiData.res.status,
-                            'res.statusText': yapiData.res.statusText
-                        });
+                        debugLog('[Index] 准备调用 YApi success 回调');
                         
                         try {
                             // YApi 期望的回调参数：success(res, header, data)
                             options.success(yapiRes, yapiHeader, yapiData);
                         } catch (callbackError) {
                             console.error('[Index] YApi success 回调执行出错:', callbackError);
-                            console.log('[Index] 调用堆栈:', callbackError.stack);
                             
                             // 尝试简化的格式
                             try {
-                                console.log('[Index] 尝试简化格式...');
+                                debugLog('[Index] 尝试简化格式...');
                                 options.success(response.data, response.headers, response);
                             } catch (secondError) {
                                 console.error('[Index] 简化格式也失败:', secondError);
@@ -363,20 +348,14 @@
                 }
             ).catch((error) => {
                 // 处理 promise rejection
-                console.error('[Index] Promise rejected:', {
-                    error: error,
-                    message: error.message,
-                    stack: error.stack,
-                    name: error.name
-                });
+                debugLog('[Index] Promise rejected:', error.message);
                 
-                // 显示错误提示
+                // 显示错误提示（仅非静默模式）
                 let errorMsg = error.message || '请求失败';
                 
-                // 不要替换错误信息，保持 background.js 提供的详细信息
-                console.log('[Index] 原始错误信息:', errorMsg);
-                
-                createErrorDisplay(errorMsg);
+                if (!isSilentMode) {
+                    createErrorDisplay(errorMsg);
+                }
                 
                 if (options.error) {
                     // 与成功响应使用相同的参数结构
@@ -399,11 +378,7 @@
                         success: false  // 顶层的 success 字段
                     };
                     
-                    console.log('[Index] 调用 error 回调，参数格式与成功响应一致:', {
-                        'errorBody (第1个参数)': errorBody,
-                        'errorHeader (第2个参数)': errorHeader,
-                        'errorData (第3个参数)': errorData
-                    });
+                    debugLog('[Index] 调用 error 回调');
                     
                     // 使用与 success 相同的三个参数
                     options.error(errorBody, errorHeader, errorData);
@@ -429,11 +404,7 @@
                         success: false  // 顶层的 success 字段
                     };
                     
-                    console.log('[Index] 使用 success 回调传递错误，参数:', {
-                        errorBody: errorBody,
-                        errorHeader: errorHeader,
-                        errorData: errorData
-                    });
+                    debugLog('[Index] 使用 success 回调传递错误');
                     
                     options.success(errorBody, errorHeader, errorData);
                 }
@@ -459,7 +430,8 @@
             textarea.style.left = '-999999px';
             textarea.style.top = '-999999px';
             textarea.setAttribute('readonly', '');
-            document.body.appendChild(textarea);
+            const parent = document.body || document.documentElement;
+            parent.appendChild(textarea);
             
             // 选择文本
             textarea.select();
@@ -474,7 +446,7 @@
                 console.warn('[Index] 复制命令执行失败:', err);
             }
             
-            document.body.removeChild(textarea);
+            parent.removeChild(textarea);
             return success;
         } catch (err) {
             console.error('[Index] 复制到剪贴板失败:', err);
@@ -568,7 +540,12 @@
         `;
         document.head.appendChild(style);
         
-        document.body.appendChild(errorDisplay);
+        if (document.body) {
+            document.body.appendChild(errorDisplay);
+        } else {
+            console.warn('[Index] document.body 不存在，无法显示错误提示');
+            return;
+        }
         
         // 5秒后自动隐藏
         setTimeout(() => {
@@ -624,7 +601,12 @@
             <pre id="curl-command-text" style="margin: 0; padding: 12px; white-space: pre-wrap; word-break: break-all; overflow-y: auto; max-height: 200px; line-height: 1.4;"></pre>
         `;
         
-        document.body.appendChild(curlDisplay);
+        if (document.body) {
+            document.body.appendChild(curlDisplay);
+        } else {
+            console.warn('[Index] document.body 不存在，无法显示 cURL');
+            return null;
+        }
         
         // 绑定事件
         bindCurlDisplayEvents();
@@ -652,7 +634,7 @@
         copyBtn.addEventListener('click', async () => {
             const curlText = document.getElementById('curl-command-text').textContent;
             
-            console.log('[Index] 复制按钮被点击');
+            debugLog('[Index] 复制按钮被点击');
             // 使用现代复制方法
             const success = await copyToClipboard(curlText);
             if (success) {
@@ -669,12 +651,12 @@
         });
         
         closeBtn.addEventListener('click', () => {
-            console.log('[Index] 关闭按钮被点击');
+            debugLog('[Index] 关闭按钮被点击');
             hideCurlDisplay();
         });
         
         disableBtn.addEventListener('click', () => {
-            console.log('[Index] 永久关闭按钮被点击');
+            debugLog('[Index] 永久关闭按钮被点击');
             // 通过 DOM 事件发送消息给 content script
             const event = new CustomEvent('curl-disable-request', {
                 detail: { disabled: true }
@@ -683,7 +665,7 @@
             hideCurlDisplay();
         });
         
-        console.log('[Index] cURL 显示框事件已重新绑定');
+        debugLog('[Index] cURL 显示框事件已重新绑定');
     }
     
     // 隐藏 cURL 显示框
@@ -722,24 +704,24 @@
     // 显示 cURL 命令
     function showCurlCommand(requestData) {
         // 检查是否已被永久关闭
-        console.log('[Index] 准备检查 cURL 禁用状态，发送事件:', requestData);
+        debugLog('[Index] 准备检查 cURL 禁用状态');
         const event = new CustomEvent('curl-check-disabled', {
             detail: { requestData: requestData }
         });
         document.dispatchEvent(event);
-        console.log('[Index] curl-check-disabled 事件已发送');
+        debugLog('[Index] curl-check-disabled 事件已发送');
     }
 
     // 显示 cURL 弹窗（由 content script 调用）
     function displayCurlCommand(requestData) {
-        console.log('[Index] displayCurlCommand 被调用，参数:', requestData);
+        debugLog('[Index] displayCurlCommand 被调用');
         
         const curlDisplay = createCurlDisplay();
         if (!curlDisplay) {
             console.error('[Index] 创建 cURL 显示框失败');
             return;
         }
-        console.log('[Index] cURL 显示框已创建/获取');
+        debugLog('[Index] cURL 显示框已创建/获取');
         
         const curlCommand = generateCurlCommand(
             requestData.url,
@@ -747,7 +729,7 @@
             requestData.headers,
             requestData.data || requestData.body
         );
-        console.log('[Index] cURL 命令已生成:', curlCommand);
+        debugLog('[Index] cURL 命令已生成');
         
         const curlText = document.getElementById('curl-command-text');
         if (!curlText) {
@@ -760,11 +742,7 @@
         curlDisplay.style.display = 'block';
         curlDisplay.style.opacity = '1'; // 确保透明度正确
         
-        console.log('[Index] cURL 显示框样式已更新:', {
-            display: curlDisplay.style.display,
-            opacity: curlDisplay.style.opacity,
-            visibility: window.getComputedStyle(curlDisplay).visibility
-        });
+        debugLog('[Index] cURL 显示框已显示');
         
         // 确保事件监听器已绑定
         setTimeout(() => {
@@ -774,18 +752,17 @@
         // 设置自动隐藏定时器
         setAutoHideTimer();
         
-        console.log('[Index] cURL 弹窗显示完成');
+        debugLog('[Index] cURL 弹窗显示完成');
     }
     
     // 监听来自 content script 的响应事件
     document.addEventListener('curl-show-command', (event) => {
         const requestData = event.detail;
-        console.log('[Index] 收到 curl-show-command 事件:', requestData);
+        debugLog('[Index] 收到 curl-show-command 事件');
         displayCurlCommand(requestData);
     });
     
-    // 添加调试：确认事件监听器已注册
-    console.log('[Index] curl-show-command 事件监听器已注册');
+    debugLog('[Index] curl-show-command 事件监听器已注册');
 
     // 创建兼容的 jQuery ajax 方法
     function createAjaxMethod() {
@@ -809,12 +786,14 @@
                 requestData.headers['User-Agent'] = navigator.userAgent;
             }
             
-            // 如果没有指定 Content-Type 且有数据，自动添加
-            if (requestData.data && !requestData.headers['Content-Type'] && !requestData.headers['content-type']) {
-                if (typeof requestData.data === 'object') {
-                    requestData.headers['Content-Type'] = 'application/json';
-                } else {
-                    requestData.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+            // 只为非 GET/HEAD 请求添加 Content-Type（有数据时）
+            if (requestData.data && requestData.method !== 'GET' && requestData.method !== 'HEAD') {
+                if (!requestData.headers['Content-Type'] && !requestData.headers['content-type']) {
+                    if (typeof requestData.data === 'object') {
+                        requestData.headers['Content-Type'] = 'application/json';
+                    } else {
+                        requestData.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+                    }
                 }
             }
             
@@ -829,10 +808,12 @@
                 requestData.headers['Cookie'] = cookies;
             }
             
-            console.log('[Index] 捕获的请求数据:', requestData);
+            debugLog('[Index] jQuery ajax 捕获的请求数据:', requestData.url);
             
-            // 显示 cURL 命令
-            showCurlCommand(requestData);
+            // 显示 cURL 命令（仅非静默模式）
+            if (!isSilentMode) {
+                showCurlCommand(requestData);
+            }
             
             // 转换 jQuery 的 success/error 回调为 Promise
             const promise = CrossRequestAPI.request(requestData);
@@ -841,23 +822,11 @@
             if (options.success || options.error || options.complete) {
                 promise.then(
                     (response) => {
-                        console.log('[Index] 收到响应:', {
-                            url: options.url,
-                            status: response.status,
-                            dataPropertyType: typeof response.data,
-                            bodyPropertyType: typeof response.body,
-                            bodyLength: response.body ? response.body.length : 0,
-                            bodyPreview: response.body ? response.body.substring(0, 100) : 'empty'
-                        });
+                        debugLog('[Index] jQuery ajax 收到响应:', response.status);
                         
                         if (options.success) {
                             // response.data 现在已经是解析后的对象了
-                            console.log('[Index] 传递给 success 回调:', {
-                                dataType: typeof response.data,
-                                isArray: Array.isArray(response.data),
-                                isObject: response.data && typeof response.data === 'object',
-                                keys: response.data && typeof response.data === 'object' && !Array.isArray(response.data) ? Object.keys(response.data).slice(0, 5) : []
-                            });
+                            debugLog('[Index] 传递给 success 回调');
                             options.success(response.data, 'success', response);
                         }
                         if (options.complete) {
@@ -894,20 +863,38 @@
     if (win.$ && win.$.ajax) {
         const originalAjax = win.$.ajax;
         win.$.ajax = function(options) {
-            // 检查是否需要使用跨域请求
-            if (options && options.crossRequest !== false) {
-                return win.crossRequest.ajax(options);
+            // 智能模式：
+            // 1. 完整模式（YApi等）：默认拦截，除非显式设置 crossRequest: false
+            // 2. 静默模式（其他网站）：opt-in，只有显式设置 crossRequest: true 才拦截
+            if (isSilentMode) {
+                // 静默模式：需要显式启用
+                if (options && options.crossRequest === true) {
+                    return win.crossRequest.ajax(options);
+                }
+            } else {
+                // 完整模式：默认拦截（YApi 等目标网站）
+                if (!options || options.crossRequest !== false) {
+                    return win.crossRequest.ajax(options);
+                }
             }
             return originalAjax.apply(this, arguments);
         };
+        
+        if (isSilentMode) {
+            debugLog('[Cross-Request] jQuery.ajax 已扩展（opt-in 模式）');
+        } else {
+            debugLog('[Cross-Request] jQuery.ajax 已扩展（默认拦截模式）');
+        }
     }
     
     // 创建标记，表示脚本已加载
     const sign = document.createElement('div');
     sign.id = 'cross-request-loaded';
     sign.style.display = 'none';
-    document.body.appendChild(sign);
+    if (document.body) {
+        document.body.appendChild(sign);
+    }
     
-    console.log('[Index] index.js 脚本执行完成，所有功能已注册');
+    debugLog('[Index] index.js 脚本执行完成，所有功能已注册');
     
 })(window);

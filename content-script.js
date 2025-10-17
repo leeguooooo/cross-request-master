@@ -1,6 +1,73 @@
 'use strict';
 
+// 检测是否为目标网站（YApi 或其他 API 管理平台）
+function isTargetWebsite() {
+  // 1. 检测 YApi 明确特征
+  const metaKeywords = document.querySelector('meta[name="keywords"]');
+  const metaDescription = document.querySelector('meta[name="description"]');
+  const title = document.title;
+  
+  // 优先检测 YApi 强特征
+  if (metaKeywords) {
+    const keywords = metaKeywords.getAttribute('content') || '';
+    if (keywords.toLowerCase().includes('yapi')) {
+      return true;
+    }
+  }
+  
+  if (metaDescription) {
+    const description = metaDescription.getAttribute('content') || '';
+    if (description.toLowerCase().includes('yapi')) {
+      return true;
+    }
+  }
+  
+  if (title.toLowerCase().includes('yapi')) {
+    return true;
+  }
+  
+  // 2. 检测 API 管理平台特征（更严格的规则）
+  if (metaKeywords) {
+    const keywords = metaKeywords.getAttribute('content') || '';
+    // 需要同时包含多个关键词才判定为目标网站
+    if ((keywords.includes('api管理') || keywords.includes('接口管理')) && 
+        (keywords.includes('测试') || keywords.includes('文档'))) {
+      return true;
+    }
+  }
+  
+  if (metaDescription) {
+    const description = metaDescription.getAttribute('content') || '';
+    if (description.includes('api管理平台') || description.includes('接口管理平台')) {
+      return true;
+    }
+  }
+  
+  // 3. 检测 URL 特征（需要组合判断）
+  const url = window.location.href;
+  const hasApiPath = url.includes('/interface/') || url.includes('/project/');
+  const hasApiDomain = url.includes('yapi') || url.includes('api-doc') || url.includes('apidoc');
+  
+  if (hasApiPath && hasApiDomain) {
+    return true;
+  }
+  
+  // 4. 检测特殊标记（给用户手动启用的选项）
+  if (document.querySelector('meta[name="cross-request-enabled"]')) {
+    return true;
+  }
+  
+  return false;
+}
+
 console.log('[Content-Script] Content script 开始加载');
+
+// 早期检测，如果不是目标网站，输出日志后静默退出
+if (!isTargetWebsite()) {
+  console.log('[Content-Script] 非目标网站，插件保持静默');
+  // 不返回，但设置一个标记，让后续代码知道应该最小化运行
+  window.__crossRequestSilentMode = true;
+}
 
 // 创建扩展命名空间
 const CrossRequest = {
@@ -16,10 +83,23 @@ const CrossRequest = {
   
   // 初始化
   init() {
-    console.log('[Content-Script] 开始初始化扩展');
+    const isSilent = window.__crossRequestSilentMode;
+    
+    if (isSilent) {
+      console.log('[Content-Script] 静默模式：核心功能启用，UI 和日志关闭');
+    } else {
+      console.log('[Content-Script] 完整模式：所有功能启用');
+    }
+    
+    // 静默模式下仍然需要 observeDOM 来处理手动调用
     this.observeDOM();
     this.injectScript();
-    this.initCurlEventListeners();
+    
+    // 只有完整模式才启用 cURL 事件监听
+    if (!isSilent) {
+      this.initCurlEventListeners();
+    }
+    
     console.log('[Content-Script] 扩展初始化完成');
   },
   
@@ -39,6 +119,13 @@ const CrossRequest = {
   
   // 监听DOM变化
   observeDOM() {
+    // 检查 body 是否存在
+    if (!document.body) {
+      console.warn('[Content-Script] document.body 不存在，延迟初始化');
+      setTimeout(() => this.observeDOM(), 100);
+      return;
+    }
+    
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
