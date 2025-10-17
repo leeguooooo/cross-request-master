@@ -200,20 +200,10 @@ cross-request-master/
 
 如果本项目对你有帮助，欢迎通过以下方式支持：
 
-- ⭐ Star 本仓库
-- 🐛 [提交 Issue](https://github.com/leeguooooo/cross-request-master/issues) 反馈问题
-- 💻 [提交 PR](https://github.com/leeguooooo/cross-request-master/pulls) 贡献代码
-- 💖 [赞助开发](https://github.com/sponsors/leeguooooo) 通过 GitHub Sponsors
-
-### 微信 / 支付宝赞助
-
-如果你想通过微信或支付宝支持本项目：
-
-<div align="center">
-  <p><i>添加赞助二维码请联系项目维护者</i></p>
-</div>
-
-你的支持是项目持续维护和改进的动力！ 🙏
+- Star 本仓库
+- [提交 Issue](https://github.com/leeguooooo/cross-request-master/issues) 反馈问题
+- [提交 PR](https://github.com/leeguooooo/cross-request-master/pulls) 贡献代码
+- [GitHub Sponsors](https://github.com/sponsors/leeguooooo) 赞助开发
 
 ## 更新日志
 
@@ -240,6 +230,6 @@ cross-request-master/
 
 [![Star History Chart](https://api.star-history.com/svg?repos=leeguooooo/cross-request-master&type=Date)](https://www.star-history.com/#leeguooooo/cross-request-master&Date)
 
-Made with ❤️ by [leeguooooo](https://github.com/leeguooooo)
+Made by [leeguooooo](https://github.com/leeguooooo)
 
 </div>
