@@ -7,7 +7,13 @@
 
 ## [未发布]
 
-_当前没有未发布的变更_
+### 改进
+
+- **日志安全** - 控制台输出不会被大响应体淹没
+  - 新增 `src/helpers/logger.js` 提供 `safeLogResponse`
+  - background/index 使用安全日志助手，输出超过 10KB 时自动截断并提示
+  - 避免 content-script 控制台被巨型响应体切割，便于调试
+  - 新增单元测试覆盖截断逻辑，防止回归
 
 ## [4.5.0] - 2025-10-17
 
@@ -386,4 +392,3 @@ _当前没有未发布的变更_
 [4.2.0]: https://github.com/leeguooooo/cross-request-master/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/leeguooooo/cross-request-master/compare/v4.0.1...v4.1.0
 [4.0.1]: https://github.com/leeguooooo/cross-request-master/releases/tag/v4.0.1
-

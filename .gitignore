@@ -35,3 +35,4 @@ temp/
 *.crx
 key.pem
 extension.zip
+cross-request-store*.zip

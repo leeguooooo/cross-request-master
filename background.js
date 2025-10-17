@@ -1,5 +1,60 @@
 'use strict';
 
+let safeLogResponse = null;
+
+try {
+  /* global importScripts */
+  importScripts('src/helpers/logger.js');
+  if (self.CrossRequestHelpers && self.CrossRequestHelpers.safeLogResponse) {
+    safeLogResponse = self.CrossRequestHelpers.safeLogResponse;
+  }
+} catch (helperError) {
+  console.warn('[Background] safeLogResponse helper 加载失败:', helperError);
+}
+
+if (!safeLogResponse) {
+  safeLogResponse = function (originalBody, options) {
+    const opts = options || {};
+    const maxBytes = typeof opts.maxBytes === 'number' ? opts.maxBytes : 10 * 1024;
+    const headChars = typeof opts.headChars === 'number' ? opts.headChars : 512;
+    const tailChars = typeof opts.tailChars === 'number' ? opts.tailChars : 512;
+
+    function toText(value) {
+      if (value == null) {
+        return '';
+      }
+      if (typeof value === 'string') {
+        return value;
+      }
+      try {
+        return JSON.stringify(value);
+      } catch (e) {
+        return String(value);
+      }
+    }
+
+    const text = toText(originalBody);
+    let byteLength;
+    if (typeof TextEncoder !== 'undefined') {
+      byteLength = new TextEncoder().encode(text).length;
+    } else {
+      byteLength = text.length * 2;
+    }
+
+    if (byteLength <= maxBytes) {
+      return originalBody;
+    }
+
+    return {
+      truncated: true,
+      size: byteLength + ' bytes',
+      head: text.slice(0, headChars),
+      tail: tailChars > 0 ? text.slice(-tailChars) : '',
+      hint: '响应体过大，已截断显示'
+    };
+  };
+}
+
 // 域名白名单管理
 let allowedDomains = new Set(['*']); // 默认允许所有域名，后续可以限制
 
@@ -184,13 +239,15 @@ async function handleCrossOriginRequest(request) {
     const responseBody = await response.text();
 
     // 添加调试日志
+    const safePreview = safeLogResponse(responseBody);
+
     console.log('[Background] 响应详情:', {
       url,
       status: response.status,
       statusText: response.statusText,
       contentType: responseHeaders['content-type'] || 'unknown',
       bodyLength: responseBody.length,
-      bodyPreview: responseBody.substring(0, 200)
+      bodyPreview: safePreview
     });
 
     // 同样发送到网页控制台
@@ -207,7 +264,7 @@ async function handleCrossOriginRequest(request) {
                 status: response.status,
                 contentType: responseHeaders['content-type'] || 'unknown',
                 bodyLength: responseBody.length,
-                bodyPreview: responseBody.substring(0, 200)
+                bodyPreview: safePreview
               }
             })
             .catch(() => {});

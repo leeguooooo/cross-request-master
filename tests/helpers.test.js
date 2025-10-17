@@ -13,6 +13,7 @@
 // Import real helpers from production code
 const { bodyToString } = require('../src/helpers/body-parser.js');
 const { buildQueryString } = require('../src/helpers/query-string.js');
+const { safeLogResponse } = require('../src/helpers/logger.js');
 
 describe('bodyToString helper', () => {
 
@@ -464,3 +465,28 @@ describe('GET request parameter handling', () => {
     });
 });
 
+describe('safeLogResponse helper', () => {
+    test('should return original body when below threshold', () => {
+        const small = 'hello world';
+        const result = safeLogResponse(small, { maxBytes: 100 });
+        expect(result).toBe(small);
+    });
+
+    test('should truncate large string responses', () => {
+        const large = 'a'.repeat(20 * 1024); // 20KB
+        const result = safeLogResponse(large, { maxBytes: 10 * 1024, headChars: 100, tailChars: 50 });
+        expect(result).toHaveProperty('truncated', true);
+        expect(result).toHaveProperty('size');
+        expect(result.head.length).toBe(100);
+        expect(result.tail.length).toBe(50);
+    });
+
+    test('should stringify objects and truncate', () => {
+        const payload = { data: 'x'.repeat(15 * 1024) };
+        const result = safeLogResponse(payload, { maxBytes: 10 * 1024, headChars: 50, tailChars: 50 });
+        expect(result.truncated).toBe(true);
+        expect(typeof result.head).toBe('string');
+        expect(typeof result.tail).toBe('string');
+        expect(result.hint).toContain('截断');
+    });
+});

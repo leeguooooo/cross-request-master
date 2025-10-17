@@ -111,7 +111,8 @@ const CrossRequest = {
     // 使用链式加载确保执行顺序，避免竞态条件
     const helpers = [
       'src/helpers/query-string.js',
-      'src/helpers/body-parser.js'
+      'src/helpers/body-parser.js',
+      'src/helpers/logger.js'
     ];
 
     // 链式加载 helpers，然后加载 index.js
