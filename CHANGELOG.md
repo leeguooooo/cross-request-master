@@ -7,20 +7,7 @@
 
 ## [未发布]
 
-### 修复
-
-- **紧急修复**（响应代码审查反馈）
-  - 修复 README.md 和 CHANGELOG.md 引用不存在文件的问题
-  - **安全修复**: 添加 `.gitignore` 忽略 Chrome 扩展敏感文件（*.pem, *.crx）
-  - 修复 Jest 版本不匹配问题（jest@29.7.0 vs jest-environment-jsdom@30.2.0）
-  - 在测试文件中添加说明，解释为何暂时重新实现 helpers
-
-### 文档
-
-- 新增 `FIXES.md` - 紧急修复报告
-  - 记录发现的 4 个关键问题
-  - 说明修复过程和验证结果
-  - 总结关键教训
+_当前没有未发布的变更_
 
 ## [4.4.13] - 2025-10-17
 
@@ -45,6 +32,18 @@
   - 使用 `String()` 转换以保留标量值的正确表示
   - 新增 `bodyToString()` helper 函数统一处理字符串转换逻辑
   - 修复所有使用 truthy 检查的位置（7处，包括最关键的返回值）
+
+- **Chrome 扩展兼容性修复**
+  - 修复 Chrome 不允许加载以下划线开头的目录的问题
+  - 重命名 `__tests__/` 为 `tests/`，使扩展可以正常加载
+  - 更新相关配置文件（package.json, .eslintignore, .prettierignore）
+
+- **代码格式和规范修复**
+  - 应用 Prettier 格式化到所有 JS 和 JSON 文件
+  - 修复 ESLint 缩进错误（21 处）
+  - 修复 README.md 和 CHANGELOG.md 引用不存在文件的问题
+  - **安全修复**: 添加 `.gitignore` 忽略 Chrome 扩展敏感文件（*.pem, *.crx）
+  - 修复 Jest 版本不匹配问题（jest@29.7.0 vs jest-environment-jsdom@30.2.0）
 
 ### 改进
 
@@ -80,7 +79,7 @@
     - npm scripts（lint, format, test）
     - Jest 测试框架配置
     - 测试覆盖率阈值设置
-  - 新增单元测试（`__tests__/helpers.test.js`）
+  - 新增单元测试（`tests/helpers.test.js`）
     - **39 个测试用例**，全部通过 ✅
     - bodyToString 函数测试（12 个）
     - parsedData 处理测试（8 个）
