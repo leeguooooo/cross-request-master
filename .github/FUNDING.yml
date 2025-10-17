@@ -1,0 +1,9 @@
+# GitHub Sponsors 配置
+# 这些是支持的赞助平台
+
+# GitHub Sponsors 用户名
+github: [leeguooooo]
+
+# 支付宝/微信赞赏码（使用 GitHub 仓库中的图片链接）
+custom: ['https://github.com/leeguooooo/cross-request-master/blob/main/.github/wechatpay.JPG', 'https://github.com/leeguooooo/cross-request-master/blob/main/.github/alipay.JPG']
+
