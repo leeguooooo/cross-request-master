@@ -203,7 +203,23 @@ cross-request-master/
 - Star 本仓库
 - [提交 Issue](https://github.com/leeguooooo/cross-request-master/issues) 反馈问题
 - [提交 PR](https://github.com/leeguooooo/cross-request-master/pulls) 贡献代码
-- [GitHub Sponsors](https://github.com/sponsors/leeguooooo) 赞助开发
+
+### 赞助开发
+
+如果你觉得这个项目对你有帮助，可以请作者喝杯咖啡：
+
+**GitHub Sponsors**
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/leeguooooo?style=for-the-badge&logo=github)](https://github.com/sponsors/leeguooooo)
+
+**微信 / 支付宝**
+
+<div align="center">
+  <img src=".github/wechatpay.JPG" alt="微信赞赏码" width="300"/>
+  <img src=".github/alipay.JPG" alt="支付宝收款码" width="300"/>
+</div>
+
+你的支持是项目持续维护和改进的动力！
 
 ## 更新日志
 
