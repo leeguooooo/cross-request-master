@@ -177,7 +177,28 @@ const CrossRequest = {
     try {
       const data = node.textContent;
       if (!data) return null;
-      return JSON.parse(decodeURIComponent(atob(data)));
+      const requestData = JSON.parse(decodeURIComponent(atob(data)));
+    
+      // Hack: Resolve relative URL to absolute based on current page origin
+      if (requestData.url) {
+        try {
+          // If it's already absolute (starts with http/https), leave it
+          if (!requestData.url.startsWith('http://') && !requestData.url.startsWith('https://')) {
+            // Handle root-relative (e.g., '/path')
+            if (requestData.url.startsWith('/')) {
+              requestData.url = location.origin + requestData.url;
+            } else {
+              // Handle other relatives (e.g., 'path/to/endpoint')
+              requestData.url = new URL(requestData.url, location.href).toString();
+            }
+          }
+        } catch (urlError) {
+          console.error('[Content-Script] URL resolution failed:', urlError);
+          // Fallback: Leave as-is if resolution fails
+        }
+      }
+      
+      return requestData;
     } catch (e) {
       console.error('[Content-Script] 数据解析失败:', e);
       return null;
