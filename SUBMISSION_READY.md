@@ -39,19 +39,19 @@
    https://leeguooooo.github.io/cross-request-master/PRIVACY_POLICY.html
    ```
 
-### 步骤 2：准备截图（15 分钟）
+### 步骤 2：上传截图（已准备好）
 
-需要 3-5 张截图，建议尺寸：1280x800
+已准备 2 张符合要求的截图，位于 `screenshots/` 目录：
 
-**建议内容**：
-1. 扩展弹出窗口
-2. YApi 中的 cURL 生成效果
-3. crossRequest API 使用示例
-4. 成功的跨域请求演示
+1. **screenshot-1-curl-generation.jpg** (1280x800, JPEG)
+   - 展示 cURL 命令生成功能
+   - 建议描述：自动生成 cURL 命令 - 在 YApi 中测试接口后，扩展会自动生成完整的 cURL 命令
 
-**截图工具**：
-- macOS: Cmd+Shift+4（按空格键截取窗口）
-- Chrome DevTools: Cmd+Shift+P -> "Capture screenshot"
+2. **screenshot-2-popup.jpg** (1280x800, JPEG)  
+   - 展示扩展弹出窗口
+   - 建议描述：扩展弹出窗口 - 简洁的界面，显示扩展状态和快速操作选项
+
+所有截图符合 Chrome Web Store 要求（1280x800, JPEG, 无 alpha 通道）
 
 ### 步骤 3：注册开发者账号（如未注册）
 
