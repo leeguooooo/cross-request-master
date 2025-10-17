@@ -6,7 +6,7 @@ function isTargetWebsite() {
   const metaKeywords = document.querySelector('meta[name="keywords"]');
   const metaDescription = document.querySelector('meta[name="description"]');
   const title = document.title;
-  
+
   // 优先检测 YApi 强特征
   if (metaKeywords) {
     const keywords = metaKeywords.getAttribute('content') || '';
@@ -14,49 +14,51 @@ function isTargetWebsite() {
       return true;
     }
   }
-  
+
   if (metaDescription) {
     const description = metaDescription.getAttribute('content') || '';
     if (description.toLowerCase().includes('yapi')) {
       return true;
     }
   }
-  
+
   if (title.toLowerCase().includes('yapi')) {
     return true;
   }
-  
+
   // 2. 检测 API 管理平台特征（更严格的规则）
   if (metaKeywords) {
     const keywords = metaKeywords.getAttribute('content') || '';
     // 需要同时包含多个关键词才判定为目标网站
-    if ((keywords.includes('api管理') || keywords.includes('接口管理')) && 
-        (keywords.includes('测试') || keywords.includes('文档'))) {
+    if (
+      (keywords.includes('api管理') || keywords.includes('接口管理')) &&
+      (keywords.includes('测试') || keywords.includes('文档'))
+    ) {
       return true;
     }
   }
-  
+
   if (metaDescription) {
     const description = metaDescription.getAttribute('content') || '';
     if (description.includes('api管理平台') || description.includes('接口管理平台')) {
       return true;
     }
   }
-  
+
   // 3. 检测 URL 特征（需要组合判断）
   const url = window.location.href;
   const hasApiPath = url.includes('/interface/') || url.includes('/project/');
   const hasApiDomain = url.includes('yapi') || url.includes('api-doc') || url.includes('apidoc');
-  
+
   if (hasApiPath && hasApiDomain) {
     return true;
   }
-  
+
   // 4. 检测特殊标记（给用户手动启用的选项）
   if (document.querySelector('meta[name="cross-request-enabled"]')) {
     return true;
   }
-  
+
   return false;
 }
 
@@ -77,46 +79,46 @@ const CrossRequest = {
     checkInterval: 100,
     maxRetries: 50
   },
-  
+
   // 请求队列
   requestQueue: new Map(),
-  
+
   // 初始化
   init() {
     const isSilent = window.__crossRequestSilentMode;
-    
+
     if (isSilent) {
       console.log('[Content-Script] 静默模式：核心功能启用，UI 和日志关闭');
     } else {
       console.log('[Content-Script] 完整模式：所有功能启用');
     }
-    
+
     // 静默模式下仍然需要 observeDOM 来处理手动调用
     this.observeDOM();
     this.injectScript();
-    
+
     // 只有完整模式才启用 cURL 事件监听
     if (!isSilent) {
       this.initCurlEventListeners();
     }
-    
+
     console.log('[Content-Script] 扩展初始化完成');
   },
-  
+
   // 注入页面脚本
   injectScript() {
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL('index.js');
-    script.onload = function() {
+    script.onload = function () {
       console.log('[Content-Script] 页面脚本加载成功');
       this.remove();
     };
-    script.onerror = function() {
+    script.onerror = function () {
       console.error('[Content-Script] 页面脚本加载失败');
     };
     (document.head || document.documentElement).appendChild(script);
   },
-  
+
   // 监听DOM变化
   observeDOM() {
     // 检查 body 是否存在
@@ -125,7 +127,7 @@ const CrossRequest = {
       setTimeout(() => this.observeDOM(), 100);
       return;
     }
-    
+
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
@@ -135,50 +137,49 @@ const CrossRequest = {
         });
       });
     });
-    
+
     observer.observe(document.body, {
       childList: true,
       subtree: true
     });
-    
+
     this.checkExistingNodes();
   },
-  
+
   // 检查现有节点
   checkExistingNodes() {
     const nodes = document.querySelectorAll(`[id*="${this.config.container}"]`);
-    nodes.forEach(node => this.handleRequestNode(node));
+    nodes.forEach((node) => this.handleRequestNode(node));
   },
-  
+
   // 处理请求节点
   async handleRequestNode(node) {
     try {
       const requestData = this.parseRequestData(node);
       if (!requestData) return;
-      
+
       console.log('[Content-Script] 处理请求:', {
         id: requestData.id,
         url: requestData.url,
         method: requestData.method
       });
-      
+
       node.setAttribute('data-status', 'processing');
       const response = await this.sendRequest(requestData);
       this.handleResponse(node, response, requestData);
-      
     } catch (error) {
       console.error('[Content-Script] 请求处理错误:', error.message);
       this.handleError(node, error);
     }
   },
-  
+
   // 解析请求数据
   parseRequestData(node) {
     try {
       const data = node.textContent;
       if (!data) return null;
       const requestData = JSON.parse(decodeURIComponent(atob(data)));
-    
+
       // Hack: Resolve relative URL to absolute based on current page origin
       if (requestData.url) {
         try {
@@ -197,14 +198,14 @@ const CrossRequest = {
           // Fallback: Leave as-is if resolution fails
         }
       }
-      
+
       return requestData;
     } catch (e) {
       console.error('[Content-Script] 数据解析失败:', e);
       return null;
     }
   },
-  
+
   // 发送请求
   sendRequest(requestData) {
     return new Promise((resolve, reject) => {
@@ -212,45 +213,50 @@ const CrossRequest = {
         reject(new Error('扩展上下文无效'));
         return;
       }
-      
+
       try {
-        chrome.runtime.sendMessage({
-          action: 'crossOriginRequest',
-          data: requestData
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            const errorMessage = chrome.runtime.lastError.message;
-            if (errorMessage.includes('back/forward cache') || 
-                errorMessage.includes('message channel is closed')) {
-              console.warn('[Content-Script] 页面缓存，请求取消');
-              reject(new Error('请求取消：页面缓存'));
-            } else {
-              reject(new Error(errorMessage));
+        chrome.runtime.sendMessage(
+          {
+            action: 'crossOriginRequest',
+            data: requestData
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              const errorMessage = chrome.runtime.lastError.message;
+              if (
+                errorMessage.includes('back/forward cache') ||
+                errorMessage.includes('message channel is closed')
+              ) {
+                console.warn('[Content-Script] 页面缓存，请求取消');
+                reject(new Error('请求取消：页面缓存'));
+              } else {
+                reject(new Error(errorMessage));
+              }
+              return;
             }
-            return;
+
+            if (!response) {
+              console.error('[Content-Script] 未收到响应');
+              reject(new Error('未收到响应'));
+            } else if (response.success) {
+              console.log('[Content-Script] 请求成功:', response.data?.status);
+              resolve(response.data);
+            } else {
+              console.error('[Content-Script] 请求失败:', response.error);
+              reject(new Error(response.error || '未知错误'));
+            }
           }
-          
-          if (!response) {
-            console.error('[Content-Script] 未收到响应');
-            reject(new Error('未收到响应'));
-          } else if (response.success) {
-            console.log('[Content-Script] 请求成功:', response.data?.status);
-            resolve(response.data);
-          } else {
-            console.error('[Content-Script] 请求失败:', response.error);
-            reject(new Error(response.error || '未知错误'));
-          }
-        });
+        );
       } catch (e) {
         reject(new Error('消息发送失败: ' + e.message));
       }
     });
   },
-  
+
   // 处理响应
   handleResponse(node, response, requestData) {
     console.log('[Content-Script] 发送响应事件');
-    
+
     const responseEvent = new CustomEvent('y-request-response', {
       detail: {
         id: requestData.id,
@@ -264,80 +270,89 @@ const CrossRequest = {
         }
       }
     });
-    
+
     document.dispatchEvent(responseEvent);
     console.log('[Content-Script] 响应事件已触发');
     node.remove();
   },
-  
+
   // 处理错误
   handleError(node, error) {
     const requestId = node.id.replace(this.config.container + '-', '');
-    
+
     console.error('[Content-Script] 发送错误事件:', error.message);
-    
+
     const errorEvent = new CustomEvent('y-request-error', {
       detail: {
         id: requestId,
         error: error.message || '未知错误'
       }
     });
-    
+
     document.dispatchEvent(errorEvent);
     node.remove();
   },
-  
+
   // 监听 cURL 相关事件
   initCurlEventListeners() {
     console.log('[Content-Script] 开始初始化 cURL 事件监听器');
-    
+
     // 监听检查禁用状态事件
     document.addEventListener('curl-check-disabled', (event) => {
       const requestData = event.detail.requestData;
       console.log('[Content-Script] 收到检查 cURL 禁用状态请求:', requestData);
-      
+
       // 向 background script 查询状态
-      chrome.runtime.sendMessage({
-        action: 'getCurlDisplayDisabled'
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.warn('[Content-Script] 获取 cURL 状态失败，默认显示:', chrome.runtime.lastError);
-          // 失败时默认显示
+      chrome.runtime.sendMessage(
+        {
+          action: 'getCurlDisplayDisabled'
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.warn(
+              '[Content-Script] 获取 cURL 状态失败，默认显示:',
+              chrome.runtime.lastError
+            );
+            // 失败时默认显示
+            this.showCurlCommand(requestData);
+            return;
+          }
+
+          if (response && response.disabled) {
+            console.log('[Content-Script] cURL 显示已被永久关闭');
+            return;
+          }
+
+          // 显示 cURL 弹窗
           this.showCurlCommand(requestData);
-          return;
         }
-        
-        if (response && response.disabled) {
-          console.log('[Content-Script] cURL 显示已被永久关闭');
-          return;
-        }
-        
-        // 显示 cURL 弹窗
-        this.showCurlCommand(requestData);
-      });
+      );
     });
-    
+
     // 监听禁用请求事件
     document.addEventListener('curl-disable-request', (event) => {
       const disabled = event.detail.disabled;
       console.log('[Content-Script] 收到 cURL 禁用请求:', disabled);
-      
+
       // 向 background script 保存设置
-      chrome.runtime.sendMessage({
-        action: 'setCurlDisplayDisabled',
-        disabled: disabled
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.warn('[Content-Script] 保存 cURL 禁用设置失败:', chrome.runtime.lastError);
-        } else {
-          console.log('[Content-Script] cURL 禁用设置已保存');
+      chrome.runtime.sendMessage(
+        {
+          action: 'setCurlDisplayDisabled',
+          disabled: disabled
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.warn('[Content-Script] 保存 cURL 禁用设置失败:', chrome.runtime.lastError);
+          } else {
+            console.log('[Content-Script] cURL 禁用设置已保存');
+          }
         }
-      });
+      );
     });
-    
+
     console.log('[Content-Script] cURL 事件监听器初始化完成');
   },
-  
+
   // 显示 cURL 命令弹窗
   showCurlCommand(requestData) {
     console.log('[Content-Script] 准备发送 curl-show-command 事件:', requestData);
