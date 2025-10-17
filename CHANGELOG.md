@@ -5,6 +5,101 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### 修复
+
+- **紧急修复**（响应代码审查反馈）
+  - 修复 README.md 和 CHANGELOG.md 引用不存在文件的问题
+  - **安全修复**: 添加 `.gitignore` 忽略 Chrome 扩展敏感文件（*.pem, *.crx）
+  - 修复 Jest 版本不匹配问题（jest@29.7.0 vs jest-environment-jsdom@30.2.0）
+  - 在测试文件中添加说明，解释为何暂时重新实现 helpers
+
+### 文档
+
+- 新增 `FIXES.md` - 紧急修复报告
+  - 记录发现的 4 个关键问题
+  - 说明修复过程和验证结果
+  - 总结关键教训
+
+## [4.4.13] - 2025-10-17
+
+### 修复
+
+- 修复 YApi request/response 脚本兼容性问题（Issue #19）
+  - **background.js**: `context.responseData` 现在正确返回解析后的 JSON 对象
+  - **index.js**: 添加类型检查，避免对已解析的对象重复调用 `JSON.parse()`
+  - 对于 JSON 响应，background 返回解析后的对象；index.js 检测类型后直接使用
+  - 对于非 JSON 响应，保持返回字符串
+  - 确保 `response.body` 始终为字符串格式以保持向后兼容
+  - 修复所有可能导致 `TypeError` 的 JSON 解析点（3处）
+  - 恢复与官方插件的完整兼容性
+
+- **修复合法 JSON 标量值丢失问题**（代码审查发现）
+  - 修复 `response.body && ...` truthy 检查会过滤掉 `0`、`false`、`null`、`""` 等合法 JSON 值
+  - 改用显式的 `!= null` 检查，避免丢失合法的 falsy 标量值
+  - **关键修复**: 将 `data: parsedData ?? {}` 改为 `parsedData === undefined ? {} : parsedData`
+  - 原因：`??` 会把 `null` 也替换为 `{}`，但 `null` 是合法的 JSON 响应值
+  - 现在只有 `undefined` 会被替换为 `{}`，保留所有合法值（包括 `null`、`0`、`false`、`""`）
+  - 修复 `response.body || ''` 会将 `0`、`false` 转换为空字符串的问题
+  - 使用 `String()` 转换以保留标量值的正确表示
+  - 新增 `bodyToString()` helper 函数统一处理字符串转换逻辑
+  - 修复所有使用 truthy 检查的位置（7处，包括最关键的返回值）
+
+### 改进
+
+- **代码质量提升**
+  - 提取 `bodyToString()` helper 函数，减少代码重复
+  - 使用更精确的 null/undefined 检查替代 truthy 判断
+  - 改善日志输出，增加 value 字段帮助调试
+  - 代码更易理解和维护
+
+- **开源项目基础设施完善**
+  - 新增 `CONTRIBUTING.md` 贡献指南
+    - 开发环境设置（npm install, npm test, npm run lint）
+    - 代码规范和最佳实践（ESLint + Prettier）
+    - 提交和 PR 流程
+    - Falsy 值处理特别说明
+  - 新增 GitHub Issue 模板
+    - Bug 报告模板（`.github/ISSUE_TEMPLATE/bug_report.md`）
+    - 功能请求模板（`.github/ISSUE_TEMPLATE/feature_request.md`）
+  - 新增 Pull Request 模板（`.github/pull_request_template.md`）
+  - 新增 `ROADMAP.md` 技术路线图
+    - 短期目标：模块化重构、消除重复代码
+    - 中期目标：TypeScript 迁移、功能扩展
+    - 长期目标：插件系统、团队协作
+
+- **开发工具链**
+  - 新增 ESLint 配置（`.eslintrc.json`）
+    - 代码规范检查
+    - 自动修复支持
+  - 新增 Prettier 配置（`.prettierrc.json`）
+    - 代码格式化
+    - 统一代码风格
+  - 新增 `package.json`
+    - npm scripts（lint, format, test）
+    - Jest 测试框架配置
+    - 测试覆盖率阈值设置
+  - 新增单元测试（`__tests__/helpers.test.js`）
+    - **39 个测试用例**，全部通过 ✅
+    - bodyToString 函数测试（12 个）
+    - parsedData 处理测试（8 个）
+    - nullish 检查测试（12 个）
+    - JSON 解析守卫测试（7 个）
+    - 覆盖所有 falsy 值场景（0、false、null、""）
+  - 新增 `.gitignore` 和 `.eslintignore` 文件
+
+### 文档
+
+- 完善项目文档结构，提升开源项目规范性
+- 添加版本发布流程说明
+- 添加支持与响应时间说明
+
+### 致谢
+
+- 感谢 @rank97 在 issue #19 中的详细反馈
+- 感谢 @leeguooooo 的深入代码审查，发现 falsy 值处理的关键问题，并提出开源项目规范化建议
+
 ## [4.4.12] - 2025-10-17
 
 ### 修复
@@ -196,6 +291,7 @@
 
 ## 版本链接
 
+[4.4.13]: https://github.com/leeguooooo/cross-request-master/compare/v4.4.12...v4.4.13
 [4.4.12]: https://github.com/leeguooooo/cross-request-master/compare/v4.4.11...v4.4.12
 [4.4.11]: https://github.com/leeguooooo/cross-request-master/compare/v4.4.10...v4.4.11
 [4.4.10]: https://github.com/leeguooooo/cross-request-master/compare/v4.4.9...v4.4.10

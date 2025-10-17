@@ -1,29 +1,37 @@
 # Dependencies
 node_modules/
 
-# System files
-.DS_Store
-Thumbs.db
+# Testing
+coverage/
+*.test.js.snap
 
-# IDE files
-.idea/
+# Build
+dist/
+build/
+
+# IDE
 .vscode/
+.idea/
 *.swp
 *.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Logs
 *.log
 npm-debug.log*
-
-# Build output
-dist/
-build/
+yarn-debug.log*
+yarn-error.log*
 
 # Temporary files
-*.tmp
-*.temp
-.cache/
+.tmp/
+temp/
 
-# Chrome extension development
+# Chrome Extension Security
 *.pem
 *.crx
+key.pem
+extension.zip

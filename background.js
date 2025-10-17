@@ -22,7 +22,7 @@ function isDomainAllowed(url) {
   // 强制允许所有域名
   return true;
   
-  // 以下是原有逻辑（已禁用）
+  /* 以下是原有逻辑（已禁用）
   if (allowedDomains.has('*')) {
     return true;
   }
@@ -50,6 +50,7 @@ function isDomainAllowed(url) {
   }
   
   return false;
+  */
 }
 
 // 获取标准的 HTTP 状态文本
@@ -208,7 +209,7 @@ async function handleCrossOriginRequest(request) {
       });
     });
     
-    // 尝试解析 JSON 以验证格式
+    // 尝试解析 JSON
     let parsedBody = null;
     let isJson = false;
     if (responseHeaders['content-type']?.includes('application/json')) {
@@ -230,7 +231,7 @@ async function handleCrossOriginRequest(request) {
       status: response.status,
       statusText: response.statusText || getStatusText(response.status),
       headers: responseHeaders,
-      body: responseBody,
+      body: isJson ? parsedBody : responseBody,  // 如果是 JSON，返回解析后的对象；否则返回字符串
       ok: response.ok
     };
   } catch (error) {

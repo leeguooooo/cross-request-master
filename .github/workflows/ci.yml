@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check Prettier formatting
+        run: npm run format:check
+
+  test:
+    name: Test & Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  build:
+    name: Build Extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create extension package
+        run: |
+          zip -r extension.zip . \
+            -x "node_modules/*" \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "__tests__/*" \
+            -x "coverage/*" \
+            -x "*.md" \
+            -x ".eslintrc.json" \
+            -x ".prettierrc.json" \
+            -x ".prettierignore" \
+            -x ".gitignore" \
+            -x "package.json" \
+            -x "package-lock.json"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: extension-${{ github.sha }}
+          path: extension.zip
+          retention-days: 30
+
+  validate:
+    name: Validate Extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Validate manifest.json
+        run: |
+          if ! jq empty manifest.json; then
+            echo "manifest.json is not valid JSON"
+            exit 1
+          fi
+          echo "manifest.json is valid"
+
+      - name: Check required files
+        run: |
+          required_files=("manifest.json" "background.js" "content-script.js" "index.js" "popup.html" "popup.js")
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "Required file $file is missing"
+              exit 1
+            fi
+          done
+          echo "All required files present"
+

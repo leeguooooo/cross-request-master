@@ -18,6 +18,7 @@
 - [安全说明](#安全说明)
 - [开发指南](#开发指南)
 - [贡献](#贡献)
+- [项目文档](#项目文档)
 - [支持项目](#支持项目)
 - [许可证](#许可证)
 
@@ -225,10 +226,38 @@ cross-request-master/
 
 查看 [CHANGELOG.md](./CHANGELOG.md) 了解详细的版本更新历史。
 
-**最新版本 v4.4.12** (2025-10-17)
-- 修复相对 URL 解析问题（感谢 @justopt796）
-- 修复 HTTP 方法大小写敏感问题
-- 提升请求处理的兼容性和可靠性
+**最新版本 v4.4.13** (2025-10-17)
+- ✅ 修复 YApi request/response 脚本兼容性（Issue #19）
+- ✅ 修复合法 JSON 标量值丢失问题（0、false、null、""）
+- ✅ 添加完整的开发工具链（ESLint、Prettier、Jest）
+- ✅ 添加 CI/CD 自动化（GitHub Actions）
+- ✅ 完善文档和贡献指南
+
+查看 [CHANGELOG.md](./CHANGELOG.md) 了解详细信息。
+
+## 开发者文档
+
+### 参与贡献
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - 贡献指南
+  - 开发环境设置（npm install, npm test, npm run lint）
+  - 代码规范和最佳实践（ESLint + Prettier）
+  - 提交和 PR 流程
+  - Falsy 值处理特别说明
+  
+- **[ROADMAP.md](./ROADMAP.md)** - 技术路线图
+  - 短期目标：模块化重构、消除重复代码
+  - 中期目标：TypeScript 迁移、功能扩展
+  - 长期目标：插件系统、团队协作
+
+### 项目配置
+- **[.github/workflows/ci.yml](./.github/workflows/ci.yml)** - CI/CD 配置
+  - 自动 Lint 检查
+  - 自动测试和覆盖率
+  - 扩展打包和验证
+- **[.eslintrc.json](./.eslintrc.json)** - ESLint 配置
+- **[.prettierrc.json](./.prettierrc.json)** - Prettier 配置
+- **[package.json](./package.json)** - npm scripts 和依赖
+- **[__tests__/](./__tests__)** - 测试套件（39 个测试用例）
 
 ## 许可证
 
