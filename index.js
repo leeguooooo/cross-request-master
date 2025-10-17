@@ -15,19 +15,53 @@
 
   debugLog('[Index] index.js 脚本开始执行（' + (isSilentMode ? '静默' : '完整') + '模式）');
 
-  // Helper: 将响应体转换为字符串（保留合法的 falsy 标量值）
-  function bodyToString(body) {
-    if (body === undefined || body === null) {
-      return '';
-    }
-    if (typeof body === 'object') {
-      return JSON.stringify(body);
-    }
-    if (typeof body === 'string') {
-      return body;
-    }
-    // number, boolean 等标量值
-    return String(body);
+  // 使用提取的 helpers（由 content-script.js 预先加载）
+  // 提供内联 fallback 确保扩展不会因为 helper 加载失败而崩溃
+  const helpers = win.CrossRequestHelpers || {};
+  
+  // Fallback: bodyToString
+  if (!helpers.bodyToString) {
+    console.warn('[Index] bodyToString helper 未加载，使用内联 fallback');
+    helpers.bodyToString = function (body) {
+      if (body === undefined || body === null) {
+        return '';
+      }
+      if (typeof body === 'object') {
+        return JSON.stringify(body);
+      }
+      if (typeof body === 'string') {
+        return body;
+      }
+      return String(body);
+    };
+  }
+
+  // Fallback: buildQueryString
+  if (!helpers.buildQueryString) {
+    console.warn('[Index] buildQueryString helper 未加载，使用内联 fallback');
+    helpers.buildQueryString = function (params) {
+      if (!params || typeof params !== 'object') {
+        return '';
+      }
+      const pairs = [];
+      for (const key in params) {
+        if (Object.prototype.hasOwnProperty.call(params, key)) {
+          const value = params[key];
+          if (value !== undefined && value !== null) {
+            if (Array.isArray(value)) {
+              value.forEach((item) => {
+                pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(item)}`);
+              });
+            } else if (typeof value === 'object') {
+              pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(JSON.stringify(value))}`);
+            } else {
+              pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+            }
+          }
+        }
+      }
+      return pairs.length > 0 ? pairs.join('&') : '';
+    };
   }
 
   // 创建跨域请求的 API
@@ -37,37 +71,6 @@
 
     // 待处理的请求
     pendingRequests: new Map(),
-
-    // 辅助函数：将对象转换为查询字符串
-    buildQueryString(params) {
-      if (!params || typeof params !== 'object') {
-        return '';
-      }
-      const pairs = [];
-      for (const key in params) {
-        if (Object.prototype.hasOwnProperty.call(params, key)) {
-          const value = params[key];
-          if (value !== undefined && value !== null) {
-            // 处理数组：转换为多个同名参数 (key=val1&key=val2)
-            if (Array.isArray(value)) {
-              value.forEach((item) => {
-                pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(item)}`);
-              });
-            }
-            // 处理嵌套对象：JSON 序列化（或者跳过，取决于 API 约定）
-            else if (typeof value === 'object') {
-              // 对于嵌套对象，序列化为 JSON 字符串
-              pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(JSON.stringify(value))}`);
-            }
-            // 处理基本类型
-            else {
-              pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
-            }
-          }
-        }
-      }
-      return pairs.length > 0 ? pairs.join('&') : '';
-    },
 
     // 发送跨域请求
     async request(options) {
@@ -85,7 +88,7 @@
 
         // 对于 GET/HEAD 请求，将参数转换为查询字符串附加到 URL
         if ((method === 'GET' || method === 'HEAD') && data) {
-          const queryString = typeof data === 'object' ? this.buildQueryString(data) : String(data);
+          const queryString = typeof data === 'object' ? helpers.buildQueryString(data) : String(data);
           if (queryString) {
             url = url + (url.includes('?') ? '&' : '?') + queryString;
           }
@@ -195,7 +198,7 @@
         }
 
         // 确保 body 始终是字符串格式（用于向后兼容）
-        const bodyString = bodyToString(response.body);
+        const bodyString = helpers.bodyToString(response.body);
 
         pending.resolve({
           status: response.status || 0,
@@ -333,7 +336,7 @@
               const errorData = {
                 res: {
                   body:
-                    response.body != null ? bodyToString(response.body) : JSON.stringify(errorBody),
+                    response.body != null ? helpers.bodyToString(response.body) : JSON.stringify(errorBody),
                   header: errorHeader,
                   status: response.status || 0, // 保留原始状态码，如果没有则用 0
                   statusText: response.statusText || 'Network Error',
@@ -420,7 +423,7 @@
             }
 
             const yapiHeader = response.headers || {}; // 响应头
-            const yapiBodyString = bodyToString(response.body); // 确保 body 为字符串格式
+            const yapiBodyString = helpers.bodyToString(response.body); // 确保 body 为字符串格式
 
             const yapiData = {
               res: {

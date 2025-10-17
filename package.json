@@ -1,6 +1,6 @@
 {
   "name": "cross-request-master",
-  "version": "4.4.13",
+  "version": "4.5.0",
   "description": "YApi 跨域请求扩展",
   "private": true,
   "scripts": {

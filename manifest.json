@@ -3,7 +3,7 @@
   "name": "Cross Request Master",
   "short_name": "CrossRequest",
   "description": "YApi 跨域请求扩展 - 开发者工具",
-  "version": "4.4.13",
+  "version": "4.5.0",
   "author": "leeguooooo",
   "homepage_url": "https://github.com/leeguooooo/cross-request-master",
   "action": {
@@ -34,7 +34,11 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["index.js"],
+      "resources": [
+        "src/helpers/query-string.js",
+        "src/helpers/body-parser.js",
+        "index.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ],

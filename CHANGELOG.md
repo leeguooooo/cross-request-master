@@ -7,12 +7,67 @@
 
 ## [未发布]
 
-### 计划中（v4.5.0）
+_当前没有未发布的变更_
 
-- **技术债清理** - 模块化重构
-  - 将 helpers (buildQueryString, bodyToString 等) 提取到独立模块 `src/helpers/`
-  - 修改测试以导入真实 helper 而不是 mock 实现
-  - 当前测试使用 mock 实现可能导致虚假通过（已在 tests/helpers.test.js 标注 TODO）
+## [4.5.0] - 2025-10-17
+
+### 新增
+
+- **模块化架构** - 技术债清理完成 ✅
+  - 提取 helpers 到独立模块 `src/helpers/`
+    - `src/helpers/query-string.js` - buildQueryString 函数
+    - `src/helpers/body-parser.js` - bodyToString 函数
+  - helpers 支持 CommonJS 导出，可被测试导入
+  - helpers 通过 `window.CrossRequestHelpers` 导出，供 index.js 使用
+
+- **测试真实性保障** - 消除"虚假绿灯"风险 ✅
+  - 测试现在导入真实的生产代码，而不是 mock 实现
+  - 如果生产代码退化，测试会立即失败
+  - 68 个测试全部通过，覆盖真实生产逻辑
+
+### 修复
+
+- **🔴 Critical: 修复脚本加载竞态条件** (Code Review 反馈)
+  - 问题: 动态注入的脚本默认 `async = true`，可能导致 index.js 在 helpers 之前执行
+  - 后果: `window.CrossRequestHelpers` 未定义，扩展崩溃
+  - 修复: 使用链式加载 + `script.async = false` 确保执行顺序
+  - content-script.js 现在按顺序等待每个 helper 加载完成
+
+- **🔴 Critical: 添加安全 Fallback Helpers** (Code Review 反馈)
+  - 问题: helpers 加载失败时，调用 `helpers.buildQueryString()` 会抛出 TypeError
+  - 后果: 第一个 GET 请求就会让扩展停止工作
+  - 修复: 在 index.js 中提供内联 fallback 实现
+  - 现在即使外部 helpers 加载失败，扩展仍能正常工作
+
+### 改进
+
+- **代码组织**
+  - index.js 减少 60 行代码（删除重复的 helper 定义）
+  - 更清晰的职责分离：helpers vs 业务逻辑
+  - content-script.js 按顺序注入 helpers，确保依赖正确加载
+
+- **可维护性**
+  - 单一数据源：helper 逻辑只在一处定义
+  - 更容易修复 bug：修改 helper 后，测试立即验证
+  - 更容易扩展：新增 helper 只需创建新模块
+
+### 技术细节
+
+- **加载顺序**
+  1. content-script.js 动态注入
+  2. src/helpers/query-string.js 加载
+  3. src/helpers/body-parser.js 加载
+  4. index.js 使用 `window.CrossRequestHelpers.*`
+
+- **兼容性**
+  - Chrome 扩展 Manifest V3 兼容
+  - IIFE 模式保持不变（非 ESM）
+  - 向后兼容：API 无变化
+
+### 文档
+
+- 更新 tests/helpers.test.js 注释，说明 v4.5.0 已完成模块化
+- 更新 ROADMAP.md，标记模块化重构为已完成
 
 ## [4.4.14] - 2025-10-17
 

@@ -4,32 +4,17 @@
  * These tests focus on critical bug fixes:
  * - v4.4.13: Falsy-value handling
  * - v4.4.14: GET request parameter handling (Issue #20)
+ * - v4.5.0: Modularization - tests now import REAL production code
  * 
- * NOTE: Currently these tests re-implement the helper logic
- * instead of importing from index.js because index.js uses
- * an IIFE pattern that doesn't export functions.
- * 
- * TODO (v4.5.0): Refactor index.js to extract helpers into
- * a separate module (helpers/body-parser.js) that can be
- * imported by both production code and tests. See ROADMAP.md
- * for the modularization plan.
+ * ✅ v4.5.0: Helpers extracted to src/helpers/, tests import real code
+ * This eliminates the "false green" risk where tests pass but production breaks.
  */
 
+// Import real helpers from production code
+const { bodyToString } = require('../src/helpers/body-parser.js');
+const { buildQueryString } = require('../src/helpers/query-string.js');
+
 describe('bodyToString helper', () => {
-    // Mock the bodyToString function (extracted from index.js:19-32)
-    function bodyToString(body) {
-        if (body === undefined || body === null) {
-            return '';
-        }
-        if (typeof body === 'object') {
-            return JSON.stringify(body);
-        }
-        if (typeof body === 'string') {
-            return body;
-        }
-        // number, boolean 等标量值
-        return String(body);
-    }
 
     describe('falsy values', () => {
         test('should preserve number zero', () => {
@@ -247,36 +232,6 @@ describe('JSON parsing guards', () => {
 
 // Tests for GET request parameter handling (Issue #20)
 describe('buildQueryString helper', () => {
-    // Mock the buildQueryString function (extracted from index.js:42-70)
-    function buildQueryString(params) {
-        if (!params || typeof params !== 'object') {
-            return '';
-        }
-        const pairs = [];
-        for (const key in params) {
-            if (Object.prototype.hasOwnProperty.call(params, key)) {
-                const value = params[key];
-                if (value !== undefined && value !== null) {
-                    // 处理数组
-                    if (Array.isArray(value)) {
-                        value.forEach((item) => {
-                            pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(item)}`);
-                        });
-                    }
-                    // 处理嵌套对象
-                    else if (typeof value === 'object') {
-                        pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(JSON.stringify(value))}`);
-                    }
-                    // 处理基本类型
-                    else {
-                        pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
-                    }
-                }
-            }
-        }
-        return pairs.length > 0 ? pairs.join('&') : '';
-    }
-
     describe('basic functionality', () => {
         test('should convert simple object to query string', () => {
             const params = { a: '1', b: '2' };
@@ -424,28 +379,12 @@ describe('buildQueryString helper', () => {
 });
 
 describe('GET request parameter handling', () => {
-    // Mock GET request processing logic
+    // Test GET request processing logic using real helpers
     function processGetRequest(url, method, data) {
-        // 规范化 method 为大写
+        // 规范化 method 为大写（same logic as index.js）
         const normalizedMethod = (method || 'GET').toUpperCase();
         
         if ((normalizedMethod === 'GET' || normalizedMethod === 'HEAD') && data) {
-            function buildQueryString(params) {
-                if (!params || typeof params !== 'object') {
-                    return '';
-                }
-                const pairs = [];
-                for (const key in params) {
-                    if (Object.prototype.hasOwnProperty.call(params, key)) {
-                        const value = params[key];
-                        if (value !== undefined && value !== null) {
-                            pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
-                        }
-                    }
-                }
-                return pairs.length > 0 ? pairs.join('&') : '';
-            }
-
             const queryString = typeof data === 'object' ? buildQueryString(data) : String(data);
             if (queryString) {
                 url = url + (url.includes('?') ? '&' : '?') + queryString;

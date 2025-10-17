@@ -2,7 +2,7 @@
 
 本文档记录 Cross Request Master 的技术改进计划，从当前"开源合格"状态提升到"优秀开源项目"。
 
-## 当前状态 (v4.4.14)
+## 当前状态 (v4.5.0)
 
 ✅ **已完成**
 - 修复关键 bug（Issue #19 falsy 值处理，Issue #20 GET 参数丢失）
@@ -10,32 +10,26 @@
 - 添加 ESLint 和 Prettier 配置
 - 添加测试框架（Jest）和 68 个测试用例
 - 完善文档（技术文档、发布说明）
-
-⚠️ **已知技术债**
-- 测试使用 mock helper 实现，不能真正测试生产代码
-- 原因：index.js 使用 IIFE 模式，不支持 export
-- 缓解：tests/helpers.test.js 顶部有明确 TODO 注释
-- 计划：v4.5.0 通过模块化重构彻底解决
+- **✅ v4.5.0: 模块化重构完成，技术债已清理**
+  - helpers 提取到 `src/helpers/`
+  - 测试导入真实生产代码
+  - 消除"虚假绿灯"风险
 
 ## 短期目标 (v4.5.x - 下一个 minor 版本)
 
 ### 1. 代码质量改进
 
-#### 1.1 模块化重构 🔥 **高优先级** - **解决测试技术债**
+#### 1.1 模块化重构 ✅ **已完成 (v4.5.0)**
 
-**当前问题**:
-- `index.js` (962行) 混合了多种职责：
-  - 消息传递逻辑
-  - UI 渲染（cURL 弹窗、错误提示）
-  - Helper 函数
-  - YApi 适配器
-  - jQuery 拦截
-- **关键问题**: IIFE 模式不支持 export，导致测试只能 mock helper 实现
-  - tests/helpers.test.js 重新实现了 buildQueryString、bodyToString 等
-  - 如果 index.js 退化，测试仍然通过（虚假绿灯）
-  - 无法真正保护生产代码
+**已解决的问题**:
+- ✅ helpers 已提取到 `src/helpers/`
+  - `query-string.js` - buildQueryString 函数
+  - `body-parser.js` - bodyToString 函数
+- ✅ 测试导入真实生产代码（不再是 mock）
+- ✅ 消除"虚假绿灯"风险
+- ✅ 减少代码重复（index.js 减少 60 行）
 
-**改进计划**:
+**下一步计划**（后续版本）:
 ```
 src/
 ├── core/
@@ -56,22 +50,18 @@ src/
 └── index.js              # 主入口，组装各模块
 ```
 
-**关键改进**:
-1. 提取 helpers 到独立模块，支持 CommonJS/ESM 导出
-2. tests/ 导入真实 helper，而不是 mock 实现
-3. 生产代码和测试使用同一份逻辑，消除虚假通过风险
-
-**挑战**:
+**挑战**（已解决）:
 - Chrome 扩展需要在 `manifest.json` 中声明所有脚本
 - 不能使用 ES modules（Manifest V3 限制）
 - 需要保持向后兼容
 
-**方案**:
-- 使用 IIFE 模块模式
-- 通过 `window` 对象暴露接口
-- 在 manifest.json 中按顺序加载
+**已采用方案**:
+- ✅ 使用 IIFE 模块模式（保持兼容性）
+- ✅ 通过 `window.CrossRequestHelpers` 暴露接口
+- ✅ 在 manifest.json 的 web_accessible_resources 中声明
+- ✅ content-script.js 按顺序动态注入
 
-**时间估计**: 2-3 周
+**实际用时**: 约 2 小时（快速重构）
 
 #### 1.2 消除重复代码 🔥 **高优先级**
 
@@ -370,19 +360,25 @@ __tests__/
 ---
 
 **最后更新**: 2025-10-17  
-**当前版本**: v4.4.14  
-**下一个版本**: v4.5.0 (预计 2-3 个月)
+**当前版本**: v4.5.0  
+**下一个版本**: v4.6.0 (待定)
 
 ---
 
 ## 版本历史
+
+### v4.5.0 (2025-10-17) - 模块化重构
+- **✅ 完成模块化重构，清理技术债**
+- 提取 helpers 到 `src/helpers/`（query-string.js, body-parser.js）
+- 测试导入真实生产代码，消除"虚假绿灯"风险
+- 减少代码重复（index.js -60 行）
+- 68 个测试全部通过，覆盖真实生产逻辑
 
 ### v4.4.14 (2025-10-17)
 - 修复 jQuery $.get 参数丢失（Issue #20）
 - 方法名规范化（大小写不敏感）
 - 增强 buildQueryString 支持数组和嵌套对象
 - 新增 29 个测试（总计 68 个）
-- **技术债**: 测试使用 mock 实现（计划 v4.5.0 修复）
 
 ### v4.4.13 (2025-10-17)
 - 修复 YApi 兼容性（Issue #19）

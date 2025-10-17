@@ -107,16 +107,49 @@ const CrossRequest = {
 
   // 注入页面脚本
   injectScript() {
-    const script = document.createElement('script');
-    script.src = chrome.runtime.getURL('index.js');
-    script.onload = function () {
-      console.log('[Content-Script] 页面脚本加载成功');
-      this.remove();
+    // 按顺序注入：helpers -> index.js
+    // 使用链式加载确保执行顺序，避免竞态条件
+    const helpers = [
+      'src/helpers/query-string.js',
+      'src/helpers/body-parser.js'
+    ];
+
+    // 链式加载 helpers，然后加载 index.js
+    let loadIndex = 0;
+
+    const loadNextHelper = () => {
+      if (loadIndex < helpers.length) {
+        const helperPath = helpers[loadIndex++];
+        const helperScript = document.createElement('script');
+        helperScript.src = chrome.runtime.getURL(helperPath);
+        helperScript.async = false; // 确保按顺序执行
+        helperScript.onload = function () {
+          console.log(`[Content-Script] Helper 加载成功: ${helperPath}`);
+          loadNextHelper(); // 加载下一个
+        };
+        helperScript.onerror = function () {
+          console.error(`[Content-Script] Helper 加载失败: ${helperPath}`);
+          // 即使失败也继续，让 index.js 的 fallback 处理
+          loadNextHelper();
+        };
+        (document.head || document.documentElement).appendChild(helperScript);
+      } else {
+        // 所有 helpers 加载完成，加载 index.js
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('index.js');
+        script.async = false; // 确保在 helpers 之后执行
+        script.onload = function () {
+          console.log('[Content-Script] 页面脚本加载成功');
+          this.remove();
+        };
+        script.onerror = function () {
+          console.error('[Content-Script] 页面脚本加载失败');
+        };
+        (document.head || document.documentElement).appendChild(script);
+      }
     };
-    script.onerror = function () {
-      console.error('[Content-Script] 页面脚本加载失败');
-    };
-    (document.head || document.documentElement).appendChild(script);
+
+    loadNextHelper(); // 开始加载
   },
 
   // 监听DOM变化
