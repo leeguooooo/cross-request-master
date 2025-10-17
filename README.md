@@ -198,12 +198,22 @@ cross-request-master/
 
 ## 支持项目
 
-如果本项目对你有帮助：
+如果本项目对你有帮助，欢迎通过以下方式支持：
 
-- Star 本仓库
-- [提交 Issue](https://github.com/leeguooooo/cross-request-master/issues) 反馈问题
-- [提交 PR](https://github.com/leeguooooo/cross-request-master/pulls) 贡献代码
-- [赞助开发](https://github.com/sponsors/leeguooooo) 通过 GitHub Sponsors
+- ⭐ Star 本仓库
+- 🐛 [提交 Issue](https://github.com/leeguooooo/cross-request-master/issues) 反馈问题
+- 💻 [提交 PR](https://github.com/leeguooooo/cross-request-master/pulls) 贡献代码
+- 💖 [赞助开发](https://github.com/sponsors/leeguooooo) 通过 GitHub Sponsors
+
+### 微信 / 支付宝赞助
+
+如果你想通过微信或支付宝支持本项目：
+
+<div align="center">
+  <p><i>添加赞助二维码请联系项目维护者</i></p>
+</div>
+
+你的支持是项目持续维护和改进的动力！ 🙏
 
 ## 更新日志
 
