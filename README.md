@@ -192,6 +192,16 @@ cross-request-master/
 
 欢迎提交 Issue 和 Pull Request！
 
+### 贡献者
+
+感谢所有为本项目做出贡献的开发者：
+
+<a href="https://github.com/leeguooooo/cross-request-master/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=leeguooooo/cross-request-master" />
+</a>
+
+### 如何贡献
+
 提交问题时请提供：
 1. Chrome 版本和扩展版本
 2. 详细的错误信息和复现步骤
