@@ -5,6 +5,23 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [4.4.12] - 2025-10-17
+
+### 修复
+
+- 修复相对 URL 解析问题
+  - 根相对路径（如 `/config/post_data`）现在正确解析为 `location.origin + path`
+  - 其他相对路径（如 `api/endpoint`）使用 `new URL(path, location.href)` 解析
+  - 添加错误处理，避免无效 URL 导致崩溃
+
+- 修复 HTTP 方法大小写敏感问题（PR #17）
+  - `background.js` 中的方法检查改为大小写不敏感
+  - 避免混合大小写方法（如 `Get`、`hEaD`）导致 fetch 错误
+
+### 致谢
+
+- 感谢 @justopt796 提交 PR #17，修复了相对 URL 和方法大小写问题
+
 ## [4.4.11] - 2025-10-17
 
 ### 改进
@@ -178,6 +195,7 @@
 
 ## 版本链接
 
+[4.4.12]: https://github.com/leeguooooo/cross-request-master/compare/v4.4.11...v4.4.12
 [4.4.11]: https://github.com/leeguooooo/cross-request-master/compare/v4.4.10...v4.4.11
 [4.4.10]: https://github.com/leeguooooo/cross-request-master/compare/v4.4.9...v4.4.10
 [4.4.9]: https://github.com/leeguooooo/cross-request-master/compare/v4.4.8...v4.4.9
