@@ -1,9 +1,18 @@
 name: Auto Tag on Version Change
 
+# 禁用自动标签创建 - 应该手动控制发布
+# on:
+#   push:
+#     branches: [ main ]
+#     paths: [ 'manifest.json' ]
+
 on:
-  push:
-    branches: [ main ]
-    paths: [ 'manifest.json' ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to tag (e.g., 4.5.3)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -18,10 +27,10 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Get current version from manifest.json
+      - name: Get version from input
         id: version
         run: |
-          VERSION=$(jq -r '.version' manifest.json)
+          VERSION="${{ github.event.inputs.version }}"
           echo "current_version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag_name=v$VERSION" >> $GITHUB_OUTPUT
           echo "当前版本: $VERSION"

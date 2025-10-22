@@ -1,9 +1,10 @@
 name: Create Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  # 禁用自动 release 创建 - 应该手动控制发布
+  # push:
+  #   tags:
+  #     - 'v*'
   workflow_dispatch:
     inputs:
       tag:
