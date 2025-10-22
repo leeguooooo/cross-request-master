@@ -974,27 +974,71 @@
       // 转换 jQuery 的 success/error 回调为 Promise
       const promise = CrossRequestAPI.request(requestData);
 
+      // 将 cross-request 响应转换为 jQuery jqXHR 对象
+      // 这解决了 issue #23：提供标准的 responseText, responseJSON 等属性
+      function toJqXHR(response) {
+        return {
+          status: response.status,
+          statusText: response.statusText,
+          readyState: 4,
+          responseText: typeof response.body === 'string' ? response.body : JSON.stringify(response.body || ''),
+          responseJSON: response.data,
+          getResponseHeader: function (name) {
+            const headers = response.headers || {};
+            const lower = name.toLowerCase();
+            for (const key in headers) {
+              if (Object.prototype.hasOwnProperty.call(headers, key) && key.toLowerCase() === lower) {
+                return headers[key];
+              }
+            }
+            return null;
+          },
+          getAllResponseHeaders: function () {
+            const headers = response.headers || {};
+            return Object.entries(headers)
+              .map(([k, v]) => `${k}: ${v}`)
+              .join('\r\n');
+          }
+        };
+      }
+
       // 支持 jQuery 风格的回调
       if (options.success || options.error || options.complete) {
         promise.then(
           (response) => {
             debugLog('[Index] jQuery ajax 收到响应:', response.status);
 
+            // 创建符合 jQuery 标准的 jqXHR 对象
+            const jqXHR = toJqXHR(response);
+
             if (options.success) {
-              // response.data 现在已经是解析后的对象了
+              // jQuery success 回调签名: success(data, textStatus, jqXHR)
               debugLog('[Index] 传递给 success 回调');
-              options.success(response.data, 'success', response);
+              options.success(response.data, 'success', jqXHR);
             }
             if (options.complete) {
-              options.complete(response, 'success');
+              // jQuery complete 回调签名: complete(jqXHR, textStatus)
+              options.complete(jqXHR, 'success');
             }
           },
           (error) => {
+            // 为错误情况创建最小化的 jqXHR 对象
+            const errorJqXHR = {
+              status: 0,
+              statusText: error.message,
+              readyState: 0,
+              responseText: '',
+              responseJSON: undefined,
+              getResponseHeader: () => null,
+              getAllResponseHeaders: () => ''
+            };
+
             if (options.error) {
-              options.error({ statusText: error.message }, 'error', error.message);
+              // jQuery error 回调签名: error(jqXHR, textStatus, errorThrown)
+              options.error(errorJqXHR, 'error', error.message);
             }
             if (options.complete) {
-              options.complete({ statusText: error.message }, 'error');
+              options.complete(errorJqXHR, 'error');
             }
           }
         );
