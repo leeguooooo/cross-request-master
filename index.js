@@ -977,12 +977,38 @@
       // 将 cross-request 响应转换为 jQuery jqXHR 对象
       // 这解决了 issue #23：提供标准的 responseText, responseJSON 等属性
       function toJqXHR(response) {
+        // 正确处理 responseText
+        let responseText = '';
+        if (response.body != null) {
+          responseText = typeof response.body === 'string' ? response.body : JSON.stringify(response.body);
+        }
+        
+        // 只有在响应是 JSON 时才设置 responseJSON
+        // 这与 jQuery 的行为一致：非 JSON 响应的 responseJSON 应该是 undefined
+        let responseJSON = undefined;
+        const contentType = response.headers['content-type'] || '';
+        if (contentType.includes('application/json') && response.data !== undefined) {
+          // 确保 response.data 是对象或数组，而不是字符串
+          // 字符串说明没有被正确解析为 JSON
+          if (typeof response.data === 'object' || typeof response.data === 'boolean' || typeof response.data === 'number') {
+            responseJSON = response.data;
+          } else if (typeof response.data === 'string') {
+            // 尝试解析字符串为 JSON（兜底处理）
+            try {
+              responseJSON = JSON.parse(response.data);
+            } catch (e) {
+              // 解析失败，保持 undefined
+              debugLog('[Index] responseJSON 解析失败，保持 undefined');
+            }
+          }
+        }
+        
         return {
           status: response.status,
           statusText: response.statusText,
           readyState: 4,
-          responseText: typeof response.body === 'string' ? response.body : JSON.stringify(response.body || ''),
-          responseJSON: response.data,
+          responseText: responseText,
+          responseJSON: responseJSON,
           getResponseHeader: function (name) {
             const headers = response.headers || {};
             const lower = name.toLowerCase();
