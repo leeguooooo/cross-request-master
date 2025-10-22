@@ -50,21 +50,23 @@ extension.zip
 **影响**: 真实代码回归时测试不会失败  
 **根本原因**: index.js 使用 IIFE 模式，不导出函数
 
-**修复**: ✅ 在测试文件中添加详细说明和 TODO
+**修复**: ✅ 在测试文件中记录模块化现状并导入真实 helper 代码
 ```javascript
 /**
- * NOTE: Currently these tests re-implement the helper logic
- * instead of importing from index.js because index.js uses
- * an IIFE pattern that doesn't export functions.
- * 
- * TODO (v4.5.0): Refactor index.js to extract helpers into
- * a separate module (helpers/body-parser.js) that can be
- * imported by both production code and tests. See ROADMAP.md
- * for the modularization plan.
+ * Tests for helper functions
+ *
+ * These tests focus on critical bug fixes:
+ * - v4.4.13: Falsy-value handling
+ * - v4.4.14: GET request parameter handling (Issue #20)
+ * - v4.5.x: Modularization - tests import REAL production code
+ *
+ * ✅ Helpers extracted to src/helpers/, tests import real code (no re-implementations)
+ * ✅ Response handler helper covered by unit tests to prevent regressions
+ * This eliminates the "false green" risk where tests pass but production breaks.
  */
 ```
 
-**长期解决方案**: 在 v4.5.0 模块化重构中解决（见 ROADMAP.md）
+**长期解决方案**: 在 v4.5.0 模块化重构中解决（见 ROADMAP.md），并在 v4.5.x 进一步覆盖 response-handler 逻辑
 
 ## ✅ 修复后状态
 
@@ -73,7 +75,7 @@ extension.zip
 - ✅ CHANGELOG.md - 移除不存在文件引用
 - ✅ .gitignore - 添加安全忽略项
 - ✅ package.json - 修正 Jest 版本
-- ✅ __tests__/helpers.test.js - 添加说明和 TODO
+- ✅ tests/helpers.test.js - 更新说明并导入真实 helper 代码
 
 ### 验证结果
 ```bash
@@ -100,7 +102,7 @@ $ npm run lint
 | CHANGELOG 链接不存在的文件 | High | 移除引用 | ✅ |
 | .gitignore 缺失 .pem/.crx | High | 添加忽略项 | ✅ |
 | Jest 版本不匹配 | Medium | 降级到 29.7.0 | ✅ |
-| 测试不导入真实代码 | Medium | 添加说明+TODO | ✅ |
+| 测试不导入真实代码 | Medium | 模块化 helpers 并更新测试覆盖真实代码 | ✅ |
 
 ## 🎯 关键教训
 

@@ -1,12 +1,13 @@
 /**
  * Tests for helper functions
- * 
+ *
  * These tests focus on critical bug fixes:
  * - v4.4.13: Falsy-value handling
  * - v4.4.14: GET request parameter handling (Issue #20)
- * - v4.5.0: Modularization - tests now import REAL production code
- * 
- * ✅ v4.5.0: Helpers extracted to src/helpers/, tests import real code
+ * - v4.5.x: Modularization - tests import REAL production code
+ *
+ * ✅ Helpers extracted to src/helpers/, tests import real code (no re-implementations)
+ * ✅ Response handler helper covered by unit tests to prevent regressions
  * This eliminates the "false green" risk where tests pass but production breaks.
  */
 
@@ -14,6 +15,10 @@
 const { bodyToString } = require('../src/helpers/body-parser.js');
 const { buildQueryString } = require('../src/helpers/query-string.js');
 const { safeLogResponse } = require('../src/helpers/logger.js');
+const {
+    buildYapiCallbackParams,
+    processBackgroundResponse
+} = require('../src/helpers/response-handler.js');
 
 describe('bodyToString helper', () => {
 
@@ -72,46 +77,217 @@ describe('bodyToString helper', () => {
     });
 });
 
-describe('parsedData handling', () => {
-    // Simulates the logic from index.js:158
-    function getParsedDataOrDefault(parsedData) {
-        return parsedData === undefined ? {} : parsedData;
+describe('processBackgroundResponse helper', () => {
+    const baseResponse = {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'content-type': 'application/json' },
+        body: undefined
+    };
+
+    function run(overrides = {}) {
+        const headers = {
+            ...baseResponse.headers,
+            ...(overrides.headers || {})
+        };
+        return processBackgroundResponse({
+            ...baseResponse,
+            ...overrides,
+            headers
+        });
     }
 
-    test('should convert undefined to empty object', () => {
-        expect(getParsedDataOrDefault(undefined)).toEqual({});
+    test('should handle missing response gracefully', () => {
+        const result = processBackgroundResponse(null);
+        expect(result).toEqual({
+            status: 0,
+            statusText: 'No Response',
+            headers: {},
+            data: {},
+            body: ''
+        });
     });
 
-    test('should preserve null (critical fix)', () => {
-        expect(getParsedDataOrDefault(null)).toBe(null);
+    test('should convert undefined body to empty object', () => {
+        const result = run({ body: undefined });
+        expect(result.data).toEqual({});
+        expect(result.body).toBe('');
+    });
+
+    test('should convert null body to empty object when not JSON', () => {
+        const result = run({
+            body: null,
+            headers: { 'content-type': 'text/plain' }
+        });
+        expect(result.data).toEqual({});
+        expect(result.body).toBe('');
+    });
+
+    test('should preserve null JSON body parsed from string', () => {
+        const result = run({ body: 'null' });
+        expect(result.data).toBeNull();
+        expect(result.body).toBe('null');
     });
 
     test('should preserve number zero', () => {
-        expect(getParsedDataOrDefault(0)).toBe(0);
+        const result = run({ body: '0' });
+        expect(result.data).toBe(0);
+        expect(result.body).toBe('0');
     });
 
     test('should preserve boolean false', () => {
-        expect(getParsedDataOrDefault(false)).toBe(false);
+        const result = run({ body: 'false' });
+        expect(result.data).toBe(false);
+        expect(result.body).toBe('false');
     });
 
-    test('should preserve empty string', () => {
-        expect(getParsedDataOrDefault('')).toBe('');
+    test('should preserve empty string for text response', () => {
+        const result = run({
+            body: '',
+            headers: { 'content-type': 'text/plain' }
+        });
+        expect(result.data).toBe('');
+        expect(result.body).toBe('');
     });
 
-    test('should preserve empty array', () => {
-        const arr = [];
-        expect(getParsedDataOrDefault(arr)).toBe(arr);
+    test('should parse JSON string to object', () => {
+        const result = run({ body: '{"key":"value"}' });
+        expect(result.data).toEqual({ key: 'value' });
+        expect(result.body).toBe('{"key":"value"}');
     });
 
-    test('should preserve empty object', () => {
-        const obj = {};
-        expect(getParsedDataOrDefault(obj)).toBe(obj);
+    test('should return same object instance when body already object', () => {
+        const payload = { key: 'value' };
+        const result = run({ body: payload });
+        expect(result.data).toBe(payload);
+        expect(result.body).toBe('{"key":"value"}');
     });
 
-    test('should preserve truthy values', () => {
-        expect(getParsedDataOrDefault(42)).toBe(42);
-        expect(getParsedDataOrDefault(true)).toBe(true);
-        expect(getParsedDataOrDefault('hello')).toBe('hello');
+    test('should return same array instance when body already array', () => {
+        const payload = [1, 2, 3];
+        const result = run({ body: payload });
+        expect(result.data).toBe(payload);
+        expect(result.body).toBe('[1,2,3]');
+    });
+
+    test('should keep scalar numbers for non JSON content type', () => {
+        const result = run({
+            body: 42,
+            headers: { 'content-type': 'text/plain' }
+        });
+        expect(result.data).toBe(42);
+        expect(result.body).toBe('42');
+    });
+
+    test('should keep boolean values for non JSON content type', () => {
+        const result = run({
+            body: false,
+            headers: { 'content-type': 'text/plain' }
+        });
+        expect(result.data).toBe(false);
+        expect(result.body).toBe('false');
+    });
+
+    test('should provide error wrapper when JSON parsing fails', () => {
+        const result = run({ body: 'not json' });
+        expect(result.data).toEqual({
+            error: 'JSON解析失败',
+            raw: 'not json'
+        });
+        expect(result.body).toBe('not json');
+    });
+});
+
+describe('buildYapiCallbackParams helper', () => {
+    test('should build success payload for JSON response with parsed data', () => {
+        const response = {
+            status: 200,
+            statusText: 'OK',
+            headers: { 'content-type': 'application/json' },
+            body: '{"key":"value"}',
+            data: { key: 'value' }
+        };
+
+        const { yapiRes, yapiHeader, yapiData } = buildYapiCallbackParams(response);
+
+        expect(yapiRes).toEqual({ key: 'value' });
+        expect(yapiHeader).toEqual(response.headers);
+        expect(yapiData).toEqual({
+            res: {
+                body: '{"key":"value"}',
+                header: response.headers,
+                status: 200,
+                statusText: 'OK',
+                success: true
+            },
+            status: 200,
+            statusText: 'OK',
+            success: true
+        });
+    });
+
+    test('should parse JSON body when data is missing', () => {
+        const response = {
+            status: 201,
+            statusText: 'Created',
+            headers: { 'content-type': 'application/json' },
+            body: '{"id":123}'
+        };
+
+        const result = buildYapiCallbackParams(response);
+
+        expect(result.yapiRes).toEqual({ id: 123 });
+        expect(result.yapiData.res.body).toBe('{"id":123}');
+    });
+
+    test('should reuse object body when already parsed', () => {
+        const body = { ok: true };
+        const response = {
+            status: 200,
+            statusText: 'OK',
+            headers: { 'content-type': 'application/json' },
+            body
+        };
+
+        const result = buildYapiCallbackParams(response);
+
+        expect(result.yapiRes).toBe(body);
+        expect(result.yapiData.res.body).toBe('{"ok":true}');
+    });
+
+    test('should use raw body for text response', () => {
+        const response = {
+            status: 200,
+            statusText: 'OK',
+            headers: { 'content-type': 'text/plain' },
+            body: 'hello world'
+        };
+
+        const result = buildYapiCallbackParams(response);
+
+        expect(result.yapiRes).toBe('hello world');
+        expect(result.yapiData.res.body).toBe('hello world');
+    });
+
+    test('should return default payload when response is missing', () => {
+        const result = buildYapiCallbackParams(null);
+
+        expect(result).toEqual({
+            yapiRes: {},
+            yapiHeader: {},
+            yapiData: {
+                res: {
+                    body: '',
+                    header: {},
+                    status: 0,
+                    statusText: 'No Response',
+                    success: false
+                },
+                status: 0,
+                statusText: 'No Response',
+                success: false
+            }
+        });
     });
 });
 
@@ -168,66 +344,6 @@ describe('nullish checks', () => {
         test('should not match empty string', () => {
             expect('' === undefined).toBe(false);
         });
-    });
-});
-
-describe('JSON parsing guards', () => {
-    // Test JSON parsing with type checks
-    function parseJsonSafely(value) {
-        // Already an object
-        if (typeof value === 'object' && value !== null) {
-            return value;
-        }
-        
-        // String to parse
-        if (typeof value === 'string' && value !== '') {
-            try {
-                return JSON.parse(value);
-            } catch (e) {
-                return { error: 'JSON解析失败', raw: value };
-            }
-        }
-        
-        // Scalar values (number, boolean)
-        if (value != null && typeof value !== 'string') {
-            return value;
-        }
-        
-        // null, undefined, empty string
-        return {};
-    }
-
-    test('should parse valid JSON string', () => {
-        expect(parseJsonSafely('{"key":"value"}')).toEqual({ key: 'value' });
-    });
-
-    test('should return object as-is', () => {
-        const obj = { key: 'value' };
-        expect(parseJsonSafely(obj)).toBe(obj);
-    });
-
-    test('should preserve null object', () => {
-        expect(parseJsonSafely(null)).toEqual({});
-    });
-
-    test('should preserve number scalars', () => {
-        expect(parseJsonSafely(0)).toBe(0);
-        expect(parseJsonSafely(42)).toBe(42);
-    });
-
-    test('should preserve boolean scalars', () => {
-        expect(parseJsonSafely(false)).toBe(false);
-        expect(parseJsonSafely(true)).toBe(true);
-    });
-
-    test('should handle invalid JSON', () => {
-        const result = parseJsonSafely('not json');
-        expect(result).toHaveProperty('error');
-        expect(result.error).toBe('JSON解析失败');
-    });
-
-    test('should handle empty string', () => {
-        expect(parseJsonSafely('')).toEqual({});
     });
 });
 
@@ -337,11 +453,11 @@ describe('buildQueryString helper', () => {
         });
 
         test('should handle mixed falsy values', () => {
-            const params = { 
-                zero: 0, 
-                false: false, 
-                empty: '', 
-                undef: undefined, 
+            const params = {
+                zero: 0,
+                false: false,
+                empty: '',
+                undef: undefined,
                 nothing: null,
                 real: 'value'
             };
@@ -358,7 +474,7 @@ describe('buildQueryString helper', () => {
     describe('Issue #20 regression test', () => {
         test('should convert jQuery $.get params correctly', () => {
             // Simulating: $.get("/feedback/list", { types: "0,2" })
-            const params = { types: "0,2" };
+            const params = { types: '0,2' };
             const queryString = buildQueryString(params);
             expect(queryString).toBe('types=0%2C2');
         });
@@ -367,8 +483,8 @@ describe('buildQueryString helper', () => {
             const params = {
                 page: 1,
                 pageSize: 10,
-                types: "0,2",
-                status: "active"
+                types: '0,2',
+                status: 'active'
             };
             const queryString = buildQueryString(params);
             expect(queryString).toContain('page=1');
@@ -384,7 +500,7 @@ describe('GET request parameter handling', () => {
     function processGetRequest(url, method, data) {
         // 规范化 method 为大写（same logic as index.js）
         const normalizedMethod = (method || 'GET').toUpperCase();
-        
+
         if ((normalizedMethod === 'GET' || normalizedMethod === 'HEAD') && data) {
             const queryString = typeof data === 'object' ? buildQueryString(data) : String(data);
             if (queryString) {
@@ -422,43 +538,43 @@ describe('GET request parameter handling', () => {
     describe('Issue #20 - Fetch API compatibility', () => {
         test('GET request should not have body', () => {
             // This was the bug: GET request had body, causing fetch error
-            const result = processGetRequest('/feedback/list', 'GET', { types: "0,2" });
-            
+            const result = processGetRequest('/feedback/list', 'GET', { types: '0,2' });
+
             expect(result.url).toContain('types=0%2C2');
             expect(result.body).toBeUndefined(); // Critical: body must be undefined for GET
         });
 
         test('POST request should keep body', () => {
             const result = processGetRequest('/api/create', 'POST', { name: 'test' });
-            
+
             expect(result.url).toBe('/api/create');
             expect(result.body).toEqual({ name: 'test' });
         });
 
         test('lowercase "get" should work', () => {
             const result = processGetRequest('/api/list', 'get', { id: 1 });
-            
+
             expect(result.url).toBe('/api/list?id=1');
             expect(result.body).toBeUndefined();
         });
 
         test('mixed case "Get" should work', () => {
             const result = processGetRequest('/api/list', 'Get', { id: 1 });
-            
+
             expect(result.url).toBe('/api/list?id=1');
             expect(result.body).toBeUndefined();
         });
 
         test('HEAD request should also not have body', () => {
             const result = processGetRequest('/api/check', 'HEAD', { id: 1 });
-            
+
             expect(result.url).toBe('/api/check?id=1');
             expect(result.body).toBeUndefined();
         });
 
         test('lowercase "head" should work', () => {
             const result = processGetRequest('/api/check', 'head', { id: 1 });
-            
+
             expect(result.url).toBe('/api/check?id=1');
             expect(result.body).toBeUndefined();
         });

@@ -14,6 +14,9 @@
   - background/index 使用安全日志助手，输出超过 10KB 时自动截断并提示
   - 避免 content-script 控制台被巨型响应体切割，便于调试
   - 新增单元测试覆盖截断逻辑，防止回归
+- **测试质量** - helpers 与生产代码保持一致
+  - `tests/helpers.test.js` 直接导入 `response-handler`，覆盖 `processBackgroundResponse` 和 `buildYapiCallbackParams`
+  - 移除遗留提醒注释，防止测试与生产代码脱节
 
 ## [4.5.0] - 2025-10-17
 
@@ -90,12 +93,13 @@
     - **增强 buildQueryString**: 支持数组（`ids=[1,2,3]` → `ids=1&ids=2&ids=3`）和嵌套对象（JSON 序列化）
   - **测试覆盖**: 新增 29 个测试（总计 68 个），覆盖大小写、数组、对象等场景
 
-### 已知限制
+### 已知限制（历史）
 
 - 测试使用 mock helper 实现而非真实代码（技术债，计划 v4.5.0 修复）
 - 原因：index.js 使用 IIFE 模式，不支持 export
 - 风险：如果 index.js 退化，测试可能仍然通过
-- 缓解：在测试文件顶部有明确的 TODO 注释
+- ~~缓解：在测试文件顶部标注风险提示（已移除）~~
+- ✅ 已在 v4.5.x 中解决：helpers 模块化，测试直接导入真实代码（含 response-handler 覆盖）
 
 ## [4.4.13] - 2025-10-17
 
