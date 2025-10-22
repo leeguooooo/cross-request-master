@@ -292,17 +292,27 @@ const CrossRequest = {
   handleResponse(node, response, requestData) {
     console.log('[Content-Script] 发送响应事件');
 
+    const responsePayload = {
+      status: response.status || 0,
+      statusText: response.statusText || 'OK',
+      headers: response.headers || {},
+      body: response.body !== undefined && response.body !== null ? response.body : '',
+      ok: response.ok !== undefined ? response.ok : true,
+      url: requestData.url
+    };
+
+    if (Object.prototype.hasOwnProperty.call(response, 'bodyParsed')) {
+      responsePayload.bodyParsed = response.bodyParsed;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(response, 'data')) {
+      responsePayload.data = response.data;
+    }
+
     const responseEvent = new CustomEvent('y-request-response', {
       detail: {
         id: requestData.id,
-        response: {
-          status: response.status || 0,
-          statusText: response.statusText || 'OK',
-          headers: response.headers || {},
-          body: response.body || '',
-          ok: response.ok !== undefined ? response.ok : true,
-          url: requestData.url
-        }
+        response: responsePayload
       }
     });
 

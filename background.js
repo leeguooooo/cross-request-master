@@ -272,13 +272,14 @@ async function handleCrossOriginRequest(request) {
       });
     });
 
-    // 尝试解析 JSON
-    let parsedBody = null;
-    let isJson = false;
-    if (responseHeaders['content-type']?.includes('application/json')) {
+    const contentType = responseHeaders['content-type'] || '';
+    let parsedBody;
+    let hasParsedBody = false;
+
+    if (contentType.includes('application/json')) {
       try {
         parsedBody = JSON.parse(responseBody);
-        isJson = true;
+        hasParsedBody = true;
         console.log('[Background] JSON 解析成功:', {
           dataType: typeof parsedBody,
           isArray: Array.isArray(parsedBody),
@@ -291,13 +292,19 @@ async function handleCrossOriginRequest(request) {
       }
     }
 
-    return {
+    const result = {
       status: response.status,
       statusText: response.statusText || getStatusText(response.status),
       headers: responseHeaders,
-      body: isJson ? parsedBody : responseBody, // 如果是 JSON，返回解析后的对象；否则返回字符串
+      body: responseBody,
       ok: response.ok
     };
+
+    if (hasParsedBody) {
+      result.bodyParsed = parsedBody;
+    }
+
+    return result;
   } catch (error) {
     clearTimeout(timeoutId);
 
