@@ -420,27 +420,27 @@
           if (response.status && response.status >= 400) {
             let errorMsg = `HTTP ${response.status}`;
             switch (response.status) {
-            case 400:
-              errorMsg = '请求参数错误 (400)';
-              break;
-            case 401:
-              errorMsg = '未授权，请检查认证信息 (401)';
-              break;
-            case 403:
-              errorMsg = '访问被拒绝 (403)';
-              break;
-            case 404:
-              errorMsg = '请求的资源不存在 (404)';
-              break;
-            case 500:
-              errorMsg = '服务器内部错误 (500)';
-              break;
-            case 502:
-              errorMsg = '网关错误 (502)';
-              break;
-            case 503:
-              errorMsg = '服务暂时不可用 (503)';
-              break;
+              case 400:
+                errorMsg = '请求参数错误 (400)';
+                break;
+              case 401:
+                errorMsg = '未授权，请检查认证信息 (401)';
+                break;
+              case 403:
+                errorMsg = '访问被拒绝 (403)';
+                break;
+              case 404:
+                errorMsg = '请求的资源不存在 (404)';
+                break;
+              case 500:
+                errorMsg = '服务器内部错误 (500)';
+                break;
+              case 502:
+                errorMsg = '网关错误 (502)';
+                break;
+              case 503:
+                errorMsg = '服务暂时不可用 (503)';
+                break;
             }
 
             // 显示错误提示（仅非静默模式）
