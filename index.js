@@ -183,6 +183,18 @@
       const pending = this.pendingRequests.get(id);
 
       if (pending) {
+        // 使用 response-handler helper 处理响应（如果可用）
+        if (helpers.processBackgroundResponse) {
+          // 使用提取的生产函数
+          const processed = helpers.processBackgroundResponse(response);
+          pending.resolve(processed);
+          this.pendingRequests.delete(id);
+          return;
+        }
+
+        // Fallback: 内联实现（如果 helper 未加载）
+        console.warn('[Index] processBackgroundResponse helper 未加载，使用 fallback');
+        
         // 确保 response 对象存在
         if (!response) {
           console.error('[Index] 收到空响应');
@@ -435,54 +447,67 @@
           }
 
           if (options.success) {
-            // 根据 YApi postmanLib.js 源码，构建期望的数据结构
-            // YApi 期望第一个参数是响应内容（字符串或对象）
-            // 优先使用已经解析好的 response.data，如果不存在再使用 response.body
-            let yapiRes;
-            const contentType = response.headers['content-type'] || '';
+            // 使用 response-handler helper 构建 YApi 回调参数（如果可用）
+            let yapiRes, yapiHeader, yapiData;
+            
+            if (helpers.buildYapiCallbackParams) {
+              // 使用提取的生产函数
+              const params = helpers.buildYapiCallbackParams(response);
+              yapiRes = params.yapiRes;
+              yapiHeader = params.yapiHeader;
+              yapiData = params.yapiData;
+            } else {
+              // Fallback: 内联实现（如果 helper 未加载）
+              console.warn('[Index] buildYapiCallbackParams helper 未加载，使用 fallback');
+              
+              // 根据 YApi postmanLib.js 源码，构建期望的数据结构
+              // YApi 期望第一个参数是响应内容（字符串或对象）
+              // 优先使用已经解析好的 response.data，如果不存在再使用 response.body
+              const contentType = response.headers['content-type'] || '';
 
-            if (contentType.includes('application/json')) {
-              // 对于 JSON 响应，优先使用已解析的 data，确保返回对象格式
-              yapiRes = response.data;
+              if (contentType.includes('application/json')) {
+                // 对于 JSON 响应，优先使用已解析的 data，确保返回对象格式
+                yapiRes = response.data;
 
-              // 只有当 data 明确为 undefined 或 null 时才尝试重新解析 body
-              // 避免将有效的 falsy 值（如 0, false, "", {}, []）误判为需要重新解析
-              if ((yapiRes === undefined || yapiRes === null) && response.body != null) {
-                // 检查 body 是否已经是对象
-                if (typeof response.body === 'object' && response.body !== null) {
-                  yapiRes = response.body;
-                  debugLog('[Index] body 已是对象，直接使用');
-                } else if (typeof response.body === 'string') {
-                  try {
-                    yapiRes = JSON.parse(response.body);
-                    debugLog('[Index] 从 body 重新解析 JSON 成功');
-                  } catch (e) {
-                    console.warn('[Index] JSON 解析失败，使用原始响应:', e.message);
+                // 只有当 data 明确为 undefined 或 null 时才尝试重新解析 body
+                // 避免将有效的 falsy 值（如 0, false, "", {}, []）误判为需要重新解析
+                if ((yapiRes === undefined || yapiRes === null) && response.body != null) {
+                  // 检查 body 是否已经是对象
+                  if (typeof response.body === 'object' && response.body !== null) {
                     yapiRes = response.body;
+                    debugLog('[Index] body 已是对象，直接使用');
+                  } else if (typeof response.body === 'string') {
+                    try {
+                      yapiRes = JSON.parse(response.body);
+                      debugLog('[Index] 从 body 重新解析 JSON 成功');
+                    } catch (e) {
+                      console.warn('[Index] JSON 解析失败，使用原始响应:', e.message);
+                      yapiRes = response.body;
+                    }
                   }
                 }
+              } else {
+                // 对于非 JSON 响应，使用原始响应体（保留 falsy 值）
+                yapiRes = response.body != null ? response.body : '';
               }
-            } else {
-              // 对于非 JSON 响应，使用原始响应体（保留 falsy 值）
-              yapiRes = response.body != null ? response.body : '';
-            }
 
-            const yapiHeader = response.headers || {}; // 响应头
-            const yapiBodyString = helpers.bodyToString(response.body); // 确保 body 为字符串格式
+              yapiHeader = response.headers || {}; // 响应头
+              const yapiBodyString = helpers.bodyToString(response.body); // 确保 body 为字符串格式
 
-            const yapiData = {
-              res: {
-                body: yapiBodyString, // 原始响应体字符串
-                header: response.headers || {}, // 响应头
-                status: response.status || 0, // 状态码
+              yapiData = {
+                res: {
+                  body: yapiBodyString, // 原始响应体字符串
+                  header: response.headers || {}, // 响应头
+                  status: response.status || 0, // 状态码
+                  statusText: response.statusText || 'OK',
+                  success: true // 成功响应也需要 success
+                },
+                // 额外的顶层属性
+                status: response.status || 0,
                 statusText: response.statusText || 'OK',
-                success: true // 成功响应也需要 success
-              },
-              // 额外的顶层属性
-              status: response.status || 0,
-              statusText: response.statusText || 'OK',
-              success: true // 顶层的 success 字段
-            };
+                success: true // 顶层的 success 字段
+              };
+            }
 
             debugLog('[Index] 准备调用 YApi success 回调');
 

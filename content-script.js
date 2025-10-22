@@ -112,7 +112,8 @@ const CrossRequest = {
     const helpers = [
       'src/helpers/query-string.js',
       'src/helpers/body-parser.js',
-      'src/helpers/logger.js'
+      'src/helpers/logger.js',
+      'src/helpers/response-handler.js'  // 必须在 body-parser.js 之后（有依赖）
     ];
 
     // 链式加载 helpers，然后加载 index.js
