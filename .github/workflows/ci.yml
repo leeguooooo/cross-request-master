@@ -80,7 +80,7 @@ jobs:
             -x "package-lock.json"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: extension-${{ github.sha }}
           path: extension.zip
