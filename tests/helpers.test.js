@@ -81,8 +81,7 @@ describe('processBackgroundResponse helper', () => {
     const baseResponse = {
         status: 200,
         statusText: 'OK',
-        headers: { 'content-type': 'application/json' },
-        body: undefined
+        headers: { 'content-type': 'application/json' }
     };
 
     function run(overrides = {}) {
@@ -124,21 +123,24 @@ describe('processBackgroundResponse helper', () => {
     });
 
     test('should preserve null JSON body parsed from string', () => {
-        const result = run({ body: 'null' });
+        const result = run({ body: 'null', bodyParsed: null });
         expect(result.data).toBeNull();
         expect(result.body).toBe('null');
+        expect(result.bodyParsed).toBeNull();
     });
 
     test('should preserve number zero', () => {
-        const result = run({ body: '0' });
+        const result = run({ body: '0', bodyParsed: 0 });
         expect(result.data).toBe(0);
         expect(result.body).toBe('0');
+        expect(result.bodyParsed).toBe(0);
     });
 
     test('should preserve boolean false', () => {
-        const result = run({ body: 'false' });
+        const result = run({ body: 'false', bodyParsed: false });
         expect(result.data).toBe(false);
         expect(result.body).toBe('false');
+        expect(result.bodyParsed).toBe(false);
     });
 
     test('should preserve empty string for text response', () => {
@@ -154,6 +156,15 @@ describe('processBackgroundResponse helper', () => {
         const result = run({ body: '{"key":"value"}' });
         expect(result.data).toEqual({ key: 'value' });
         expect(result.body).toBe('{"key":"value"}');
+        expect(result.bodyParsed).toBeUndefined();
+    });
+
+    test('should use provided bodyParsed when available', () => {
+        const parsed = { key: 'value' };
+        const result = run({ body: '{"key":"value"}', bodyParsed: parsed });
+        expect(result.data).toBe(parsed);
+        expect(result.bodyParsed).toBe(parsed);
+        expect(result.body).toBe('{"key":"value"}');
     });
 
     test('should return same object instance when body already object', () => {
@@ -161,6 +172,7 @@ describe('processBackgroundResponse helper', () => {
         const result = run({ body: payload });
         expect(result.data).toBe(payload);
         expect(result.body).toBe('{"key":"value"}');
+        expect(result.bodyParsed).toBeUndefined();
     });
 
     test('should return same array instance when body already array', () => {
@@ -168,6 +180,7 @@ describe('processBackgroundResponse helper', () => {
         const result = run({ body: payload });
         expect(result.data).toBe(payload);
         expect(result.body).toBe('[1,2,3]');
+        expect(result.bodyParsed).toBeUndefined();
     });
 
     test('should keep scalar numbers for non JSON content type', () => {
@@ -200,17 +213,19 @@ describe('processBackgroundResponse helper', () => {
 
 describe('buildYapiCallbackParams helper', () => {
     test('should build success payload for JSON response with parsed data', () => {
+        const parsed = { key: 'value' };
         const response = {
             status: 200,
             statusText: 'OK',
             headers: { 'content-type': 'application/json' },
             body: '{"key":"value"}',
-            data: { key: 'value' }
+            data: parsed,
+            bodyParsed: parsed
         };
 
         const { yapiRes, yapiHeader, yapiData } = buildYapiCallbackParams(response);
 
-        expect(yapiRes).toEqual({ key: 'value' });
+        expect(yapiRes).toBe(parsed);
         expect(yapiHeader).toEqual(response.headers);
         expect(yapiData).toEqual({
             res: {
@@ -240,18 +255,36 @@ describe('buildYapiCallbackParams helper', () => {
         expect(result.yapiData.res.body).toBe('{"id":123}');
     });
 
-    test('should reuse object body when already parsed', () => {
-        const body = { ok: true };
+    test('should use bodyParsed when data is missing', () => {
+        const parsed = { id: 456 };
         const response = {
             status: 200,
             statusText: 'OK',
             headers: { 'content-type': 'application/json' },
-            body
+            body: '{"id":456}',
+            bodyParsed: parsed
         };
 
         const result = buildYapiCallbackParams(response);
 
-        expect(result.yapiRes).toBe(body);
+        expect(result.yapiRes).toBe(parsed);
+        expect(result.yapiData.res.body).toBe('{"id":456}');
+    });
+
+    test('should reuse object body when already parsed', () => {
+        const parsedBody = { ok: true };
+        const response = {
+            status: 200,
+            statusText: 'OK',
+            headers: { 'content-type': 'application/json' },
+            body: '{"ok":true}',
+            data: parsedBody,
+            bodyParsed: parsedBody
+        };
+
+        const result = buildYapiCallbackParams(response);
+
+        expect(result.yapiRes).toBe(parsedBody);
         expect(result.yapiData.res.body).toBe('{"ok":true}');
     });
 

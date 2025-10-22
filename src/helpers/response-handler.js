@@ -1,6 +1,6 @@
 /**
  * Response Handler Helper
- * 
+ *
  * 处理 background.js 返回的响应，转换为 YApi 期望的格式
  * 这个模块被提取出来以便测试 Issue #22 的修复
  */
@@ -10,7 +10,7 @@
 
   // Import bodyToString helper
   const helpers = window.CrossRequestHelpers || {};
-  
+
   /**
    * 将 background.js 的响应转换为 YApi success 回调的参数
    * @param {Object} response - background.js 返回的响应对象
@@ -36,17 +36,18 @@
       };
     }
 
-    const contentType = response.headers['content-type'] || '';
+    const headers = response.headers || {};
+    const contentType = headers['content-type'] || '';
+    const hasDataProp = Object.prototype.hasOwnProperty.call(response, 'data');
+    const hasBodyParsedProp = Object.prototype.hasOwnProperty.call(response, 'bodyParsed');
     let yapiRes;
 
-    // 处理 JSON 响应
     if (contentType.includes('application/json')) {
-      // 优先使用已经解析好的 response.data，如果不存在再使用 response.body
-      yapiRes = response.data;
-
-      // 只有当 data 明确为 undefined 或 null 时才尝试重新解析 body
-      if ((yapiRes === undefined || yapiRes === null) && response.body != null) {
-        // 检查 body 是否已经是对象
+      if (hasDataProp && response.data !== undefined) {
+        yapiRes = response.data;
+      } else if (hasBodyParsedProp) {
+        yapiRes = response.bodyParsed;
+      } else if (response.body != null) {
         if (typeof response.body === 'object' && response.body !== null) {
           yapiRes = response.body;
         } else if (typeof response.body === 'string') {
@@ -56,25 +57,40 @@
             console.warn('[ResponseHandler] JSON 解析失败，使用原始响应:', e.message);
             yapiRes = response.body;
           }
+        } else {
+          yapiRes = response.body;
         }
       }
+
+      if (yapiRes === undefined) {
+        yapiRes = {};
+      }
     } else {
-      // 对于非 JSON 响应，使用原始响应体
       yapiRes = response.body != null ? response.body : '';
     }
 
-    const yapiHeader = response.headers || {};
-    
+    const yapiHeader = headers;
+
     // 使用 bodyToString helper 确保 body 为字符串格式
-    const bodyToString = helpers.bodyToString || function(body) {
-      if (body == null) return '';
-      if (typeof body === 'string') return body;
-      if (typeof body === 'number' || typeof body === 'boolean') return String(body);
-      try { return JSON.stringify(body); }
-      catch (e) { return ''; }
-    };
-    
-    const bodyString = bodyToString(response.body);
+    const bodyToString =
+      helpers.bodyToString ||
+      function (body) {
+        if (body == null) return '';
+        if (typeof body === 'string') return body;
+        if (typeof body === 'number' || typeof body === 'boolean') return String(body);
+        try {
+          return JSON.stringify(body);
+        } catch (e) {
+          return '';
+        }
+      };
+
+    const bodySource = Object.prototype.hasOwnProperty.call(response, 'body')
+      ? response.body
+      : hasBodyParsedProp
+        ? response.bodyParsed
+        : '';
+    const bodyString = bodyToString(bodySource);
 
     const yapiData = {
       res: {
@@ -109,54 +125,73 @@
       };
     }
 
-    // 处理响应体，为 YApi 提供正确的数据格式
-    let parsedData = response.body;
-    const contentType = response.headers['content-type'] || '';
+    const headers = response.headers || {};
+    const contentType = headers['content-type'] || '';
+    const hasBodyProp = Object.prototype.hasOwnProperty.call(response, 'body');
+    const hasBodyParsedProp = Object.prototype.hasOwnProperty.call(response, 'bodyParsed');
+    const hasDataProp = Object.prototype.hasOwnProperty.call(response, 'data');
 
-    // 使用显式的 null/undefined 检查，避免过滤掉合法的 falsy 值（0, false, null, ""）
-    if (contentType.includes('application/json') && response.body != null) {
-      // 检查 body 是否已经是对象（background.js 已经解析过）
+    let parsedData;
+
+    // 优先使用 background.js 提供的解析结果，必要时重新解析字符串
+    if (hasBodyParsedProp) {
+      parsedData = response.bodyParsed;
+    } else if (hasDataProp && response.data !== undefined) {
+      parsedData = response.data;
+    } else if (contentType.includes('application/json') && hasBodyProp && response.body != null) {
       if (typeof response.body === 'object' && response.body !== null) {
-        // 已经是对象，直接使用
         parsedData = response.body;
       } else if (typeof response.body === 'string') {
-        // 是字符串，需要解析
         try {
           parsedData = JSON.parse(response.body);
         } catch (e) {
           console.warn('[ResponseHandler] JSON 解析失败，使用原始响应:', e.message);
-          // 如果解析失败，至少确保返回一个对象格式
           parsedData = {
             error: 'JSON解析失败',
             raw: response.body
           };
         }
       } else {
-        // body 是其他类型（number, boolean 等），也是合法的 JSON
         parsedData = response.body;
       }
-    } else if (response.body === undefined || response.body === null) {
-      // 只有在明确是 undefined 或 null 时才返回空对象
+    } else if (hasBodyProp && (response.body === undefined || response.body === null)) {
+      parsedData = {};
+    } else if (hasBodyProp) {
+      parsedData = response.body;
+    } else {
       parsedData = {};
     }
 
     // 确保 body 始终是字符串格式（用于向后兼容）
-    const bodyToString = helpers.bodyToString || function(body) {
-      if (body == null) return '';
-      if (typeof body === 'string') return body;
-      if (typeof body === 'number' || typeof body === 'boolean') return String(body);
-      try { return JSON.stringify(body); }
-      catch (e) { return ''; }
-    };
-    const bodyString = bodyToString(response.body);
+    const bodyToString =
+      helpers.bodyToString ||
+      function (body) {
+        if (body == null) return '';
+        if (typeof body === 'string') return body;
+        if (typeof body === 'number' || typeof body === 'boolean') return String(body);
+        try {
+          return JSON.stringify(body);
+        } catch (e) {
+          return '';
+        }
+      };
 
-    return {
+    const bodySource = hasBodyProp ? response.body : hasBodyParsedProp ? response.bodyParsed : '';
+    const bodyString = bodyToString(bodySource);
+
+    const result = {
       status: response.status || 0,
       statusText: response.statusText || 'OK',
-      headers: response.headers || {},
+      headers,
       data: parsedData === undefined ? {} : parsedData,
       body: bodyString
     };
+
+    if (hasBodyParsedProp) {
+      result.bodyParsed = response.bodyParsed;
+    }
+
+    return result;
   }
 
   // 导出到 window 对象
@@ -172,4 +207,3 @@
     };
   }
 })(typeof window !== 'undefined' ? window : global);
-
