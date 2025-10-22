@@ -45,11 +45,11 @@ function showStatus(message, type = 'info', duration = 3000) {
 }
 
 // HTML 转义
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+// function _escapeHtml(text) {
+//   const div = document.createElement('div');
+//   div.textContent = text;
+//   return div.innerHTML;
+// }
 
 // 加载 cURL 弹窗设置状态
 function loadCurlDisplaySettings() {

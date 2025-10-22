@@ -59,7 +59,7 @@ if (!safeLogResponse) {
 let allowedDomains = new Set(['*']); // 默认允许所有域名，后续可以限制
 
 // 初始化白名单 - 强制使用允许所有域名
-chrome.storage.local.get(['allowedDomains'], (result) => {
+chrome.storage.local.get(['allowedDomains'], (_result) => {
   // 忽略存储的值，始终使用 ['*']
   allowedDomains = new Set(['*']);
 });
@@ -73,7 +73,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 });
 
 // 检查域名是否在白名单中
-function isDomainAllowed(url) {
+function isDomainAllowed(_url) {
   // 强制允许所有域名
   return true;
 

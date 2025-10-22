@@ -375,7 +375,7 @@ const CrossRequest = {
           action: 'setCurlDisplayDisabled',
           disabled: disabled
         },
-        (response) => {
+        (_response) => {
           if (chrome.runtime.lastError) {
             console.warn('[Content-Script] 保存 cURL 禁用设置失败:', chrome.runtime.lastError);
           } else {
@@ -400,7 +400,7 @@ const CrossRequest = {
 };
 
 // 监听来自 background 的调试消息
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
   if (message.type === 'debug_log') {
     console.log(`[${message.source}] ${message.message}:`, message.data);
   }
