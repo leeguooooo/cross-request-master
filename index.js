@@ -18,7 +18,7 @@
   // 使用提取的 helpers（由 content-script.js 预先加载）
   // 提供内联 fallback 确保扩展不会因为 helper 加载失败而崩溃
   const helpers = win.CrossRequestHelpers || {};
-  
+
   // Fallback: bodyToString
   if (!helpers.bodyToString) {
     console.warn('[Index] bodyToString helper 未加载，使用内联 fallback');
@@ -133,7 +133,8 @@
 
         // 对于 GET/HEAD 请求，将参数转换为查询字符串附加到 URL
         if ((method === 'GET' || method === 'HEAD') && data) {
-          const queryString = typeof data === 'object' ? helpers.buildQueryString(data) : String(data);
+          const queryString =
+            typeof data === 'object' ? helpers.buildQueryString(data) : String(data);
           if (queryString) {
             url = url + (url.includes('?') ? '&' : '?') + queryString;
           }
@@ -194,7 +195,7 @@
 
         // Fallback: 内联实现（如果 helper 未加载）
         console.warn('[Index] processBackgroundResponse helper 未加载，使用 fallback');
-        
+
         // 确保 response 对象存在
         if (!response) {
           console.error('[Index] 收到空响应');
@@ -393,7 +394,9 @@
               const errorData = {
                 res: {
                   body:
-                    response.body != null ? helpers.bodyToString(response.body) : JSON.stringify(errorBody),
+                    response.body != null
+                      ? helpers.bodyToString(response.body)
+                      : JSON.stringify(errorBody),
                   header: errorHeader,
                   status: response.status || 0, // 保留原始状态码，如果没有则用 0
                   statusText: response.statusText || 'Network Error',
@@ -417,27 +420,27 @@
           if (response.status && response.status >= 400) {
             let errorMsg = `HTTP ${response.status}`;
             switch (response.status) {
-            case 400:
-              errorMsg = '请求参数错误 (400)';
-              break;
-            case 401:
-              errorMsg = '未授权，请检查认证信息 (401)';
-              break;
-            case 403:
-              errorMsg = '访问被拒绝 (403)';
-              break;
-            case 404:
-              errorMsg = '请求的资源不存在 (404)';
-              break;
-            case 500:
-              errorMsg = '服务器内部错误 (500)';
-              break;
-            case 502:
-              errorMsg = '网关错误 (502)';
-              break;
-            case 503:
-              errorMsg = '服务暂时不可用 (503)';
-              break;
+              case 400:
+                errorMsg = '请求参数错误 (400)';
+                break;
+              case 401:
+                errorMsg = '未授权，请检查认证信息 (401)';
+                break;
+              case 403:
+                errorMsg = '访问被拒绝 (403)';
+                break;
+              case 404:
+                errorMsg = '请求的资源不存在 (404)';
+                break;
+              case 500:
+                errorMsg = '服务器内部错误 (500)';
+                break;
+              case 502:
+                errorMsg = '网关错误 (502)';
+                break;
+              case 503:
+                errorMsg = '服务暂时不可用 (503)';
+                break;
             }
 
             // 显示错误提示（仅非静默模式）
@@ -449,7 +452,7 @@
           if (options.success) {
             // 使用 response-handler helper 构建 YApi 回调参数（如果可用）
             let yapiRes, yapiHeader, yapiData;
-            
+
             if (helpers.buildYapiCallbackParams) {
               // 使用提取的生产函数
               const params = helpers.buildYapiCallbackParams(response);
@@ -459,7 +462,7 @@
             } else {
               // Fallback: 内联实现（如果 helper 未加载）
               console.warn('[Index] buildYapiCallbackParams helper 未加载，使用 fallback');
-              
+
               // 根据 YApi postmanLib.js 源码，构建期望的数据结构
               // YApi 期望第一个参数是响应内容（字符串或对象）
               // 优先使用已经解析好的 response.data，如果不存在再使用 response.body
@@ -1005,9 +1008,10 @@
         // 正确处理 responseText
         let responseText = '';
         if (response.body != null) {
-          responseText = typeof response.body === 'string' ? response.body : JSON.stringify(response.body);
+          responseText =
+            typeof response.body === 'string' ? response.body : JSON.stringify(response.body);
         }
-        
+
         // 只有在响应是 JSON 时才设置 responseJSON
         // 这与 jQuery 的行为一致：非 JSON 响应的 responseJSON 应该是 undefined
         let responseJSON = undefined;
@@ -1015,7 +1019,11 @@
         if (contentType.includes('application/json') && response.data !== undefined) {
           // 确保 response.data 是对象或数组，而不是字符串
           // 字符串说明没有被正确解析为 JSON
-          if (typeof response.data === 'object' || typeof response.data === 'boolean' || typeof response.data === 'number') {
+          if (
+            typeof response.data === 'object' ||
+            typeof response.data === 'boolean' ||
+            typeof response.data === 'number'
+          ) {
             responseJSON = response.data;
           } else if (typeof response.data === 'string') {
             // 尝试解析字符串为 JSON（兜底处理）
@@ -1027,7 +1035,7 @@
             }
           }
         }
-        
+
         return {
           status: response.status,
           statusText: response.statusText,
@@ -1038,7 +1046,10 @@
             const headers = response.headers || {};
             const lower = name.toLowerCase();
             for (const key in headers) {
-              if (Object.prototype.hasOwnProperty.call(headers, key) && key.toLowerCase() === lower) {
+              if (
+                Object.prototype.hasOwnProperty.call(headers, key) &&
+                key.toLowerCase() === lower
+              ) {
                 return headers[key];
               }
             }
