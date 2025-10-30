@@ -2,7 +2,8 @@
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/leeguooooo?logo=github)](https://github.com/sponsors/leeguooooo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-brightgreen.svg)](https://chrome.google.com/webstore)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-已上架-brightgreen.svg)](https://chrome.google.com/webstore/detail/efgjanhcajpiljllnehiinpmicghbgfm)
+[![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-brightgreen.svg)](https://chrome.google.com/webstore/detail/efgjanhcajpiljllnehiinpmicghbgfm)
 
 专为 YApi 接口管理平台定制的 Chrome 扩展，支持绕过 CORS 限制并自动生成 cURL 命令。
 
@@ -31,6 +32,16 @@
 - **Manifest V3** - 基于最新 Chrome 扩展标准开发
 
 ## 安装
+
+### 方式一：Chrome Web Store（推荐）
+
+[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-立即安装-brightgreen.svg)](https://chrome.google.com/webstore/detail/efgjanhcajpiljllnehiinpmicghbgfm)
+
+1. 点击上方按钮或访问 [Chrome Web Store](https://chrome.google.com/webstore/detail/efgjanhcajpiljllnehiinpmicghbgfm)
+2. 点击"添加至 Chrome"按钮
+3. 确认安装即可
+
+### 方式二：开发者模式安装
 
 1. 下载或克隆本仓库到本地
    ```bash
@@ -236,7 +247,8 @@ cross-request-master/
 
 查看 [CHANGELOG.md](./CHANGELOG.md) 了解详细的版本更新历史。
 
-**最新版本 v4.4.13** (2025-10-17)
+**最新版本 v4.5.3** (2025-01-XX)
+- ✅ 成功上架 Chrome Web Store
 - ✅ 修复 YApi request/response 脚本兼容性（Issue #19）
 - ✅ 修复合法 JSON 标量值丢失问题（0、false、null、""）
 - ✅ 添加完整的开发工具链（ESLint、Prettier、Jest）
@@ -273,8 +285,31 @@ cross-request-master/
 
 [MIT License](LICENSE)
 
+## Chrome Web Store
+
+🎉 **Cross Request Master 已成功上架 Chrome Web Store！**
+
+[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-立即安装-brightgreen.svg)](https://chrome.google.com/webstore/detail/efgjanhcajpiljllnehiinpmicghbgfm)
+
+- **扩展 ID**: `efgjanhcajpiljllnehiinpmicghbgfm`
+- **当前版本**: v4.5.3
+- **用户数**: 130+ 用户
+- **评分**: 待评分（新上架）
+
+### 安装方式
+
+1. **推荐方式**: 直接访问 [Chrome Web Store](https://chrome.google.com/webstore/detail/efgjanhcajpiljllnehiinpmicghbgfm) 安装
+2. **开发者方式**: 下载源码本地安装（见上方安装说明）
+
+### 更新说明
+
+- 扩展会自动更新到最新版本
+- 如需手动更新，请访问 Chrome Web Store 页面
+- 开发版本需要手动重新加载
+
 ## 相关链接
 
+- [Chrome Web Store](https://chrome.google.com/webstore/detail/efgjanhcajpiljllnehiinpmicghbgfm) - 官方商店页面
 - [GitHub Issues](https://github.com/leeguooooo/cross-request-master/issues)
 - [Chrome Extension 开发文档](https://developer.chrome.com/docs/extensions/)
 - [YApi 官网](https://github.com/YMFE/yapi)
