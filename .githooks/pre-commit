@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+echo "[hooks] 运行 ESLint 检查..."
+npm run lint
+
+echo "[hooks] 运行 Prettier 校验..."
+npm run format:check
+
+echo "[hooks] pre-commit 检查通过"

@@ -65,14 +65,23 @@
    npm install
    ```
 
-3. **加载扩展**
+3. **安装 Git 钩子**
+   ```bash
+   npm run hooks:install
+   ```
+   该命令会将本仓库的 `.githooks` 目录挂载为本地 Git 钩子路径，
+   从而在提交前自动执行 `npm run lint` 和 `npm run format:check`，
+   在推送前执行 `npm test` 与 `npm run release:check`，
+   确保代码质量和打包产物始终保持最新。
+
+4. **加载扩展**
    - 打开 Chrome 浏览器
    - 访问 `chrome://extensions/`
    - 开启"开发者模式"
    - 点击"加载已解压的扩展程序"
    - 选择项目目录
 
-4. **开发工作流**
+5. **开发工作流**
    ```bash
    # 检查代码风格
    npm run lint
@@ -96,7 +105,7 @@
    npm run test:coverage
    ```
 
-5. **测试修改**
+6. **测试修改**
    - 修改代码后，运行 lint 和 test
    - 在 `chrome://extensions/` 点击刷新按钮
    - 重新加载使用扩展的网页
@@ -421,4 +430,3 @@ const value = response.body === undefined ? '' : response.body;
 ---
 
 有问题？欢迎[创建 issue](https://github.com/leeguooooo/cross-request-master/issues/new) 或查看现有[讨论](https://github.com/leeguooooo/cross-request-master/discussions)。
-

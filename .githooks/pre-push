@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+echo "[hooks] 运行单元测试..."
+npm test
+
+echo "[hooks] 校验扩展打包产物..."
+npm run release:check
+
+echo "[hooks] pre-push 检查通过"

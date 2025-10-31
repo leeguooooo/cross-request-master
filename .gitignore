@@ -36,3 +36,7 @@ temp/
 key.pem
 extension.zip
 cross-request-store*.zip
+cross-request-master-v*.zip
+
+# Extracted extension files (temporary)
+extracted/
