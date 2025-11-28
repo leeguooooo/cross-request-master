@@ -273,10 +273,15 @@ async function handleCrossOriginRequest(request) {
     });
 
     const contentType = responseHeaders['content-type'] || '';
+    const looksLikeJsonString = (val) => {
+      if (typeof val !== 'string') return false;
+      const trimmed = val.trim();
+      return trimmed.startsWith('{') || trimmed.startsWith('[');
+    };
     let parsedBody;
     let hasParsedBody = false;
 
-    if (contentType.includes('application/json')) {
+    if (contentType.includes('application/json') || looksLikeJsonString(responseBody)) {
       try {
         parsedBody = JSON.parse(responseBody);
         hasParsedBody = true;

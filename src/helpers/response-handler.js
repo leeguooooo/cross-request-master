@@ -42,7 +42,13 @@
     const hasBodyParsedProp = Object.prototype.hasOwnProperty.call(response, 'bodyParsed');
     let yapiRes;
 
-    if (contentType.includes('application/json')) {
+    const looksLikeJsonString = (val) => {
+      if (typeof val !== 'string') return false;
+      const trimmed = val.trim();
+      return trimmed.startsWith('{') || trimmed.startsWith('[');
+    };
+
+    if (contentType.includes('application/json') || looksLikeJsonString(response.body)) {
       if (hasDataProp && response.data !== undefined) {
         yapiRes = response.data;
       } else if (hasBodyParsedProp) {
@@ -132,13 +138,22 @@
     const hasDataProp = Object.prototype.hasOwnProperty.call(response, 'data');
 
     let parsedData;
+    const looksLikeJsonString = (val) => {
+      if (typeof val !== 'string') return false;
+      const trimmed = val.trim();
+      return trimmed.startsWith('{') || trimmed.startsWith('[');
+    };
 
     // 优先使用 background.js 提供的解析结果，必要时重新解析字符串
     if (hasBodyParsedProp) {
       parsedData = response.bodyParsed;
     } else if (hasDataProp && response.data !== undefined) {
       parsedData = response.data;
-    } else if (contentType.includes('application/json') && hasBodyProp && response.body != null) {
+    } else if (
+      (contentType.includes('application/json') || looksLikeJsonString(response.body)) &&
+      hasBodyProp &&
+      response.body != null
+    ) {
       if (typeof response.body === 'object' && response.body !== null) {
         parsedData = response.body;
       } else if (typeof response.body === 'string') {

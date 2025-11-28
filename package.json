@@ -3,6 +3,7 @@
   "version": "4.5.4",
   "description": "YApi 跨域请求扩展",
   "private": true,
+  "types": "types/cross-request.d.ts",
   "scripts": {
     "lint": "eslint *.js",
     "lint:fix": "eslint *.js --fix",

@@ -286,6 +286,23 @@ describe('YApi context.responseData (Issue #22)', () => {
             expect(typeof processed.data).toBe('object');
             expect(processed.data).toHaveProperty('broken');
         });
+
+        test('missing content-type but JSON string should still populate responseData as object', () => {
+            const backgroundResponse = {
+                status: 200,
+                headers: {},
+                body: '{"code":0,"data":{"id":1}}',
+                ok: true
+            };
+
+            const processed = processBackgroundResponse(backgroundResponse);
+            const { yapiRes } = buildYapiCallbackParams(processed);
+            const context = { responseData: yapiRes };
+
+            expect(typeof context.responseData).toBe('object');
+            expect(context.responseData.code).toBe(0);
+            expect(context.responseData.data.id).toBe(1);
+            expect(typeof processed.body).toBe('string');
+        });
     });
 });
-

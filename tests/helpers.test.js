@@ -159,6 +159,15 @@ describe('processBackgroundResponse helper', () => {
         expect(result.bodyParsed).toBeUndefined();
     });
 
+    test('should parse JSON string even without content-type', () => {
+        const result = run({
+            headers: {},
+            body: '{"code":0,"msg":"ok"}'
+        });
+        expect(result.data).toEqual({ code: 0, msg: 'ok' });
+        expect(result.body).toBe('{"code":0,"msg":"ok"}');
+    });
+
     test('should use provided bodyParsed when available', () => {
         const parsed = { key: 'value' };
         const result = run({ body: '{"key":"value"}', bodyParsed: parsed });

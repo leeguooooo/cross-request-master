@@ -340,7 +340,19 @@
 
       // 只为非 GET/HEAD 请求添加 Content-Type（有数据时）
       if (requestData.data && requestData.method !== 'GET' && requestData.method !== 'HEAD') {
-        if (!requestData.headers['Content-Type'] && !requestData.headers['content-type']) {
+        const hasContentType =
+          !!requestData.headers['Content-Type'] || !!requestData.headers['content-type'];
+
+        const isFormLike =
+          (typeof FormData !== 'undefined' && requestData.data instanceof FormData) ||
+          (typeof Blob !== 'undefined' && requestData.data instanceof Blob) ||
+          (typeof File !== 'undefined' && requestData.data instanceof File) ||
+          (typeof URLSearchParams !== 'undefined' && requestData.data instanceof URLSearchParams) ||
+          (typeof ArrayBuffer !== 'undefined' && requestData.data instanceof ArrayBuffer) ||
+          (typeof DataView !== 'undefined' && requestData.data instanceof DataView);
+
+        // 让浏览器为 FormData/Blob 设置 multipart 边界，避免破坏文件上传
+        if (!hasContentType && !isFormLike) {
           if (typeof requestData.data === 'object') {
             requestData.headers['Content-Type'] = 'application/json';
           } else {
