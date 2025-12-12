@@ -79,13 +79,13 @@ extension.zip
 
 ### 验证结果
 ```bash
-$ npm install
+$ pnpm install
 ✅ 398 packages, 0 vulnerabilities
 
-$ npm test
+$ pnpm test
 ✅ 39/39 tests passed
 
-$ npm run lint
+$ pnpm lint
 ✅ 0 errors, 7 warnings
 ```
 
@@ -116,7 +116,7 @@ $ npm run lint
 
 ### 3. 依赖版本
 **问题**: 主版本不匹配  
-**教训**: 安装依赖后必须运行 npm test 验证
+**教训**: 安装依赖后必须运行 pnpm test 验证
 
 ### 4. 测试策略
 **问题**: 测试与实现分离  
@@ -156,4 +156,3 @@ $ npm run lint
 **修复人**: AI Assistant  
 **审查人**: @leeguooooo  
 **版本**: v4.4.13 (hotfix)
-

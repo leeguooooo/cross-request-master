@@ -62,16 +62,16 @@
 
 2. **安装依赖**
    ```bash
-   npm install
+   pnpm install
    ```
 
 3. **安装 Git 钩子**
    ```bash
-   npm run hooks:install
+   pnpm hooks:install
    ```
    该命令会将本仓库的 `.githooks` 目录挂载为本地 Git 钩子路径，
-   从而在提交前自动执行 `npm run lint` 和 `npm run format:check`，
-   在推送前执行 `npm test` 与 `npm run release:check`，
+   从而在提交前自动执行 `pnpm lint` 和 `pnpm format:check`，
+   在推送前执行 `pnpm test` 与 `pnpm release:check`，
    确保代码质量和打包产物始终保持最新。
 
 4. **加载扩展**
@@ -84,25 +84,25 @@
 5. **开发工作流**
    ```bash
    # 检查代码风格
-   npm run lint
+   pnpm lint
    
    # 自动修复代码风格问题
-   npm run lint:fix
+   pnpm lint:fix
    
    # 格式化代码
-   npm run format
+   pnpm format
    
    # 检查格式
-   npm run format:check
+   pnpm format:check
    
    # 运行测试
-   npm test
+   pnpm test
    
    # 监听模式运行测试
-   npm run test:watch
+   pnpm test:watch
    
    # 生成测试覆盖率报告
-   npm run test:coverage
+   pnpm test:coverage
    ```
 
 6. **测试修改**
@@ -165,10 +165,10 @@ Closes #123
 ### 提交前检查清单
 
 - [ ] 代码遵循项目的代码规范
-  - [ ] `npm run lint` 通过
-  - [ ] `npm run format:check` 通过
+  - [ ] `pnpm lint` 通过
+  - [ ] `pnpm format:check` 通过
 - [ ] 已测试所有变更，确保功能正常
-  - [ ] `npm test` 通过
+  - [ ] `pnpm test` 通过
   - [ ] 手动测试功能
   - [ ] 测试边界情况（falsy 值等）
 - [ ] 已更新相关文档

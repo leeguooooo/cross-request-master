@@ -14,20 +14,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run ESLint
-        run: npm run lint
+        run: pnpm lint
 
       - name: Check Prettier formatting
-        run: npm run format:check
+        run: pnpm format:check
 
   test:
     name: Test & Coverage
@@ -36,17 +41,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run tests
-        run: npm test -- --coverage
+        run: pnpm test -- --coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -69,15 +79,16 @@ jobs:
             -x "node_modules/*" \
             -x ".git/*" \
             -x ".github/*" \
-            -x "__tests__/*" \
+            -x "tests/*" \
             -x "coverage/*" \
+            -x "docs/*" \
             -x "*.md" \
-            -x ".eslintrc.json" \
+            -x "eslint.config.js" \
             -x ".prettierrc.json" \
             -x ".prettierignore" \
             -x ".gitignore" \
             -x "package.json" \
-            -x "package-lock.json"
+            -x "pnpm-lock.yaml"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -111,4 +122,3 @@ jobs:
             fi
           done
           echo "All required files present"
-

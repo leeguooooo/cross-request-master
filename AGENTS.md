@@ -7,11 +7,11 @@
 - Top-level `.md` files document releases, privacy, permissions, and store submission checklists—update them when related areas change.
 
 ## Build, Test, and Development Commands
-- Install: `npm install`. Enable local hooks: `npm run hooks:install` (pre-commit lint/format, pre-push test + release check).
-- Lint: `npm run lint` / `npm run lint:fix`.
-- Format: `npm run format` / `npm run format:check` (JS/JSON/MD).
-- Tests: `npm test` (Jest + jsdom), `npm run test:watch`, `npm run test:coverage`.
-- Release sanity: `npm run release:check`.
+- Install: `pnpm install`. Enable local hooks: `pnpm hooks:install` (pre-commit lint/format, pre-push test + release check).
+- Lint: `pnpm lint` / `pnpm lint:fix`.
+- Format: `pnpm format` / `pnpm format:check` (JS/JSON/MD).
+- Tests: `pnpm test` (Jest + jsdom), `pnpm test:watch`, `pnpm test:coverage`.
+- Release sanity: `pnpm release:check`.
 - Package for Chrome: `./build-extension.sh`, then load the `build/` directory via `chrome://extensions` or upload the generated `cross-request-master-v*.zip`.
 
 ## Coding Style & Naming Conventions
@@ -24,7 +24,7 @@
 - Follow the existing pattern in `tests/*.test.js` (descriptive `describe` blocks, focused `test` cases).
 - Cover edge cases that previously regressed (falsy body handling, GET/HEAD bodies being ignored, YApi callback shapes, jQuery interception).
 - Prefer importing real helpers from `src/helpers/` over stubbing to avoid “false green” tests.
-- Run `npm run test:coverage` after modifying shared helpers to ensure branches stay exercised.
+- Run `pnpm test:coverage` after modifying shared helpers to ensure branches stay exercised.
 
 ## Commit & Pull Request Guidelines
 - Use conventional commits seen in history (`feat:`, `fix(response-handling):`, `chore:`); include a scope when it clarifies the surface area.

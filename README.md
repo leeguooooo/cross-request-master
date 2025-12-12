@@ -113,10 +113,10 @@ tests/               Jest 单测
 
 常用命令：
 ```bash
-npm install
-npm test
-npm run lint
-npm run format
+pnpm install
+pnpm test
+pnpm lint
+pnpm format
 ./build-extension.sh
 ```
 

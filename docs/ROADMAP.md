@@ -207,17 +207,17 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run format:check
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
   
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
-      - run: npm ci
-      - run: npm test
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
       - uses: codecov/codecov-action@v3
   
   build:
@@ -385,4 +385,3 @@ __tests__/
 - 修复 falsy 值处理
 - 添加 ESLint、Prettier、Jest
 - 完善开源项目基础设施
-
