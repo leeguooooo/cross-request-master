@@ -27,24 +27,16 @@ Cross Request Master 扩展承诺保护您的隐私。
 扩展请求以下权限：
 
 1. **host_permissions (所有网站访问)**
-   - 用途: 拦截和转发跨域请求
+   - 用途: 后台代发跨域请求，实现 CORS 绕过
    - 数据处理: 仅在内存中处理，不存储
-   
-2. **declarativeNetRequest**
-   - 用途: 修改请求头以绕过 CORS
-   - 数据处理: 不涉及数据存储
-   
-3. **storage**
+
+2. **storage**
    - 用途: 保存扩展配置（启用状态、白名单）
    - 数据范围: 仅本地，不同步
 
-4. **tabs**
+3. **tabs**
    - 用途: 检测当前页面 URL 以判断是否启用扩展
    - 数据处理: 不存储 URL 信息
-
-5. **scripting**
-   - 用途: 注入 crossRequest API 到页面
-   - 数据处理: 仅功能性注入，不收集数据
 
 #### 第三方服务
 
@@ -97,24 +89,16 @@ The extension only stores the following data locally:
 The extension requests the following permissions:
 
 1. **host_permissions (access to all websites)**
-   - Purpose: Intercept and forward cross-origin requests
+   - Purpose: Send cross-origin requests from the background to bypass CORS
    - Data handling: Processed in memory only, not stored
-   
-2. **declarativeNetRequest**
-   - Purpose: Modify request headers to bypass CORS
-   - Data handling: No data storage involved
-   
-3. **storage**
+
+2. **storage**
    - Purpose: Save extension settings (enable status, whitelist)
    - Scope: Local only, not synced
 
-4. **tabs**
+3. **tabs**
    - Purpose: Detect current page URL to determine if extension should be enabled
    - Data handling: URL information is not stored
-
-5. **scripting**
-   - Purpose: Inject crossRequest API into pages
-   - Data handling: Functional injection only, no data collection
 
 #### Third-Party Services
 
@@ -145,4 +129,3 @@ For privacy-related questions, please contact:
 ## 更新历史 / Update History
 
 - **2025-10-17**: 初始版本 / Initial version
-

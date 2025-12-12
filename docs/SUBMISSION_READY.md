@@ -123,17 +123,11 @@ https://leeguooooo.github.io/cross-request-master/PRIVACY_POLICY.html
 host_permissions (<all_urls>):
 用于拦截和转发跨域请求，实现 CORS 绕过功能。仅在您访问的页面使用，不后台运行。
 
-declarativeNetRequest:
-用于添加必要的 CORS 请求头，使跨域请求成功。不记录或存储任何请求数据。
-
 storage:
 保存扩展启用状态和白名单配置。数据仅存储在您的浏览器，不上传。
 
 tabs:
 检测当前页面 URL，判断是否为 YApi 等 API 平台。不收集或存储浏览历史。
-
-scripting:
-向页面注入 crossRequest API 供开发使用。仅提供功能接口，不收集数据。
 ```
 
 7. **上传截图**

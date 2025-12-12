@@ -7,6 +7,18 @@
 
 ## [未发布]
 
+## [4.5.7] - 2025-12-12
+
+### 修复
+
+- **商店权限合规** - 移除未使用的权限 `declarativeNetRequest` / `declarativeNetRequestWithHostAccess` / `scripting`
+
+### 改进
+
+- **开发工具链** - 迁移到 pnpm，升级 ESLint 9 与 Jest 30
+
+## [4.5.6] - 2025-12-12
+
 ### 修复
 
 - **文件上传** - 支持 `multipart/form-data` / FormData 文件上传（Issue #14）

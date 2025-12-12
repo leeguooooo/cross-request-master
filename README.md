@@ -144,7 +144,7 @@ pnpm format
 
 ## 更新日志
 
-见 `CHANGELOG.md`，最新版本：v4.5.6。
+见 `CHANGELOG.md`，最新版本：v4.5.7。
 
 ## 许可证
 

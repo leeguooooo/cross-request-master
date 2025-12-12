@@ -8,18 +8,10 @@
 
 ---
 
-## 需要求declarativeNetRequest的理由（0/1,000 字符）
+## 需要求 host_permissions (<all_urls>) 的理由（0/1,000 字符）
 
 ```
-本权限用于修改 HTTP 请求头，添加必要的 CORS（跨域资源共享）相关头部信息，使跨域请求能够成功执行。这是扩展核心功能的基础，允许开发者在测试环境中绕过浏览器的同源策略限制，测试跨域 API 接口。扩展仅在用户主动发起请求时修改请求头，不会后台自动执行，也不会记录或存储任何请求数据。
-```
-
----
-
-## 需要求declarativeNetRequestWithHostAccess的理由（0/1,000 字符）
-
-```
-本权限用于在用户访问的特定域名上应用请求修改规则。由于跨域请求可能涉及任意目标 API 服务器，扩展需要此权限来处理不同域名的请求。这确保了开发者可以测试任何第三方 API 接口，而不受域名限制。扩展仅在用户明确使用 crossRequest API 或在 YApi 等平台发起请求时才会激活，不会干扰正常的网页浏览。
+本扩展需要访问任意 API 服务器以实现跨域请求测试能力。扩展在后台 Service Worker 中使用 fetch 代发请求，从而绕过页面侧的 CORS 限制。host_permissions 仅用于允许后台对目标域名发起请求，不会拦截或修改您的正常浏览，也不会收集、存储或上传任何请求/响应内容。
 ```
 
 ---
@@ -40,23 +32,12 @@
 
 ---
 
-## 需要求scripting的理由（0/1,000 字符）
-
-```
-本权限用于向网页注入 window.crossRequest API，使开发者可以在浏览器控制台或页面脚本中直接调用跨域请求功能。这是扩展提供开发者友好接口的关键，允许开发者通过简单的 JavaScript 代码发起跨域请求。扩展仅注入功能性 API 接口，不收集页面数据或用户信息，也不会修改页面的其他内容或功能。
-```
-
----
-
 ## 完整的权限列表
 
 扩展使用的所有权限：
-1. ✅ declarativeNetRequest - 修改请求头实现 CORS 绕过
-2. ✅ declarativeNetRequestWithHostAccess - 在特定域名应用规则
-3. ✅ storage - 保存本地配置
-4. ✅ tabs - 检测当前页面 URL
-5. ✅ scripting - 注入 crossRequest API
-6. ✅ host_permissions (<all_urls>) - 访问任意 API 服务器
+1. ✅ host_permissions (<all_urls>) - 访问任意 API 服务器
+2. ✅ storage - 保存本地配置
+3. ✅ tabs - 检测当前页面 URL
 
 ---
 
@@ -67,4 +48,3 @@
 - 强调不收集用户数据
 - 强调仅在必要时使用权限
 - 明确说明是开发工具用途
-
