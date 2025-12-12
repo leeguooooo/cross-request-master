@@ -83,7 +83,7 @@
 ### 文档
 
 - 更新 tests/helpers.test.js 注释，说明 v4.5.0 已完成模块化
-- 更新 ROADMAP.md，标记模块化重构为已完成
+- 更新 `docs/ROADMAP.md`，标记模块化重构为已完成
 
 ## [4.4.14] - 2025-10-17
 
@@ -162,7 +162,7 @@
     - Bug 报告模板（`.github/ISSUE_TEMPLATE/bug_report.md`）
     - 功能请求模板（`.github/ISSUE_TEMPLATE/feature_request.md`）
   - 新增 Pull Request 模板（`.github/pull_request_template.md`）
-  - 新增 `ROADMAP.md` 技术路线图
+  - 新增 `docs/ROADMAP.md` 技术路线图
     - 短期目标：模块化重构、消除重复代码
     - 中期目标：TypeScript 迁移、功能扩展
     - 长期目标：插件系统、团队协作
@@ -234,7 +234,7 @@
 
 ### 文档
 
-- 添加详细的测试指南（TESTING.md）
+- 添加详细的测试指南（`docs/TESTING.md`）
 - 优化 README 结构，提升专业性
 - 创建独立的 CHANGELOG.md 文件
 

@@ -148,10 +148,17 @@ npm run format
 
 ## 许可证
 
-[MIT License](LICENSE)
+[MIT License](https://opensource.org/licenses/MIT)
 
 ## 相关链接
 
 - Issues: https://github.com/leeguooooo/cross-request-master/issues
 - YApi: https://github.com/YMFE/yapi
 - Chrome Extension Docs: https://developer.chrome.com/docs/extensions/
+
+## 更多文档
+
+- 测试指南：`docs/TESTING.md`
+- 技术路线图：`docs/ROADMAP.md`
+- 商店提交指南：`docs/STORE_SUBMISSION_GUIDE.md`
+- 提交检查清单：`docs/CHROME_WEB_STORE_CHECKLIST.md`

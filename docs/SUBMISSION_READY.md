@@ -3,7 +3,7 @@
 ## 已完成的准备工作
 
 ### 1. 扩展包打包脚本已准备
-- 按 `STORE_SUBMISSION_GUIDE.md` 或执行 `./build-extension.sh` 生成 `cross-request-store.zip`
+- 按 `STORE_SUBMISSION_GUIDE.md` 或在仓库根目录执行 `./build-extension.sh` 生成 `cross-request-store.zip`
 - 生成的压缩包需包含所有必需文件（manifest/background/content-script/index/popup/icons/src 等）
 
 ### 2. 隐私政策已准备

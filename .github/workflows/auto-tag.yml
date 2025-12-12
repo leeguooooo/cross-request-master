@@ -62,38 +62,29 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 从 README.md 提取版本更新日志
-          VERSION="${{ steps.version.outputs.current_version }}"
-          
-          # 尝试从 README.md 提取对应版本的更新日志
-          CHANGELOG=$(awk -v version="$VERSION" '
-            BEGIN { found=0; content=""; in_version=0 }
-            /^### v/ { 
-              if (in_version && found) exit;
-              if ($0 ~ "v" version "[ (]") {
-                found=1;
-                in_version=1;
-                # 跳过版本标题行，只提取内容
-                next;
-              } else if (in_version && found) {
-                exit;
-              }
-            }
-            found && in_version && !/^### v/ { 
-              if (NF > 0 || $0 ~ /^$/) {
-                content = content $0 "\n"; 
-              }
-            }
-            END { 
-              # 清理末尾多余的换行符
-              gsub(/\n+$/, "", content);
-              if (content == "") {
-                print "版本更新";
-              } else {
-                print content;
-              }
-            }
-          ' README.md)
+	          # 从 CHANGELOG.md 提取版本更新日志
+	          VERSION="${{ steps.version.outputs.current_version }}"
+	          
+	          # 尝试从 CHANGELOG.md 提取对应版本的更新日志
+	          CHANGELOG=$(awk -v version="$VERSION" '
+	            BEGIN { found=0; content="" }
+	            /^## \\[/ {
+	              if (found) exit;
+	              if ($0 ~ "\\[" version "\\]") {
+	                found=1;
+	                next;
+	              }
+	            }
+	            found { content = content $0 "\n" }
+	            END {
+	              gsub(/\n+$/, "", content);
+	              if (content == "") {
+	                print "版本更新";
+	              } else {
+	                print content;
+	              }
+	            }
+	          ' CHANGELOG.md)
           
           echo "提取到的更新日志:"
           echo "$CHANGELOG"

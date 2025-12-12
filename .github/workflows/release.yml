@@ -44,36 +44,22 @@ jobs:
           echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
         else
-          # 否则从 README.md 提取对应版本的更新日志
-          echo "从 README.md 提取更新日志"
-          VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
-          
-          # 提取版本对应的更新内容
-          RELEASE_NOTES=$(awk -v version="$VERSION" '
-            BEGIN { found=0; content=""; in_version=0 }
-            /^### v/ { 
-              if (in_version && found) exit;
-              if ($0 ~ "v" version "[ (]") {
-                found=1;
-                in_version=1;
-                # 包含版本标题行
-                content = $0 "\n";
-                next;
-              } else if (in_version && found) {
-                exit;
-              }
-            }
-            found && in_version && !/^### v/ { 
-              if (NF > 0 || $0 ~ /^$/) {
-                content = content $0 "\n"; 
-              }
-            }
-            END { 
-              # 清理末尾多余的换行符
-              gsub(/\n+$/, "", content);
-              print content;
-            }
-          ' README.md)
+	          # 否则从 CHANGELOG.md 提取对应版本的更新日志
+	          echo "从 CHANGELOG.md 提取更新日志"
+	          VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
+	          
+	          # 提取版本对应的更新内容
+	          RELEASE_NOTES=$(awk -v version="$VERSION" '
+	            BEGIN { found=0 }
+	            /^## \\[/ {
+	              if (found) exit;
+	              if ($0 ~ "\\[" version "\\]") {
+	                found=1;
+	                next;
+	              }
+	            }
+	            found { print }
+	          ' CHANGELOG.md)
           
           echo "提取到的更新日志内容："
           echo "---"
