@@ -2,10 +2,9 @@
 
 ## 已完成的准备工作
 
-### 1. 扩展包已打包
-- 文件：`cross-request-store.zip`
-- 大小：102 KB
-- 内容：包含所有必需文件
+### 1. 扩展包打包脚本已准备
+- 按 `STORE_SUBMISSION_GUIDE.md` 或执行 `./build-extension.sh` 生成 `cross-request-store.zip`
+- 生成的压缩包需包含所有必需文件（manifest/background/content-script/index/popup/icons/src 等）
 
 ### 2. 隐私政策已准备
 - 文件：`PRIVACY_POLICY.md`
@@ -69,7 +68,7 @@
 2. **点击"New Item"（新建项目）**
 
 3. **上传扩展包**
-   - 上传：`cross-request-store.zip`
+   - 上传：你刚生成的 `cross-request-store.zip`
    
 4. **填写商店列表信息**
 
@@ -169,8 +168,7 @@ scripting:
 
 **准备就绪！** 
 
-打包文件：`cross-request-store.zip`  
+打包文件：按指南生成 `cross-request-store.zip`  
 隐私政策：待 GitHub Pages 部署完成
 
 **下一步：访问 GitHub 仓库设置启用 Pages，然后登录 Chrome Web Store 开发者控制台提交。**
-
