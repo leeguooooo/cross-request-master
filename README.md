@@ -125,7 +125,22 @@ npm run format
 - 提交 Issue/PR 前请先看 `CONTRIBUTING.md`
 - 如果项目对你有帮助，欢迎 Star 或赞助：
   - GitHub Sponsors: https://github.com/sponsors/leeguooooo
-  - 微信/支付宝赞赏码见 `.github/`
+  - 微信/支付宝赞赏码见下方
+
+### 赞助开发
+
+如果你觉得这个项目对你有帮助，可以请作者喝杯咖啡：
+
+**GitHub Sponsors**
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/leeguooooo?style=for-the-badge&logo=github)](https://github.com/sponsors/leeguooooo)
+
+**微信 / 支付宝**
+
+<div align="center">
+  <img src=".github/wechatpay.JPG" alt="微信赞赏码" width="300"/>
+  <img src=".github/alipay.JPG" alt="支付宝收款码" width="300"/>
+</div>
 
 ## 更新日志
 
