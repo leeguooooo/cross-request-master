@@ -134,7 +134,8 @@
 
       // 对于 GET/HEAD 请求，将参数转换为查询字符串附加到 URL
       if ((method === 'GET' || method === 'HEAD') && data) {
-        const queryString = typeof data === 'object' ? helpers.buildQueryString(data) : String(data);
+        const queryString =
+          typeof data === 'object' ? helpers.buildQueryString(data) : String(data);
         if (queryString) {
           url = url + (url.includes('?') ? '&' : '?') + queryString;
         }
