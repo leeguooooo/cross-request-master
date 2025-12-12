@@ -22,13 +22,26 @@ export interface YApiCallbackData {
   success: boolean;
 }
 
+export type RequestBody =
+  | Record<string, any>
+  | string
+  | number
+  | boolean
+  | null
+  | FormData
+  | Blob
+  | File
+  | URLSearchParams
+  | ArrayBuffer
+  | DataView;
+
 export interface CrossRequestOptions {
   url: string;
   method?: string;
   type?: string;
   headers?: Record<string, string>;
-  data?: any;
-  body?: any;
+  data?: RequestBody;
+  body?: RequestBody;
   timeout?: number;
   success?: (res: any, header: Record<string, string>, data: YApiCallbackData) => void;
   error?: (err: any, header: Record<string, string>, data: YApiCallbackData) => void;

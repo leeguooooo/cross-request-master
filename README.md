@@ -29,6 +29,7 @@
 - **cURL 命令生成** - 自动生成完整 cURL 命令，一键复制分享
 - **智能网站检测** - 自动识别 YApi 等 API 管理平台，按需激活功能
 - **jQuery 集成** - 智能拦截 jQuery ajax 请求，无需修改现有代码
+- **文件上传支持** - 支持 `multipart/form-data` / FormData 文件上传
 - **Manifest V3** - 基于最新 Chrome 扩展标准开发
 
 ## 安装
@@ -191,6 +192,17 @@ cross-request-master/
 快速检查项：
 - YApi 网站：cURL 弹窗显示 + 控制台有日志
 - 普通网站：无 UI 弹窗 + 手动调用正常工作
+
+### TypeScript 类型定义
+
+仓库内置 `types/cross-request.d.ts`，在 TypeScript 项目中可获得 IntelliSense：
+
+1. 将该文件复制到你的项目（例如 `src/types/`）
+2. 在 `tsconfig.json` 的 `include` 中包含它，或在 `global.d.ts` 中引用：
+
+```ts
+/// <reference path="./src/types/cross-request.d.ts" />
+```
 
 ### 技术栈
 

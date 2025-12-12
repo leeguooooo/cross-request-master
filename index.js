@@ -119,63 +119,73 @@
 
     // 发送跨域请求
     async request(options) {
-      return new Promise((resolve, reject) => {
-        const id = `request-${++this.requestId}`;
+      const id = `request-${++this.requestId}`;
 
+      const promise = new Promise((resolve, reject) => {
         // 保存回调
         this.pendingRequests.set(id, { resolve, reject });
-
-        // 规范化 method 为大写，确保大小写不敏感的比较
-        const method = (options.method || 'GET').toUpperCase();
-        const data = options.data || options.body;
-        let url = options.url;
-        let body = data;
-
-        // 对于 GET/HEAD 请求，将参数转换为查询字符串附加到 URL
-        if ((method === 'GET' || method === 'HEAD') && data) {
-          const queryString =
-            typeof data === 'object' ? helpers.buildQueryString(data) : String(data);
-          if (queryString) {
-            url = url + (url.includes('?') ? '&' : '?') + queryString;
-          }
-          body = undefined; // GET/HEAD 请求不应该有 body
-        }
-
-        // 创建请求数据
-        const requestData = {
-          id,
-          url,
-          method,
-          headers: options.headers || {},
-          body,
-          timeout: options.timeout || 30000
-        };
-
-        // 将请求数据编码并插入到 DOM
-        const container = document.createElement('div');
-        container.id = `y-request-${id}`;
-        container.style.display = 'none';
-        container.textContent = btoa(encodeURIComponent(JSON.stringify(requestData)));
-        (document.body || document.documentElement).appendChild(container);
-
-        // 设置超时
-        setTimeout(() => {
-          if (this.pendingRequests.has(id)) {
-            const pending = this.pendingRequests.get(id);
-            const timeoutResponse = {
-              status: 0,
-              statusText: '请求超时',
-              headers: {},
-              data: { error: '请求超时' },
-              body: JSON.stringify({ error: '请求超时' }),
-              ok: false,
-              isError: true
-            };
-            pending.resolve(timeoutResponse);
-            this.pendingRequests.delete(id);
-          }
-        }, requestData.timeout);
       });
+
+      // 规范化 method 为大写，确保大小写不敏感的比较
+      const method = (options.method || 'GET').toUpperCase();
+      const data = options.data || options.body;
+      let url = options.url;
+      let body = data;
+
+      // 对于 GET/HEAD 请求，将参数转换为查询字符串附加到 URL
+      if ((method === 'GET' || method === 'HEAD') && data) {
+        const queryString = typeof data === 'object' ? helpers.buildQueryString(data) : String(data);
+        if (queryString) {
+          url = url + (url.includes('?') ? '&' : '?') + queryString;
+        }
+        body = undefined; // GET/HEAD 请求不应该有 body
+      }
+
+      // 支持 FormData/File/Blob 的序列化（Issue #14）
+      if (body !== undefined && helpers.serializeRequestBody) {
+        try {
+          body = await helpers.serializeRequestBody(body);
+        } catch (e) {
+          console.warn('[Index] FormData 序列化失败，降级为原始 body:', e.message);
+        }
+      }
+
+      // 创建请求数据
+      const requestData = {
+        id,
+        url,
+        method,
+        headers: options.headers || {},
+        body,
+        timeout: options.timeout || 30000
+      };
+
+      // 将请求数据编码并插入到 DOM
+      const container = document.createElement('div');
+      container.id = `y-request-${id}`;
+      container.style.display = 'none';
+      container.textContent = btoa(encodeURIComponent(JSON.stringify(requestData)));
+      (document.body || document.documentElement).appendChild(container);
+
+      // 设置超时
+      setTimeout(() => {
+        if (this.pendingRequests.has(id)) {
+          const pending = this.pendingRequests.get(id);
+          const timeoutResponse = {
+            status: 0,
+            statusText: '请求超时',
+            headers: {},
+            data: { error: '请求超时' },
+            body: JSON.stringify({ error: '请求超时' }),
+            ok: false,
+            isError: true
+          };
+          pending.resolve(timeoutResponse);
+          this.pendingRequests.delete(id);
+        }
+      }, requestData.timeout);
+
+      return promise;
     },
 
     // 处理响应
@@ -212,6 +222,11 @@
         // 处理响应体，为 YApi 提供正确的数据格式
         const headers = response.headers || {};
         const contentType = headers['content-type'] || '';
+        const looksLikeJsonString = (val) => {
+          if (typeof val !== 'string') return false;
+          const trimmed = val.trim();
+          return trimmed.startsWith('{') || trimmed.startsWith('[');
+        };
         const hasBodyProp = Object.prototype.hasOwnProperty.call(response, 'body');
         const hasBodyParsedProp = Object.prototype.hasOwnProperty.call(response, 'bodyParsed');
         const hasDataProp = Object.prototype.hasOwnProperty.call(response, 'data');
@@ -226,7 +241,7 @@
           parsedData = response.data;
           debugLog('[Index] 使用 response.data 作为解析结果');
         } else if (
-          contentType.includes('application/json') &&
+          (contentType.includes('application/json') || looksLikeJsonString(response.body)) &&
           hasBodyProp &&
           response.body != null
         ) {
@@ -504,6 +519,11 @@
               // 优先使用已经解析好的 response.data，如果不存在再使用 response.body/bodyParsed
               const headers = response.headers || {};
               const contentType = headers['content-type'] || '';
+              const looksLikeJsonString = (val) => {
+                if (typeof val !== 'string') return false;
+                const trimmed = val.trim();
+                return trimmed.startsWith('{') || trimmed.startsWith('[');
+              };
               const hasBodyProp = Object.prototype.hasOwnProperty.call(response, 'body');
               const hasBodyParsedProp = Object.prototype.hasOwnProperty.call(
                 response,
@@ -511,7 +531,7 @@
               );
               const hasDataProp = Object.prototype.hasOwnProperty.call(response, 'data');
 
-              if (contentType.includes('application/json')) {
+              if (contentType.includes('application/json') || looksLikeJsonString(response.body)) {
                 if (hasDataProp && response.data !== undefined) {
                   yapiRes = response.data;
                   debugLog('[Index] 使用 response.data 构建 yapiRes');

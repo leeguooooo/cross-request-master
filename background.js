@@ -141,6 +141,54 @@ function getStatusText(status) {
 async function handleCrossOriginRequest(request) {
   const { url, method = 'GET', headers = {}, body, timeout = 30000 } = request;
 
+  // 支持 FormData/File/Blob 的序列化传输（Issue #14）
+  const base64ToUint8Array = (base64) => {
+    const binary = atob(base64 || '');
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  };
+
+  const deserializeFileLike = (serialized) => {
+    const bytes = base64ToUint8Array(serialized.data);
+    const blob = new Blob([bytes], {
+      type: serialized.type || 'application/octet-stream'
+    });
+    return { blob, name: serialized.name || 'blob' };
+  };
+
+  const deserializeFormData = (serialized) => {
+    const formData = new FormData();
+    const entries = Array.isArray(serialized.entries) ? serialized.entries : [];
+    entries.forEach((entry) => {
+      if (!entry) return;
+      const key = entry.key;
+      const value = entry.value;
+      if (value && typeof value === 'object' && value.__isFile) {
+        const file = deserializeFileLike(value);
+        formData.append(key, file.blob, file.name);
+      } else {
+        formData.append(key, value);
+      }
+    });
+    return formData;
+  };
+
+  let requestBody = body;
+  let isMultipartBody = false;
+  if (body && typeof body === 'object') {
+    if (body.__isFormData) {
+      requestBody = deserializeFormData(body);
+      isMultipartBody = true;
+    } else if (body.__isFile) {
+      requestBody = deserializeFileLike(body).blob;
+      isMultipartBody = true;
+    }
+  }
+
   // 检查域名白名单
   if (!isDomainAllowed(url)) {
     throw new Error('Domain not allowed: ' + url);
@@ -154,24 +202,36 @@ async function handleCrossOriginRequest(request) {
     credentials: 'include'
   };
 
+  // multipart/form-data 让浏览器自动设置 boundary，移除手动 Content-Type
+  if (isMultipartBody) {
+    const contentTypeHeader =
+      fetchOptions.headers.get('Content-Type') || fetchOptions.headers.get('content-type') || '';
+    if (contentTypeHeader.includes('multipart/form-data')) {
+      fetchOptions.headers.delete('Content-Type');
+      fetchOptions.headers.delete('content-type');
+    }
+  }
+
   // 添加请求体（如果有）
-  if (body && method.toLowerCase() !== 'get' && method.toLowerCase() !== 'head') {
-    if (typeof body === 'object' && !(body instanceof FormData)) {
+  if (requestBody && method.toLowerCase() !== 'get' && method.toLowerCase() !== 'head') {
+    const isPlainObject = (val) => Object.prototype.toString.call(val) === '[object Object]';
+
+    if (isPlainObject(requestBody) && !(requestBody instanceof FormData)) {
       // 检查 Content-Type 以决定如何序列化 body
       const contentType = fetchOptions.headers.get('Content-Type') || '';
 
       if (contentType.includes('application/x-www-form-urlencoded')) {
         // 对于 form-urlencoded，使用 URLSearchParams
-        fetchOptions.body = new URLSearchParams(body).toString();
+        fetchOptions.body = new URLSearchParams(requestBody).toString();
       } else {
         // 默认使用 JSON
-        fetchOptions.body = JSON.stringify(body);
+        fetchOptions.body = JSON.stringify(requestBody);
         if (!fetchOptions.headers.has('Content-Type')) {
           fetchOptions.headers.set('Content-Type', 'application/json');
         }
       }
     } else {
-      fetchOptions.body = body;
+      fetchOptions.body = requestBody;
     }
   }
 

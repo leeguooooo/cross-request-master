@@ -112,6 +112,7 @@ const CrossRequest = {
     const helpers = [
       'src/helpers/query-string.js',
       'src/helpers/body-parser.js',
+      'src/helpers/form-data.js',
       'src/helpers/logger.js',
       'src/helpers/response-handler.js' // 必须在 body-parser.js 之后（有依赖）
     ];

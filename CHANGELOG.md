@@ -7,6 +7,13 @@
 
 ## [未发布]
 
+### 修复
+
+- **文件上传** - 支持 `multipart/form-data` / FormData 文件上传（Issue #14）
+  - index.js 序列化 FormData/File/Blob 以跨上下文传输
+  - background.js 反序列化并自动移除手动 `Content-Type`，让浏览器设置 boundary
+- **YApi 脚本兼容** - fallback 路径也会解析 JSON 字符串（Issue #22）
+
 ### 改进
 
 - **日志安全** - 控制台输出不会被大响应体淹没
