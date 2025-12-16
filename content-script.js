@@ -436,6 +436,73 @@ const CrossRequest = {
       };
     };
 
+    const buildGlobalMcpConfigBlocks = ({ origin }) => {
+      const baseUrl = String(origin || '').replace(/\/$/, '');
+      const host = String(location.hostname || 'yapi').replace(/[^a-zA-Z0-9._-]/g, '');
+      const serverName = `yapi-global-${host.replace(/\./g, '-')}-mcp`;
+      const cliServerName = /\s/.test(serverName) ? JSON.stringify(serverName) : serverName;
+
+      const stdioArgs = [
+        '-y',
+        'yapi-auto-mcp',
+        '--stdio',
+        `--yapi-base-url=${baseUrl}`,
+        '--yapi-auth-mode=global',
+        '--yapi-email=YOUR_EMAIL',
+        '--yapi-password=YOUR_PASSWORD'
+      ];
+
+      const cursor = JSON.stringify(
+        {
+          mcpServers: {
+            [serverName]: {
+              command: 'npx',
+              args: stdioArgs
+            }
+          }
+        },
+        null,
+        2
+      );
+
+      const codex = `[mcp_servers.${JSON.stringify(serverName)}]\ncommand = "npx"\nargs = ${JSON.stringify(
+        stdioArgs
+      )}\n`;
+
+      const gemini = JSON.stringify(
+        {
+          mcpServers: {
+            [serverName]: {
+              command: 'npx',
+              args: stdioArgs
+            }
+          }
+        },
+        null,
+        2
+      );
+
+      const claudeCode = `claude mcp add --transport stdio ${cliServerName} -- npx ${stdioArgs
+        .map((a) => (a.includes(' ') ? JSON.stringify(a) : a))
+        .join(' ')}`;
+
+      const geminiCli = `gemini mcp add --transport stdio ${cliServerName} npx ${stdioArgs
+        .map((a) => (a.includes(' ') ? JSON.stringify(a) : a))
+        .join(' ')}`;
+
+      const rawCommand = `npx ${stdioArgs.join(' ')}`;
+
+      return {
+        cursor,
+        codex,
+        gemini,
+        claudeCode,
+        geminiCli,
+        rawCommand,
+        serverName
+      };
+    };
+
     const isTruthyRequired = (val) => {
       if (val === true) return true;
       if (val === 1) return true;
@@ -786,8 +853,8 @@ const CrossRequest = {
 	          </div>
 	          <div class="crm-body">
 	            <div class="crm-section">
-	              <h3>MCP 配置</h3>
-	              <div class="crm-hint">已按当前项目自动拼好（Cursor / Codex / Gemini CLI / Claude Code）。</div>
+	              <h3 id="crm-mcp-title">MCP 配置</h3>
+	              <div class="crm-hint" id="crm-mcp-hint">已按当前项目自动拼好（Cursor / Codex / Gemini CLI / Claude Code）。</div>
 	              <div id="crm-mcp-content" style="margin-top: 10px;"></div>
 	            </div>
 	          </div>
@@ -826,7 +893,7 @@ const CrossRequest = {
       return container;
     };
 
-    const openModal = async () => {
+    const openModal = async (mode) => {
       const route = parseYapiInterfaceRoute();
       if (!route) return;
 
@@ -834,22 +901,45 @@ const CrossRequest = {
       const modal = ensureModal();
       modal.style.display = 'block';
 
+      const headerTitle = modal.querySelector('.crm-title');
+      const panelTitle = modal.querySelector('#crm-mcp-title');
+      const panelHint = modal.querySelector('#crm-mcp-hint');
+
       const mcpContainer = modal.querySelector('#crm-mcp-content');
       mcpContainer.textContent = '生成中...';
 
       const origin = location.origin;
 
       try {
-        const [token, projectName] = await Promise.all([
-          resolveProjectToken(origin, route.projectId),
-          resolveProjectName(origin, route.projectId)
-        ]);
-        const blocks = buildMcpConfigBlocks({
-          origin,
-          projectId: route.projectId,
-          projectName,
-          token
-        });
+        const mcpMode = mode === 'global' ? 'global' : 'project';
+        if (mcpMode === 'global') {
+          if (headerTitle) headerTitle.textContent = 'MCP 配置（整个项目）';
+          if (panelTitle) panelTitle.textContent = 'MCP 配置（整个项目）';
+          if (panelHint) {
+            panelHint.textContent =
+              '全局模式：请把 YOUR_EMAIL/YOUR_PASSWORD 替换为自己的账号密码；启动后先在对话里调用一次 yapi_update_token 自动缓存所有项目 token。';
+          }
+        } else {
+          if (headerTitle) headerTitle.textContent = 'MCP 配置（当前项目）';
+          if (panelTitle) panelTitle.textContent = 'MCP 配置（当前项目）';
+          if (panelHint) panelHint.textContent = '已按当前项目自动拼好（Cursor / Codex / Gemini CLI / Claude Code）。';
+        }
+
+        let blocks;
+        if (mcpMode === 'global') {
+          blocks = buildGlobalMcpConfigBlocks({ origin });
+        } else {
+          const [token, projectName] = await Promise.all([
+            resolveProjectToken(origin, route.projectId),
+            resolveProjectName(origin, route.projectId)
+          ]);
+          blocks = buildMcpConfigBlocks({
+            origin,
+            projectId: route.projectId,
+            projectName,
+            token
+          });
+        }
 
         mcpContainer.textContent = '';
         mcpContainer.style.display = 'block';
@@ -913,11 +1003,17 @@ const CrossRequest = {
       const group = document.createElement('span');
       group.id = BTN_GROUP_ID;
 
-      const mcpBtn = document.createElement('button');
-      mcpBtn.className = 'crm-btn';
-      mcpBtn.type = 'button';
-      mcpBtn.textContent = 'MCP 配置';
-      mcpBtn.addEventListener('click', openModal);
+      const mcpGlobalBtn = document.createElement('button');
+      mcpGlobalBtn.className = 'crm-btn';
+      mcpGlobalBtn.type = 'button';
+      mcpGlobalBtn.textContent = '整个项目 MCP 配置';
+      mcpGlobalBtn.addEventListener('click', () => openModal('global'));
+
+      const mcpProjectBtn = document.createElement('button');
+      mcpProjectBtn.className = 'crm-btn';
+      mcpProjectBtn.type = 'button';
+      mcpProjectBtn.textContent = '当前项目 MCP 配置';
+      mcpProjectBtn.addEventListener('click', () => openModal('project'));
 
       const copyBtn = document.createElement('button');
       copyBtn.className = 'crm-btn crm-primary';
@@ -925,7 +1021,8 @@ const CrossRequest = {
       copyBtn.textContent = '复制当前页面给 AI';
       copyBtn.addEventListener('click', () => copyMarkdownDirectly(copyBtn));
 
-      group.appendChild(mcpBtn);
+      group.appendChild(mcpGlobalBtn);
+      group.appendChild(mcpProjectBtn);
       group.appendChild(copyBtn);
       titleEl.appendChild(group);
     };
