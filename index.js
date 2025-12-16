@@ -7,8 +7,42 @@
   }
   win.__crossRequestLoaded = true;
 
-  // 检查是否为静默模式
-  const isSilentMode = win.__crossRequestSilentMode || false;
+  const isYapiContext = () => {
+    try {
+      return !!(win.document && win.document.getElementById('yapi'));
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const toAbsoluteUrl = (inputUrl) => {
+    if (typeof inputUrl !== 'string') return inputUrl;
+    const url = inputUrl.trim();
+    if (!url) return url;
+
+    // 已经是绝对 URL（含协议）
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) {
+      return url;
+    }
+
+    // protocol-relative URL: //example.com/path
+    if (url.startsWith('//')) {
+      return (win.location && win.location.protocol ? win.location.protocol : 'https:') + url;
+    }
+
+    try {
+      return new URL(
+        url,
+        win.location && win.location.href ? win.location.href : undefined
+      ).toString();
+    } catch (e) {
+      return url;
+    }
+  };
+
+  // 静默模式：非 YApi 页面默认静默（避免误拦截导致页面加载失败）
+  // 允许外部显式强制静默：window.__crossRequestSilentMode = true
+  const isSilentMode = win.__crossRequestSilentMode === true ? true : !isYapiContext();
 
   // 静默模式下不输出调试日志
   const debugLog = isSilentMode ? () => {} : console.log.bind(console);
@@ -141,6 +175,9 @@
         }
         body = undefined; // GET/HEAD 请求不应该有 body
       }
+
+      // 背景页 fetch 需要绝对 URL：非 YApi 页面常见使用相对路径（如 /api/...）
+      url = toAbsoluteUrl(url);
 
       // 支持 FormData/File/Blob 的序列化（Issue #14）
       if (body !== undefined && helpers.serializeRequestBody) {
@@ -1230,14 +1267,15 @@
       // 智能模式：
       // 1. 完整模式（YApi等）：默认拦截，除非显式设置 crossRequest: false
       // 2. 静默模式（其他网站）：opt-in，只有显式设置 crossRequest: true 才拦截
-      if (isSilentMode) {
-        // 静默模式：需要显式启用
-        if (options && options.crossRequest === true) {
+      const inYapi = isYapiContext();
+      if (inYapi) {
+        // YApi：默认拦截（除非显式关闭）
+        if (!options || options.crossRequest !== false) {
           return win.crossRequest.ajax(options);
         }
       } else {
-        // 完整模式：默认拦截（YApi 等目标网站）
-        if (!options || options.crossRequest !== false) {
+        // 非 YApi：仅 opt-in（避免误拦截导致页面加载失败）
+        if (options && options.crossRequest === true) {
           return win.crossRequest.ajax(options);
         }
       }
