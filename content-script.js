@@ -528,11 +528,31 @@ const CrossRequest = {
     };
 
     const resolveCurrentUserEmail = async (origin) => {
+      // 1) 优先用 status（不依赖读取 cookie；只要 fetch 带 credentials 即可）
+      try {
+        const statusUrl = `${origin}/api/user/status`;
+        const statusPayload = await fetchJson(statusUrl);
+        const emailFromStatus = statusPayload && statusPayload.data && statusPayload.data.email;
+        if (looksLikeEmail(emailFromStatus)) return String(emailFromStatus).trim();
+
+        const uidFromStatus = statusPayload && statusPayload.data && (statusPayload.data.uid || statusPayload.data._id);
+        if (uidFromStatus) {
+          const url = `${origin}/api/user/find?id=${encodeURIComponent(String(uidFromStatus))}`;
+          const payload = await fetchJson(url);
+          if (payload && payload.errcode === 0 && payload.data && looksLikeEmail(payload.data.email)) {
+            return String(payload.data.email || '').trim();
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      // 2) 兜底：尝试从非 HttpOnly 的 _yapi_uid 读取
       const uid = getCookieValue('_yapi_uid');
       if (!uid) return '';
       const url = `${origin}/api/user/find?id=${encodeURIComponent(uid)}`;
       const payload = await fetchJson(url);
-      if (payload && payload.errcode === 0 && payload.data && payload.data.email) {
+      if (payload && payload.errcode === 0 && payload.data && looksLikeEmail(payload.data.email)) {
         return String(payload.data.email || '').trim();
       }
       return '';
