@@ -209,6 +209,15 @@ const CrossRequest = {
       return true;
     };
 
+    const looksLikeEmail = (val) => {
+      if (typeof val !== 'string') return false;
+      const s = val.trim();
+      if (!s) return false;
+      if (s.length > 128) return false;
+      if (/[\s"'<>]/.test(s)) return false;
+      return /^[^@]+@[^@]+\.[^@]+$/.test(s);
+    };
+
     const findTokenInObject = (obj) => {
       if (!obj || typeof obj !== 'object') return '';
       const queue = [{ value: obj, depth: 0, key: '' }];
@@ -443,7 +452,7 @@ const CrossRequest = {
       const host = String(location.hostname || 'yapi').replace(/[^a-zA-Z0-9._-]/g, '');
       const serverName = `yapi-global-${host.replace(/\./g, '-')}-mcp`;
       const cliServerName = /\s/.test(serverName) ? JSON.stringify(serverName) : serverName;
-      const safeEmail = String(email || '').trim() || 'YOUR_EMAIL';
+      const safeEmail = looksLikeEmail(email) ? String(email).trim() : 'YOUR_EMAIL';
 
       const stdioArgs = [
         '-y',
