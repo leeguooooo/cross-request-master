@@ -2,6 +2,11 @@
 
 // 检测是否为目标网站（YApi 或其他 API 管理平台）
 function isTargetWebsite() {
+  // 0. 最强特征：YApi 根节点（用户反馈：目标站一定存在）
+  if (document.getElementById('yapi')) {
+    return true;
+  }
+
   // 1. 检测 YApi 明确特征
   const metaKeywords = document.querySelector('meta[name="keywords"]');
   const metaDescription = document.querySelector('meta[name="description"]');
@@ -535,11 +540,17 @@ const CrossRequest = {
         const emailFromStatus = statusPayload && statusPayload.data && statusPayload.data.email;
         if (looksLikeEmail(emailFromStatus)) return String(emailFromStatus).trim();
 
-        const uidFromStatus = statusPayload && statusPayload.data && (statusPayload.data.uid || statusPayload.data._id);
+        const uidFromStatus =
+          statusPayload && statusPayload.data && (statusPayload.data.uid || statusPayload.data._id);
         if (uidFromStatus) {
           const url = `${origin}/api/user/find?id=${encodeURIComponent(String(uidFromStatus))}`;
           const payload = await fetchJson(url);
-          if (payload && payload.errcode === 0 && payload.data && looksLikeEmail(payload.data.email)) {
+          if (
+            payload &&
+            payload.errcode === 0 &&
+            payload.data &&
+            looksLikeEmail(payload.data.email)
+          ) {
             return String(payload.data.email || '').trim();
           }
         }
@@ -977,7 +988,9 @@ const CrossRequest = {
         } else {
           if (headerTitle) headerTitle.textContent = 'MCP 配置（当前项目）';
           if (panelTitle) panelTitle.textContent = 'MCP 配置（当前项目）';
-          if (panelHint) panelHint.textContent = '已按当前项目自动拼好（Cursor / Codex / Gemini CLI / Claude Code）。';
+          if (panelHint)
+            panelHint.textContent =
+              '已按当前项目自动拼好（Cursor / Codex / Gemini CLI / Claude Code）。';
         }
 
         let blocks;
