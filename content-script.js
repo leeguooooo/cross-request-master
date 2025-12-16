@@ -367,6 +367,7 @@ const CrossRequest = {
     };
 
     const buildMcpConfigBlocks = ({ origin, projectId, projectName, token }) => {
+      const mcpPkg = '@leeguooooo/yapi-auto-mcp';
       const baseUrl = String(origin || '').replace(/\/$/, '');
       const yapiToken = `${projectId}:${token}`;
       const normalizedProjectName = String(projectName || '')
@@ -379,7 +380,7 @@ const CrossRequest = {
 
       const stdioArgs = [
         '-y',
-        'yapi-auto-mcp',
+        mcpPkg,
         '--stdio',
         `--yapi-base-url=${baseUrl}`,
         `--yapi-token=${yapiToken}`
@@ -436,19 +437,21 @@ const CrossRequest = {
       };
     };
 
-    const buildGlobalMcpConfigBlocks = ({ origin }) => {
+    const buildGlobalMcpConfigBlocks = ({ origin, email }) => {
+      const mcpPkg = '@leeguooooo/yapi-auto-mcp';
       const baseUrl = String(origin || '').replace(/\/$/, '');
       const host = String(location.hostname || 'yapi').replace(/[^a-zA-Z0-9._-]/g, '');
       const serverName = `yapi-global-${host.replace(/\./g, '-')}-mcp`;
       const cliServerName = /\s/.test(serverName) ? JSON.stringify(serverName) : serverName;
+      const safeEmail = String(email || '').trim() || 'YOUR_EMAIL';
 
       const stdioArgs = [
         '-y',
-        'yapi-auto-mcp',
+        mcpPkg,
         '--stdio',
         `--yapi-base-url=${baseUrl}`,
         '--yapi-auth-mode=global',
-        '--yapi-email=YOUR_EMAIL',
+        `--yapi-email=${safeEmail}`,
         '--yapi-password=YOUR_PASSWORD'
       ];
 
@@ -501,6 +504,29 @@ const CrossRequest = {
         rawCommand,
         serverName
       };
+    };
+
+    const getCookieValue = (key) => {
+      const name = `${String(key || '').trim()}=`;
+      if (!name || name === '=') return '';
+      const cookies = String(document.cookie || '').split(';');
+      for (const c of cookies) {
+        const trimmed = String(c || '').trim();
+        if (!trimmed.startsWith(name)) continue;
+        return trimmed.slice(name.length);
+      }
+      return '';
+    };
+
+    const resolveCurrentUserEmail = async (origin) => {
+      const uid = getCookieValue('_yapi_uid');
+      if (!uid) return '';
+      const url = `${origin}/api/user/find?id=${encodeURIComponent(uid)}`;
+      const payload = await fetchJson(url);
+      if (payload && payload.errcode === 0 && payload.data && payload.data.email) {
+        return String(payload.data.email || '').trim();
+      }
+      return '';
     };
 
     const isTruthyRequired = (val) => {
@@ -913,11 +939,11 @@ const CrossRequest = {
       try {
         const mcpMode = mode === 'global' ? 'global' : 'project';
         if (mcpMode === 'global') {
-          if (headerTitle) headerTitle.textContent = 'MCP 配置（整个项目）';
-          if (panelTitle) panelTitle.textContent = 'MCP 配置（整个项目）';
+          if (headerTitle) headerTitle.textContent = 'MCP 配置（所有项目）';
+          if (panelTitle) panelTitle.textContent = 'MCP 配置（所有项目）';
           if (panelHint) {
             panelHint.textContent =
-              '全局模式：请把 YOUR_EMAIL/YOUR_PASSWORD 替换为自己的账号密码；启动后先在对话里调用一次 yapi_update_token 自动缓存所有项目 token。';
+              '全局模式：邮箱会尽量自动填入；只需填写密码。启动后先在对话里调用一次 yapi_update_token 自动缓存所有项目 token。';
           }
         } else {
           if (headerTitle) headerTitle.textContent = 'MCP 配置（当前项目）';
@@ -927,7 +953,8 @@ const CrossRequest = {
 
         let blocks;
         if (mcpMode === 'global') {
-          blocks = buildGlobalMcpConfigBlocks({ origin });
+          const email = await resolveCurrentUserEmail(origin);
+          blocks = buildGlobalMcpConfigBlocks({ origin, email });
         } else {
           const [token, projectName] = await Promise.all([
             resolveProjectToken(origin, route.projectId),
@@ -1006,7 +1033,7 @@ const CrossRequest = {
       const mcpGlobalBtn = document.createElement('button');
       mcpGlobalBtn.className = 'crm-btn';
       mcpGlobalBtn.type = 'button';
-      mcpGlobalBtn.textContent = '整个项目 MCP 配置';
+      mcpGlobalBtn.textContent = '所有项目 MCP 配置';
       mcpGlobalBtn.addEventListener('click', () => openModal('global'));
 
       const mcpProjectBtn = document.createElement('button');
