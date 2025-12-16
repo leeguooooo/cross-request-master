@@ -21,10 +21,7 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "permissions": [
-    "storage",
-    "tabs"
-  ],
+  "permissions": ["storage", "tabs"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
@@ -35,6 +32,7 @@
         "src/helpers/query-string.js",
         "src/helpers/body-parser.js",
         "src/helpers/form-data.js",
+        "src/helpers/yapi-openapi.js",
         "src/helpers/logger.js",
         "src/helpers/response-handler.js",
         "index.js"

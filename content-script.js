@@ -100,9 +100,850 @@ const CrossRequest = {
     // 只有完整模式才启用 cURL 事件监听
     if (!isSilent) {
       this.initCurlEventListeners();
+      this.initYapiAiAssist();
     }
 
     console.log('[Content-Script] 扩展初始化完成');
+  },
+
+  // YApi 接口页：AI 辅助（MCP 配置 + Markdown 复制）
+  initYapiAiAssist() {
+    const STYLE_ID = 'crm-yapi-ai-style';
+    const MODAL_ID = 'crm-yapi-ai-modal';
+    const BTN_GROUP_ID = 'crm-yapi-ai-btn-group';
+
+    const tokenCache = new Map();
+    let lastHref = location.href;
+
+    const ensureStyle = () => {
+      if (document.getElementById(STYLE_ID)) return;
+      const style = document.createElement('style');
+      style.id = STYLE_ID;
+      style.textContent = `
+        #${BTN_GROUP_ID} { display: inline-flex; gap: 8px; margin-left: auto; }
+        #${BTN_GROUP_ID} .crm-btn { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid #d0d7de; background: #fff; color: #24292f; font-size: 12px; cursor: pointer; }
+        #${BTN_GROUP_ID} .crm-btn:hover { background: #f6f8fa; }
+        #${BTN_GROUP_ID} .crm-btn.crm-primary { background: #1677ff; border-color: #1677ff; color: #fff; }
+        #${BTN_GROUP_ID} .crm-btn.crm-primary:hover { background: #0958d9; border-color: #0958d9; }
+        #${BTN_GROUP_ID} .crm-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+        #${MODAL_ID} { position: fixed; inset: 0; z-index: 2147483647; display: none; }
+        #${MODAL_ID} .crm-mask { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
+        #${MODAL_ID} .crm-panel { position: absolute; top: 10vh; left: 50%; transform: translateX(-50%); width: min(980px, calc(100vw - 32px)); max-height: 80vh; background: #fff; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.2); overflow: hidden; display: flex; flex-direction: column; }
+        #${MODAL_ID} .crm-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #eee; }
+        #${MODAL_ID} .crm-title { font-size: 14px; font-weight: 600; color: #111; }
+        #${MODAL_ID} .crm-close { border: none; background: transparent; cursor: pointer; font-size: 18px; line-height: 18px; padding: 4px 6px; color: #666; }
+        #${MODAL_ID} .crm-body { padding: 14px; overflow: auto; }
+        #${MODAL_ID} .crm-section { margin-bottom: 16px; }
+        #${MODAL_ID} .crm-section h3 { font-size: 13px; margin: 0 0 8px; color: #111; }
+        #${MODAL_ID} .crm-row { display: flex; gap: 10px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+        #${MODAL_ID} .crm-hint { font-size: 12px; color: #666; }
+        #${MODAL_ID} .crm-code { position: relative; }
+        #${MODAL_ID} pre { margin: 0; padding: 10px 10px; background: #0b1020; color: #d6deeb; border-radius: 8px; overflow: auto; font-size: 12px; line-height: 1.5; }
+        #${MODAL_ID} .crm-copy { position: absolute; top: 8px; right: 8px; height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; cursor: pointer; font-size: 12px; }
+        #${MODAL_ID} .crm-copy:hover { background: rgba(255,255,255,.14); }
+      `;
+      (document.head || document.documentElement).appendChild(style);
+    };
+
+    const parseYapiInterfaceRoute = () => {
+      const href = location.href;
+      const m = href.match(/(?:#\/|\/)project\/(\d+)\/interface\/api\/(\d+)/);
+      if (!m) return null;
+      return { projectId: m[1], apiId: m[2] };
+    };
+
+    const safeWriteClipboard = async (text) => {
+      const content = String(text == null ? '' : text);
+      if (!content) return false;
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(content);
+          return true;
+        }
+      } catch (e) {
+        // fallback
+      }
+
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = content;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        ta.remove();
+        return ok;
+      } catch (e) {
+        return false;
+      }
+    };
+
+    const fetchJson = async (url) => {
+      const resp = await fetch(url, { credentials: 'include' });
+      const text = await resp.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const looksLikeToken = (val) => {
+      if (typeof val !== 'string') return false;
+      const s = val.trim();
+      if (s.length < 24) return false;
+      if (s.length > 128) return false;
+
+      // YApi 项目 token 常见为 32 位 hex（优先）
+      if (/^[a-f0-9]{32}$/i.test(s)) return true;
+      if (/^[a-f0-9]{64}$/i.test(s)) return true;
+
+      // 兜底：只接受较“像 token”的字符串（同时包含字母与数字）
+      if (!/^[a-zA-Z0-9_-]+$/.test(s)) return false;
+      if (!/[a-zA-Z]/.test(s) || !/[0-9]/.test(s)) return false;
+      return true;
+    };
+
+    const findTokenInObject = (obj) => {
+      if (!obj || typeof obj !== 'object') return '';
+      const queue = [{ value: obj, depth: 0, key: '' }];
+      const maxDepth = 6;
+      let best = '';
+
+      while (queue.length) {
+        const { value, depth, key } = queue.shift();
+        if (depth > maxDepth || !value) continue;
+
+        if (typeof value === 'string') {
+          const tokenKey = String(key || '');
+          const isTokenField = /(^token$|token$|project.*token|token.*project)/i.test(tokenKey);
+          if (looksLikeToken(value) && isTokenField) {
+            if (value.length > best.length) best = value;
+          }
+          continue;
+        }
+
+        if (Array.isArray(value)) {
+          value.forEach((v) => queue.push({ value: v, depth: depth + 1, key }));
+          continue;
+        }
+
+        if (typeof value === 'object') {
+          Object.keys(value).forEach((k) => {
+            queue.push({ value: value[k], depth: depth + 1, key: k });
+          });
+        }
+      }
+
+      return best;
+    };
+
+    const resolveProjectName = async (origin, projectId) => {
+      const pid = String(projectId || '');
+      if (!pid) return '';
+
+      const ssKey = `__crm_yapi_project_name_${pid}`;
+      try {
+        const cached = sessionStorage.getItem(ssKey);
+        if (cached) return cached;
+      } catch (e) {
+        // ignore
+      }
+
+      try {
+        const projectGetUrl = `${origin}/api/project/get?id=${encodeURIComponent(pid)}`;
+        const projectResp = await fetchJson(projectGetUrl);
+        const name =
+          projectResp && projectResp.errcode === 0 && projectResp.data && projectResp.data.name
+            ? String(projectResp.data.name)
+            : '';
+
+        if (name) {
+          try {
+            sessionStorage.setItem(ssKey, name);
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        return name;
+      } catch (e) {
+        return '';
+      }
+    };
+
+    const resolveProjectToken = async (origin, projectId) => {
+      const pid = String(projectId || '');
+      if (!pid) throw new Error('缺少 projectId');
+
+      if (tokenCache.has(pid)) return tokenCache.get(pid);
+
+      const ssKey = `__crm_yapi_project_token_${pid}`;
+      try {
+        const cached = sessionStorage.getItem(ssKey);
+        if (cached && looksLikeToken(cached)) {
+          tokenCache.set(pid, cached);
+          return cached;
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      // 1) 优先使用 /api/project/token 获取（更稳定）
+      const projectTokenUrl = `${origin}/api/project/token?project_id=${encodeURIComponent(pid)}`;
+      const projectTokenResp = await fetchJson(projectTokenUrl);
+      if (projectTokenResp && projectTokenResp.errcode === 0) {
+        const data = projectTokenResp.data;
+        const tokenFromTokenApi =
+          (data &&
+            typeof data === 'object' &&
+            (data.token || data.project_token || data.projectToken)) ||
+          (typeof data === 'string' ? data : '') ||
+          findTokenInObject(data);
+
+        if (tokenFromTokenApi && looksLikeToken(tokenFromTokenApi)) {
+          tokenCache.set(pid, tokenFromTokenApi);
+          try {
+            sessionStorage.setItem(ssKey, tokenFromTokenApi);
+          } catch {
+            // ignore
+          }
+          return tokenFromTokenApi;
+        }
+      }
+
+      // 2) 兜底：尝试从 /api/project/get 获取（部分部署可能会回 token 字段）
+      const projectGetUrl = `${origin}/api/project/get?id=${encodeURIComponent(pid)}`;
+      const projectResp = await fetchJson(projectGetUrl);
+      if (projectResp && projectResp.errcode === 0) {
+        const tokenFromApi = findTokenInObject(projectResp.data);
+        if (tokenFromApi) {
+          tokenCache.set(pid, tokenFromApi);
+          try {
+            sessionStorage.setItem(ssKey, tokenFromApi);
+          } catch {
+            // ignore
+          }
+          return tokenFromApi;
+        }
+      }
+
+      // 3) 最后兜底：从项目设置页 HTML 抓取（通常会显示 token）
+      const settingUrl = `${origin}/project/${encodeURIComponent(pid)}/setting`;
+      const htmlResp = await fetch(settingUrl, { credentials: 'include' });
+      const html = await htmlResp.text();
+      const tokenRegexes = [
+        // 更强上下文：token 字段附近
+        /(?:project\\s*token|项目\\s*token|token)\\s*[:：]\\s*([a-zA-Z0-9_-]{24,128})/i,
+        /name\\s*=\\s*"token"[\\s\\S]{0,200}?value\\s*=\\s*"([a-zA-Z0-9_-]{24,128})"/i,
+        /id\\s*=\\s*"token"[\\s\\S]{0,200}?value\\s*=\\s*"([a-zA-Z0-9_-]{24,128})"/i
+      ];
+      let tokenFromHtml = '';
+
+      for (const re of tokenRegexes) {
+        const m = re.exec(html);
+        if (m && m[1] && looksLikeToken(m[1])) {
+          tokenFromHtml = m[1];
+          break;
+        }
+      }
+
+      if (tokenFromHtml) {
+        tokenCache.set(pid, tokenFromHtml);
+        try {
+          sessionStorage.setItem(ssKey, tokenFromHtml);
+        } catch {
+          // ignore
+        }
+        return tokenFromHtml;
+      }
+
+      throw new Error('未能自动获取项目 token（请确认已登录且有项目权限）');
+    };
+
+    const buildMcpConfigBlocks = ({ origin, projectId, projectName, token }) => {
+      const baseUrl = String(origin || '').replace(/\/$/, '');
+      const yapiToken = `${projectId}:${token}`;
+      const normalizedProjectName = String(projectName || '')
+        .replace(/\s+/g, ' ')
+        .replace(/\n/g, ' ')
+        .trim();
+      const serverNameBase = normalizedProjectName || `project-${projectId}`;
+      const serverName = `${serverNameBase}-${projectId}-mcp`;
+      const cliServerName = /\s/.test(serverName) ? JSON.stringify(serverName) : serverName;
+
+      const stdioArgs = [
+        '-y',
+        'yapi-auto-mcp',
+        '--stdio',
+        `--yapi-base-url=${baseUrl}`,
+        `--yapi-token=${yapiToken}`
+      ];
+
+      const cursor = JSON.stringify(
+        {
+          mcpServers: {
+            [serverName]: {
+              command: 'npx',
+              args: stdioArgs
+            }
+          }
+        },
+        null,
+        2
+      );
+
+      const codex = `[mcp_servers.${JSON.stringify(serverName)}]\ncommand = "npx"\nargs = ${JSON.stringify(
+        stdioArgs
+      )}\n`;
+
+      const gemini = JSON.stringify(
+        {
+          mcpServers: {
+            [serverName]: {
+              command: 'npx',
+              args: stdioArgs
+            }
+          }
+        },
+        null,
+        2
+      );
+
+      const claudeCode = `claude mcp add --transport stdio ${cliServerName} -- npx ${stdioArgs
+        .map((a) => (a.includes(' ') ? JSON.stringify(a) : a))
+        .join(' ')}`;
+
+      const geminiCli = `gemini mcp add --transport stdio ${cliServerName} npx ${stdioArgs
+        .map((a) => (a.includes(' ') ? JSON.stringify(a) : a))
+        .join(' ')}`;
+
+      const rawCommand = `npx ${stdioArgs.join(' ')}`;
+
+      return {
+        cursor,
+        codex,
+        gemini,
+        claudeCode,
+        geminiCli,
+        rawCommand,
+        serverName
+      };
+    };
+
+    const isTruthyRequired = (val) => {
+      if (val === true) return true;
+      if (val === 1) return true;
+      if (val === '1') return true;
+      if (val === 'true') return true;
+      return false;
+    };
+
+    const parseJsonMaybe = (text) => {
+      const s = typeof text === 'string' ? text.trim() : '';
+      if (!s) return null;
+      if (!(s.startsWith('{') || s.startsWith('['))) return null;
+      try {
+        return JSON.parse(s);
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const isJsonSchemaLike = (obj) => {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+      if (obj.$schema) return true;
+      if (obj.type && obj.properties) return true;
+      if (obj.properties && typeof obj.properties === 'object') return true;
+      return false;
+    };
+
+    const valueType = (v) => {
+      if (v === null) return 'null';
+      if (Array.isArray(v)) return 'array';
+      return typeof v;
+    };
+
+    const schemaToFieldRows = (schema, prefix, requiredSet) => {
+      const rows = [];
+      const s = schema && typeof schema === 'object' ? schema : {};
+      const type = s.type || (s.properties ? 'object' : '');
+      const props = s.properties && typeof s.properties === 'object' ? s.properties : null;
+      const reqList = Array.isArray(s.required) ? s.required.map(String) : [];
+      const localRequired = new Set(reqList);
+      const combinedRequired = requiredSet || localRequired;
+
+      if (type === 'object' && props) {
+        Object.keys(props).forEach((key) => {
+          const prop = props[key];
+          const name = prefix ? `${prefix}.${key}` : key;
+          const isReq = localRequired.has(String(key));
+
+          const propType =
+            (prop && typeof prop === 'object' && prop.type) ||
+            (prop && typeof prop === 'object' && prop.properties ? 'object' : '') ||
+            '';
+          const desc = prop && typeof prop === 'object' ? prop.description || prop.desc || '' : '';
+
+          if (propType === 'object' || (prop && typeof prop === 'object' && prop.properties)) {
+            rows.push({ name, type: 'object', required: isReq ? '是' : '', desc });
+            rows.push(...schemaToFieldRows(prop, name));
+          } else if (propType === 'array' || (prop && typeof prop === 'object' && prop.items)) {
+            const items = prop && typeof prop === 'object' ? prop.items : null;
+            const itemsType =
+              items && typeof items === 'object'
+                ? items.type || (items.properties ? 'object' : '')
+                : '';
+            rows.push({
+              name,
+              type: itemsType ? `array<${itemsType}>` : 'array',
+              required: isReq ? '是' : '',
+              desc
+            });
+
+            if (items && typeof items === 'object') {
+              if (items.type === 'object' || items.properties) {
+                rows.push(...schemaToFieldRows(items, `${name}[*]`));
+              }
+            }
+          } else {
+            rows.push({ name, type: propType || 'any', required: isReq ? '是' : '', desc });
+          }
+        });
+        return rows;
+      }
+
+      // 非 object schema：仅输出自身（用于根不是 object 的情况）
+      const rootName = prefix || '(root)';
+      rows.push({
+        name: rootName,
+        type: type || 'any',
+        required: combinedRequired && combinedRequired.size ? '是' : '',
+        desc: s.description || s.desc || ''
+      });
+      return rows;
+    };
+
+    const jsonValueToRows = (val, prefix) => {
+      const rows = [];
+      const name = prefix || '(root)';
+      const t = valueType(val);
+
+      if (t === 'object') {
+        const keys = Object.keys(val || {});
+        keys.forEach((k) => {
+          rows.push(...jsonValueToRows(val[k], prefix ? `${prefix}.${k}` : k));
+        });
+        return rows;
+      }
+
+      if (t === 'array') {
+        const first = Array.isArray(val) && val.length ? val[0] : undefined;
+        const itemType = valueType(first);
+        rows.push({
+          name,
+          type: itemType ? `array<${itemType}>` : 'array',
+          required: '',
+          desc: ''
+        });
+        if (itemType === 'object') {
+          rows.push(...jsonValueToRows(first, `${name}[*]`));
+        }
+        return rows;
+      }
+
+      rows.push({ name, type: t, required: '', desc: val == null ? '' : String(val) });
+      return rows;
+    };
+
+    const rowsToMarkdownTable = (rows, columns) => {
+      const cols = Array.isArray(columns) ? columns : [];
+      const list = Array.isArray(rows) ? rows : [];
+      if (!cols.length || !list.length) return '';
+
+      const escape = (s) =>
+        String(s == null ? '' : s)
+          .replace(/\|/g, '\\|')
+          .replace(/\n/g, ' ');
+      const header = `| ${cols.map((c) => escape(c.label)).join(' | ')} |`;
+      const sep = `| ${cols.map(() => '---').join(' | ')} |`;
+      const lines = list.map((r) => `| ${cols.map((c) => escape(r[c.key])).join(' | ')} |`);
+      return [header, sep, ...lines].join('\n');
+    };
+
+    const interfaceToMarkdown = (api) => {
+      if (!api || typeof api !== 'object') return '';
+
+      const lines = [];
+      const title = api.title ? String(api.title) : '';
+      if (title) lines.push(`# ${title}`);
+
+      const method = api.method ? String(api.method).toUpperCase() : '';
+      const path = api.path ? String(api.path) : '';
+      const desc = api.desc ? String(api.desc).trim() : '';
+
+      if (method || path) {
+        lines.push('');
+        if (method) lines.push(`- Method: \`${method}\``);
+        if (path) lines.push(`- Path: \`${path}\``);
+      }
+
+      if (desc) {
+        lines.push('');
+        lines.push('## 描述');
+        lines.push(desc);
+      }
+
+      const reqParams = Array.isArray(api.req_params) ? api.req_params : [];
+      const reqQuery = Array.isArray(api.req_query) ? api.req_query : [];
+      const reqHeaders = Array.isArray(api.req_headers) ? api.req_headers : [];
+      const reqBodyType = api.req_body_type ? String(api.req_body_type) : '';
+      const reqBodyForm = Array.isArray(api.req_body_form) ? api.req_body_form : [];
+      const reqBodyOther = api.req_body_other ? String(api.req_body_other) : '';
+
+      const responseBody = api.res_body ? String(api.res_body) : '';
+      const responseType = api.res_body_type ? String(api.res_body_type) : '';
+      const markdownDoc = api.markdown ? String(api.markdown).trim() : '';
+
+      const hasRequest =
+        reqParams.length ||
+        reqQuery.length ||
+        reqHeaders.length ||
+        reqBodyForm.length ||
+        reqBodyOther ||
+        reqBodyType;
+
+      if (hasRequest) {
+        lines.push('');
+        lines.push('## 请求');
+
+        if (reqParams.length) {
+          const rows = reqParams.map((p) => ({
+            name: p.name || p.key || '',
+            required: isTruthyRequired(p.required) ? '是' : '',
+            desc: p.desc || p.description || ''
+          }));
+          lines.push('');
+          lines.push('### Path 参数');
+          lines.push(
+            rowsToMarkdownTable(rows, [
+              { key: 'name', label: 'name' },
+              { key: 'required', label: 'required' },
+              { key: 'desc', label: 'desc' }
+            ])
+          );
+        }
+
+        if (reqQuery.length) {
+          const rows = reqQuery.map((p) => ({
+            name: p.name || p.key || '',
+            required: isTruthyRequired(p.required) ? '是' : '',
+            desc: p.desc || p.description || ''
+          }));
+          lines.push('');
+          lines.push('### Query 参数');
+          lines.push(
+            rowsToMarkdownTable(rows, [
+              { key: 'name', label: 'name' },
+              { key: 'required', label: 'required' },
+              { key: 'desc', label: 'desc' }
+            ])
+          );
+        }
+
+        if (reqHeaders.length) {
+          const rows = reqHeaders.map((h) => ({
+            name: h.name || h.key || '',
+            required: isTruthyRequired(h.required) ? '是' : '',
+            desc: h.desc || h.description || ''
+          }));
+          lines.push('');
+          lines.push('### Headers');
+          lines.push(
+            rowsToMarkdownTable(rows, [
+              { key: 'name', label: 'name' },
+              { key: 'required', label: 'required' },
+              { key: 'desc', label: 'desc' }
+            ])
+          );
+        }
+
+        if (reqBodyType || reqBodyForm.length || reqBodyOther) {
+          lines.push('');
+          lines.push('### Body');
+          if (reqBodyType) lines.push(`- Type: \`${reqBodyType}\``);
+
+          if (reqBodyForm.length) {
+            const rows = reqBodyForm.map((f) => ({
+              name: f.name || f.key || '',
+              required: isTruthyRequired(f.required) ? '是' : '',
+              type: f.type || '',
+              desc: f.desc || f.description || ''
+            }));
+            lines.push('');
+            lines.push(
+              rowsToMarkdownTable(rows, [
+                { key: 'name', label: 'name' },
+                { key: 'required', label: 'required' },
+                { key: 'type', label: 'type' },
+                { key: 'desc', label: 'desc' }
+              ])
+            );
+          }
+
+          if (reqBodyOther) {
+            const parsed = parseJsonMaybe(reqBodyOther);
+            if (parsed) {
+              const rows = isJsonSchemaLike(parsed)
+                ? schemaToFieldRows(parsed, '')
+                : jsonValueToRows(parsed, '');
+              if (rows.length) {
+                lines.push('');
+                lines.push('#### Body 字段');
+                lines.push(
+                  rowsToMarkdownTable(rows, [
+                    { key: 'name', label: 'field' },
+                    { key: 'type', label: 'type' },
+                    { key: 'required', label: 'required' },
+                    { key: 'desc', label: 'desc' }
+                  ])
+                );
+              }
+            } else {
+              lines.push('');
+              lines.push('#### Body（原始）');
+              lines.push(reqBodyOther);
+            }
+          }
+        }
+      }
+
+      if (responseType || responseBody) {
+        lines.push('');
+        lines.push('## 响应');
+        if (responseType) lines.push(`- Type: \`${responseType}\``);
+        if (responseBody) {
+          const parsed = parseJsonMaybe(responseBody);
+          if (parsed) {
+            const rows = isJsonSchemaLike(parsed)
+              ? schemaToFieldRows(parsed, '')
+              : jsonValueToRows(parsed, '');
+            if (rows.length) {
+              lines.push('');
+              lines.push('### 响应字段');
+              lines.push(
+                rowsToMarkdownTable(rows, [
+                  { key: 'name', label: 'field' },
+                  { key: 'type', label: 'type' },
+                  { key: 'required', label: 'required' },
+                  { key: 'desc', label: 'desc' }
+                ])
+              );
+            }
+          } else {
+            lines.push('');
+            lines.push('### 响应（原始）');
+            lines.push(responseBody);
+          }
+        }
+      }
+
+      if (markdownDoc) {
+        lines.push('');
+        lines.push('## 备注');
+        lines.push(markdownDoc);
+      }
+
+      return lines.join('\n').trim() + '\n';
+    };
+
+    const fetchInterfaceDetail = async (origin, apiId) => {
+      const url = `${origin}/api/interface/get?id=${encodeURIComponent(String(apiId || ''))}`;
+      const payload = await fetchJson(url);
+      if (payload && payload.errcode === 0 && payload.data) {
+        return payload.data;
+      }
+      return null;
+    };
+
+    const ensureModal = () => {
+      let modal = document.getElementById(MODAL_ID);
+      if (modal) return modal;
+
+      modal = document.createElement('div');
+      modal.id = MODAL_ID;
+      modal.innerHTML = `
+	        <div class="crm-mask"></div>
+	        <div class="crm-panel" role="dialog" aria-modal="true">
+	          <div class="crm-header">
+	            <div class="crm-title">MCP 配置</div>
+	            <button class="crm-close" aria-label="Close">×</button>
+	          </div>
+	          <div class="crm-body">
+	            <div class="crm-section">
+	              <h3>MCP 配置</h3>
+	              <div class="crm-hint">已按当前项目自动拼好（Cursor / Codex / Gemini CLI / Claude Code）。</div>
+	              <div id="crm-mcp-content" style="margin-top: 10px;"></div>
+	            </div>
+	          </div>
+	        </div>
+	      `;
+      document.body.appendChild(modal);
+
+      const close = () => {
+        modal.style.display = 'none';
+      };
+      modal.querySelector('.crm-mask').addEventListener('click', close);
+      modal.querySelector('.crm-close').addEventListener('click', close);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display !== 'none') close();
+      });
+
+      return modal;
+    };
+
+    const renderCodeBlock = (label, text) => {
+      const container = document.createElement('div');
+      container.className = 'crm-section';
+      container.innerHTML = `
+        <div class="crm-row" style="justify-content: space-between;">
+          <div style="font-size: 12px; font-weight: 600; color: #111;">${label}</div>
+        </div>
+        <div class="crm-code">
+          <button class="crm-copy">复制</button>
+          <pre><code></code></pre>
+        </div>
+      `;
+      container.querySelector('code').textContent = text;
+      container.querySelector('.crm-copy').addEventListener('click', async () => {
+        await safeWriteClipboard(text);
+      });
+      return container;
+    };
+
+    const openModal = async () => {
+      const route = parseYapiInterfaceRoute();
+      if (!route) return;
+
+      ensureStyle();
+      const modal = ensureModal();
+      modal.style.display = 'block';
+
+      const mcpContainer = modal.querySelector('#crm-mcp-content');
+      mcpContainer.textContent = '生成中...';
+
+      const origin = location.origin;
+
+      try {
+        const [token, projectName] = await Promise.all([
+          resolveProjectToken(origin, route.projectId),
+          resolveProjectName(origin, route.projectId)
+        ]);
+        const blocks = buildMcpConfigBlocks({
+          origin,
+          projectId: route.projectId,
+          projectName,
+          token
+        });
+
+        mcpContainer.textContent = '';
+        mcpContainer.style.display = 'block';
+        mcpContainer.appendChild(
+          renderCodeBlock(`Cursor（mcpServers: ${blocks.serverName}）`, blocks.cursor)
+        );
+        mcpContainer.appendChild(
+          renderCodeBlock(`Codex（mcp_servers: ${blocks.serverName}）`, blocks.codex)
+        );
+        mcpContainer.appendChild(
+          renderCodeBlock(`Gemini CLI（mcpServers: ${blocks.serverName}）`, blocks.gemini)
+        );
+        mcpContainer.appendChild(
+          renderCodeBlock(`Claude Code（命令行: ${blocks.serverName}）`, blocks.claudeCode + '\n')
+        );
+        mcpContainer.appendChild(
+          renderCodeBlock(`Gemini CLI（命令行: ${blocks.serverName}）`, blocks.geminiCli + '\n')
+        );
+        mcpContainer.appendChild(renderCodeBlock('通用（直接运行）', blocks.rawCommand + '\n'));
+      } catch (e) {
+        mcpContainer.textContent =
+          'MCP 配置生成失败：' + (e && e.message ? e.message : String(e || ''));
+      }
+    };
+
+    const copyMarkdownDirectly = async (btn) => {
+      const route = parseYapiInterfaceRoute();
+      if (!route) return;
+      btn.disabled = true;
+      const origin = location.origin;
+
+      try {
+        const api = await fetchInterfaceDetail(origin, route.apiId);
+        const md = api ? interfaceToMarkdown(api) : '';
+        if (!md) throw new Error('未能获取接口详情');
+        await safeWriteClipboard(md);
+      } catch (e) {
+        console.error('[Content-Script] 复制接口 Markdown 失败:', e);
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    const mountButtons = () => {
+      const route = parseYapiInterfaceRoute();
+      if (!route) return;
+
+      const titleElList = Array.from(document.querySelectorAll('h2.interface-title'));
+      const titleEl = titleElList.find((el) => (el.textContent || '').trim().includes('基本信息'));
+      if (!titleEl) return;
+
+      if (document.getElementById(BTN_GROUP_ID)) return;
+
+      ensureStyle();
+
+      // 尽量不破坏原样式：把 h2 变成 flex 并把按钮推到最右侧
+      titleEl.style.display = 'flex';
+      titleEl.style.alignItems = 'center';
+      titleEl.style.gap = '8px';
+
+      const group = document.createElement('span');
+      group.id = BTN_GROUP_ID;
+
+      const mcpBtn = document.createElement('button');
+      mcpBtn.className = 'crm-btn';
+      mcpBtn.type = 'button';
+      mcpBtn.textContent = 'MCP 配置';
+      mcpBtn.addEventListener('click', openModal);
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'crm-btn crm-primary';
+      copyBtn.type = 'button';
+      copyBtn.textContent = '复制当前页面给 AI';
+      copyBtn.addEventListener('click', () => copyMarkdownDirectly(copyBtn));
+
+      group.appendChild(mcpBtn);
+      group.appendChild(copyBtn);
+      titleEl.appendChild(group);
+    };
+
+    const tick = () => {
+      if (location.href !== lastHref) {
+        lastHref = location.href;
+        const old = document.getElementById(BTN_GROUP_ID);
+        if (old) old.remove();
+      }
+      mountButtons();
+    };
+
+    tick();
+    setInterval(tick, 800);
+
+    const observer = new MutationObserver(() => tick());
+    observer.observe(document.documentElement, { childList: true, subtree: true });
   },
 
   // 注入页面脚本
@@ -113,6 +954,7 @@ const CrossRequest = {
       'src/helpers/query-string.js',
       'src/helpers/body-parser.js',
       'src/helpers/form-data.js',
+      'src/helpers/yapi-openapi.js',
       'src/helpers/logger.js',
       'src/helpers/response-handler.js' // 必须在 body-parser.js 之后（有依赖）
     ];

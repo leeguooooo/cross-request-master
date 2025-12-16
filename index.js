@@ -1199,6 +1199,28 @@
   win.crossRequest.fetch = CrossRequestAPI.request.bind(CrossRequestAPI);
   win.crossRequest.ajax = createAjaxMethod();
 
+  // 暴露 YApi OpenAPI（Yapi-MCP tool 同名）客户端
+  // 仅依赖 window.crossRequest.fetch，因此不会影响现有功能
+  try {
+    const createYapiOpenApiClient =
+      helpers.createYapiOpenApiClient ||
+      function () {
+        throw new Error('createYapiOpenApiClient helper 未加载');
+      };
+
+    if (!win.crossRequest.yapiMcp) {
+      const client = createYapiOpenApiClient(win.crossRequest.fetch, {
+        baseUrl: win.location && win.location.origin ? win.location.origin : '',
+        token: ''
+      });
+      win.crossRequest.yapiMcp = client;
+      // 兼容更直观的命名
+      win.crossRequest.yapi = client;
+    }
+  } catch (e) {
+    debugLog('[Cross-Request] YApi OpenAPI 客户端初始化失败:', e && e.message ? e.message : e);
+  }
+
   console.log('[Cross-Request] API 已暴露到 window.crossRequest');
 
   // 如果存在 jQuery，扩展它

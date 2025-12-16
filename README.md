@@ -36,6 +36,25 @@ cd cross-request-master
 
 安装后直接在 YApi 页面发送请求即可，扩展会自动处理跨域、显示 cURL，并把 JSON 响应解析为对象供脚本使用。
 
+在接口详情页（基本信息区域右上角）额外提供：
+- **MCP 配置**：自动拼好 Cursor / Codex / Gemini CLI / Claude Code 的配置并可一键复制
+- **复制给 AI**：把当前接口信息整理成 Markdown（仅接口相关字段）复制到剪贴板
+
+### YApi OpenAPI（Yapi-MCP tool 同名方法）
+
+扩展在页面侧额外暴露 `window.crossRequest.yapiMcp`（也可用 `window.crossRequest.yapi`），把 YApi OpenAPI 封装成与 Yapi-MCP 一致的 5 个方法，方便直接在浏览器控制台/脚本里操作接口文档：
+
+```js
+// 先配置（支持多项目：'28:token1,29:token2'）
+window.crossRequest.yapiMcp.configure({
+  baseUrl: 'https://your-yapi-domain.com',
+  token: '28:your_project_token'
+});
+
+// 查接口、拉分类、搜索、保存
+const api = await window.crossRequest.yapiMcp.yapi_get_api_desc({ projectId: '28', apiId: '66' });
+```
+
 ### 在任意网页中手动调用
 
 ```js
@@ -154,6 +173,8 @@ pnpm format
 
 - Issues: https://github.com/leeguooooo/cross-request-master/issues
 - YApi: https://github.com/YMFE/yapi
+- Yapi-MCP: https://github.com/lzsheng/Yapi-MCP
+- YApi OpenAPI 文档: https://hellosean1025.github.io/yapi/openapi.html
 - Chrome Extension Docs: https://developer.chrome.com/docs/extensions/
 
 ## 更多文档
