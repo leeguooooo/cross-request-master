@@ -1258,7 +1258,7 @@
     debugLog('[Cross-Request] YApi OpenAPI 客户端初始化失败:', e && e.message ? e.message : e);
   }
 
-  console.log('[Cross-Request] API 已暴露到 window.crossRequest');
+  debugLog('[Cross-Request] API 已暴露到 window.crossRequest');
 
   // 如果存在 jQuery，扩展它
   if (win.$ && win.$.ajax) {
