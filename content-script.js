@@ -67,13 +67,12 @@ function isTargetWebsite() {
   return false;
 }
 
-console.log('[Content-Script] Content script 开始加载');
-
-// 早期检测，如果不是目标网站，输出日志后静默退出
-if (!isTargetWebsite()) {
-  console.log('[Content-Script] 非目标网站，插件保持静默');
-  // 不返回，但设置一个标记，让后续代码知道应该最小化运行
+// 早期检测：非目标网站进入静默模式（不输出日志，避免干扰页面调试）
+const __crossRequestIsTargetWebsite = isTargetWebsite();
+if (!__crossRequestIsTargetWebsite) {
   window.__crossRequestSilentMode = true;
+} else {
+  console.log('[Content-Script] Content script 开始加载');
 }
 
 // 创建扩展命名空间
@@ -93,7 +92,7 @@ const CrossRequest = {
     const isSilent = window.__crossRequestSilentMode;
 
     if (isSilent) {
-      console.log('[Content-Script] 静默模式：核心功能启用，UI 和日志关闭');
+      // 静默模式下尽量不输出日志，避免干扰页面调试
     } else {
       console.log('[Content-Script] 完整模式：所有功能启用');
     }
@@ -108,7 +107,9 @@ const CrossRequest = {
       this.initYapiAiAssist();
     }
 
-    console.log('[Content-Script] 扩展初始化完成');
+    if (!isSilent) {
+      console.log('[Content-Script] 扩展初始化完成');
+    }
   },
 
   // YApi 接口页：AI 辅助（MCP 配置 + Markdown 复制）
@@ -450,7 +451,6 @@ const CrossRequest = {
         serverName
       };
     };
-
     const buildGlobalMcpConfigBlocks = ({ origin, email }) => {
       const mcpPkg = '@leeguoo/yapi-mcp';
       const baseUrl = String(origin || '').replace(/\/$/, '');
@@ -1135,11 +1135,15 @@ const CrossRequest = {
         helperScript.src = chrome.runtime.getURL(helperPath);
         helperScript.async = false; // 确保按顺序执行
         helperScript.onload = function () {
-          console.log(`[Content-Script] Helper 加载成功: ${helperPath}`);
+          if (!window.__crossRequestSilentMode) {
+            console.log(`[Content-Script] Helper 加载成功: ${helperPath}`);
+          }
           loadNextHelper(); // 加载下一个
         };
         helperScript.onerror = function () {
-          console.error(`[Content-Script] Helper 加载失败: ${helperPath}`);
+          if (!window.__crossRequestSilentMode) {
+            console.error(`[Content-Script] Helper 加载失败: ${helperPath}`);
+          }
           // 即使失败也继续，让 index.js 的 fallback 处理
           loadNextHelper();
         };
@@ -1150,11 +1154,15 @@ const CrossRequest = {
         script.src = chrome.runtime.getURL('index.js');
         script.async = false; // 确保在 helpers 之后执行
         script.onload = function () {
-          console.log('[Content-Script] 页面脚本加载成功');
+          if (!window.__crossRequestSilentMode) {
+            console.log('[Content-Script] 页面脚本加载成功');
+          }
           this.remove();
         };
         script.onerror = function () {
-          console.error('[Content-Script] 页面脚本加载失败');
+          if (!window.__crossRequestSilentMode) {
+            console.error('[Content-Script] 页面脚本加载失败');
+          }
         };
         (document.head || document.documentElement).appendChild(script);
       }
@@ -1167,7 +1175,9 @@ const CrossRequest = {
   observeDOM() {
     // 检查 body 是否存在
     if (!document.body) {
-      console.warn('[Content-Script] document.body 不存在，延迟初始化');
+      if (!window.__crossRequestSilentMode) {
+        console.warn('[Content-Script] document.body 不存在，延迟初始化');
+      }
       setTimeout(() => this.observeDOM(), 100);
       return;
     }
@@ -1202,11 +1212,13 @@ const CrossRequest = {
       const requestData = this.parseRequestData(node);
       if (!requestData) return;
 
-      console.log('[Content-Script] 处理请求:', {
-        id: requestData.id,
-        url: requestData.url,
-        method: requestData.method
-      });
+      if (!window.__crossRequestSilentMode) {
+        console.log('[Content-Script] 处理请求:', {
+          id: requestData.id,
+          url: requestData.url,
+          method: requestData.method
+        });
+      }
 
       node.setAttribute('data-status', 'processing');
       const response = await this.sendRequest(requestData);
@@ -1271,7 +1283,9 @@ const CrossRequest = {
                 errorMessage.includes('back/forward cache') ||
                 errorMessage.includes('message channel is closed')
               ) {
-                console.warn('[Content-Script] 页面缓存，请求取消');
+                if (!window.__crossRequestSilentMode) {
+                  console.warn('[Content-Script] 页面缓存，请求取消');
+                }
                 reject(new Error('请求取消：页面缓存'));
               } else {
                 reject(new Error(errorMessage));
@@ -1283,7 +1297,9 @@ const CrossRequest = {
               console.error('[Content-Script] 未收到响应');
               reject(new Error('未收到响应'));
             } else if (response.success) {
-              console.log('[Content-Script] 请求成功:', response.data?.status);
+              if (!window.__crossRequestSilentMode) {
+                console.log('[Content-Script] 请求成功:', response.data?.status);
+              }
               resolve(response.data);
             } else {
               console.error('[Content-Script] 请求失败:', response.error);
@@ -1299,7 +1315,9 @@ const CrossRequest = {
 
   // 处理响应
   handleResponse(node, response, requestData) {
-    console.log('[Content-Script] 发送响应事件');
+    if (!window.__crossRequestSilentMode) {
+      console.log('[Content-Script] 发送响应事件');
+    }
 
     const responsePayload = {
       status: response.status || 0,
@@ -1326,7 +1344,9 @@ const CrossRequest = {
     });
 
     document.dispatchEvent(responseEvent);
-    console.log('[Content-Script] 响应事件已触发');
+    if (!window.__crossRequestSilentMode) {
+      console.log('[Content-Script] 响应事件已触发');
+    }
     node.remove();
   },
 
@@ -1421,21 +1441,31 @@ const CrossRequest = {
 // 监听来自 background 的调试消息
 chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
   if (message.type === 'debug_log') {
-    console.log(`[${message.source}] ${message.message}:`, message.data);
+    if (!window.__crossRequestSilentMode) {
+      console.log(`[${message.source}] ${message.message}:`, message.data);
+    }
   }
 });
 
 // 启动扩展
-console.log('[Content-Script] 当前页面:', window.location.href);
+if (!window.__crossRequestSilentMode) {
+  console.log('[Content-Script] 当前页面:', window.location.href);
+}
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    console.log('[Content-Script] DOM加载完成，初始化');
+    if (!window.__crossRequestSilentMode) {
+      console.log('[Content-Script] DOM加载完成，初始化');
+    }
     CrossRequest.init();
   });
 } else {
-  console.log('[Content-Script] DOM已就绪，立即初始化');
+  if (!window.__crossRequestSilentMode) {
+    console.log('[Content-Script] DOM已就绪，立即初始化');
+  }
   CrossRequest.init();
 }
 
-console.log('[Content-Script] Content script 加载完成');
+if (!window.__crossRequestSilentMode) {
+  console.log('[Content-Script] Content script 加载完成');
+}
