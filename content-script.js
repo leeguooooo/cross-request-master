@@ -381,7 +381,7 @@ const CrossRequest = {
     };
 
     const buildMcpConfigBlocks = ({ origin, projectId, projectName, token }) => {
-      const mcpPkg = '@leeguooooo/yapi-auto-mcp';
+      const mcpPkg = '@leeguoo/yapi-auto-mcp';
       const baseUrl = String(origin || '').replace(/\/$/, '');
       const yapiToken = `${projectId}:${token}`;
       const normalizedProjectName = String(projectName || '')
@@ -452,7 +452,7 @@ const CrossRequest = {
     };
 
     const buildGlobalMcpConfigBlocks = ({ origin, email }) => {
-      const mcpPkg = '@leeguooooo/yapi-auto-mcp';
+      const mcpPkg = '@leeguoo/yapi-auto-mcp';
       const baseUrl = String(origin || '').replace(/\/$/, '');
       const host = String(location.hostname || 'yapi').replace(/[^a-zA-Z0-9._-]/g, '');
       const serverName = `yapi-global-${host.replace(/\./g, '-')}-mcp`;
