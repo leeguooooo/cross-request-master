@@ -6,7 +6,9 @@
 
 专为 YApi/接口管理平台定制的 Chrome 扩展：绕过 CORS 发请求、自动生成 cURL，并兼容 YApi 的 request/response 脚本与 jQuery ajax。
 
-![cURL 生成效果](./images/curl-generation-demo-new.png)
+<img width="2950" height="1048" alt="CleanShot 2025-12-17 at 18 37 24@2x" src="https://github.com/user-attachments/assets/5103c830-767c-45fa-9bbb-46fbda752fa1" />
+<img width="2966" height="1882" alt="CleanShot 2025-12-17 at 18 39 44@2x" src="https://github.com/user-attachments/assets/46906250-4a02-4136-b081-3b44d4ce3b44" />
+
 
 ## 功能特性
 
