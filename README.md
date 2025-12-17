@@ -37,8 +37,9 @@ cd cross-request-master
 安装后直接在 YApi 页面发送请求即可，扩展会自动处理跨域、显示 cURL，并把 JSON 响应解析为对象供脚本使用。
 
 在接口详情页（基本信息区域右上角）额外提供：
-- **MCP 配置**：自动拼好 Cursor / Codex / Gemini CLI / Claude Code 的配置并可一键复制
-- **复制给 AI**：把当前接口信息整理成 Markdown（仅接口相关字段）复制到剪贴板
+- **所有项目 MCP 配置**：全局模式（账号密码登录），只需配置一次，后续可自动缓存所有项目 token（生成配置默认使用 `@leeguoo/yapi-mcp`）
+- **当前项目 MCP 配置**：项目 token 模式（自动拼好 `projectId:token`），适合单项目/少量项目
+- **复制当前页面给 AI**：把当前接口信息整理成 Markdown（仅接口相关字段）复制到剪贴板
 
 ### YApi OpenAPI（Yapi-MCP tool 同名方法）
 
