@@ -4,19 +4,31 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Install-brightgreen.svg)](https://chrome.google.com/webstore/detail/efgjanhcajpiljllnehiinpmicghbgfm)
 
-专为 YApi/接口管理平台定制的 Chrome 扩展：绕过 CORS 发请求、自动生成 cURL，并兼容 YApi 的 request/response 脚本与 jQuery ajax。
+面向 API 开发/测试的 Chrome 扩展：绕过 CORS 发请求、自动生成 cURL，并对 YApi「运行」页做增强（内嵌 cURL、路径参数 `{param}` 引导填写）。
 
-<img width="2950" height="1048" alt="CleanShot 2025-12-17 at 18 37 24@2x" src="https://github.com/user-attachments/assets/5103c830-767c-45fa-9bbb-46fbda752fa1" />
-<img width="2966" height="1882" alt="CleanShot 2025-12-17 at 18 39 44@2x" src="https://github.com/user-attachments/assets/46906250-4a02-4136-b081-3b44d4ce3b44" />
+<p align="center">
+  <img
+    src="screenshots/store/store-2-yapi-run-curl-1280x800.jpg"
+    alt="YApi 运行页：内嵌 cURL + 路径参数填写"
+    width="960"
+  />
+</p>
+<p align="center">
+  <img
+    src="screenshots/store/store-3-popup-1280x800.jpg"
+    alt="扩展弹出窗口：状态与问题反馈入口"
+    width="520"
+  />
+</p>
 
 
 ## 功能特性
 
-- 跨域请求：在页面侧调用 `crossRequest` 由扩展后台代发
-- cURL 生成：自动展示可复制的 cURL 命令
-- 智能静默模式：非目标网站不弹窗、不刷日志，但仍可手动调用
-- jQuery 集成：按站点类型自动/按需拦截 `$.ajax`
-- 文件上传：支持 `multipart/form-data` / FormData（含 File/Blob）
+- 跨域请求（CORS bypass）：在页面侧调用 `crossRequest`，由扩展后台代发
+- 内嵌 cURL：YApi「运行」页 URL 下方展示可复制的 cURL 命令
+- 路径参数引导：URL 含 `{param}` 时提示填写，避免请求失败
+- AI/MCP 导出：一键生成 MCP 配置 / 复制接口信息给 AI
+- jQuery/Fetch 支持：兼容 `$.ajax` / `fetch` / 脚本能力
 - Manifest V3：兼容最新 Chrome 扩展标准
 
 ## 安装
@@ -36,7 +48,7 @@ cd cross-request-master
 
 ### 在 YApi 中
 
-安装后直接在 YApi 页面发送请求即可，扩展会自动处理跨域、显示 cURL，并把 JSON 响应解析为对象供脚本使用。
+安装后直接在 YApi「运行」页发送请求即可，扩展会自动处理跨域、显示 cURL，并把 JSON 响应解析为对象供脚本使用。
 
 在接口详情页（基本信息区域右上角）额外提供：
 - **所有项目 MCP 配置**：全局模式（账号密码登录），只需配置一次，后续可自动缓存所有项目 token（生成配置默认使用 `@leeguoo/yapi-mcp`）
@@ -121,7 +133,7 @@ await window.crossRequest({
 - **自定义 Header 被放到 `Access-Control-Request-Headers`**：这是浏览器 CORS 预检行为，需要服务端正确返回 `Access-Control-Allow-Headers`。
 - **Network 面板看不到请求**：请求由扩展后台发出，不会出现在页面 Network；可在扩展 Service Worker 的 Network/Console 查看。
 
-## 开发与测试
+## 开发与测试（本仓库）
 
 项目结构：
 ```
@@ -166,7 +178,7 @@ pnpm format
 
 ## 更新日志
 
-见 `CHANGELOG.md`，最新版本：v4.5.7。
+见 `CHANGELOG.md`。
 
 ## 许可证
 

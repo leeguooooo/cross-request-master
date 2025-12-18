@@ -3,7 +3,7 @@
 ## 已完成的准备工作
 
 ### 1. 扩展包打包脚本已准备
-- 按 `STORE_SUBMISSION_GUIDE.md` 或在仓库根目录执行 `./build-extension.sh` 生成 `cross-request-store.zip`
+- 按 `STORE_SUBMISSION_GUIDE.md` 或在仓库根目录执行 `./build-extension.sh` 生成 `cross-request-master-v*.zip`
 - 生成的压缩包需包含所有必需文件（manifest/background/content-script/index/popup/icons/src 等）
 
 ### 2. 隐私政策已准备
@@ -40,17 +40,31 @@
 
 ### 步骤 2：上传截图（已准备好）
 
-已准备 2 张符合要求的截图，位于 `screenshots/` 目录：
+已准备 3 张符合要求的截图，位于 `screenshots/store/` 目录：
 
-1. **screenshot-1-curl-generation.jpg** (1280x800, JPEG)
-   - 展示 cURL 命令生成功能
-   - 建议描述：自动生成 cURL 命令 - 在 YApi 中测试接口后，扩展会自动生成完整的 cURL 命令
+1. **store-1-yapi-interface-1280x800.jpg** (1280x800, JPEG)
+   - 展示 YApi 接口详情页（包含带 `{param}` 的接口路径示例）
+   - 建议描述：YApi 接口详情页 - 路径参数清晰展示，配合运行页可快速测试
 
-2. **screenshot-2-popup.jpg** (1280x800, JPEG)  
+2. **store-2-yapi-run-curl-1280x800.jpg** (1280x800, JPEG)
+   - 展示 YApi「运行」页内嵌 cURL 展示与路径参数填写
+   - 建议描述：YApi 运行增强 - 内嵌展示 cURL，路径参数缺失时引导填写
+
+3. **store-3-popup-1280x800.jpg** (1280x800, JPEG)
    - 展示扩展弹出窗口
-   - 建议描述：扩展弹出窗口 - 简洁的界面，显示扩展状态和快速操作选项
+   - 建议描述：扩展弹出窗口 - 显示扩展状态与问题反馈入口
 
-所有截图符合 Chrome Web Store 要求（1280x800, JPEG, 无 alpha 通道）
+所有截图符合 Chrome Web Store 要求（1280x800 或 640x400、JPEG、无 alpha 通道）
+
+### 步骤 2.1：上传宣传图块（已准备好）
+
+已准备 2 张符合要求的宣传图块，位于 `images/store/` 目录：
+
+1. **promo-small-440x280.jpg** (440x280, JPEG)
+   - 小型宣传图块
+
+2. **promo-top-1400x560.jpg** (1400x560, JPEG)
+   - 顶部宣传图块
 
 ### 步骤 3：注册开发者账号（如未注册）
 
@@ -68,7 +82,7 @@
 2. **点击"New Item"（新建项目）**
 
 3. **上传扩展包**
-   - 上传：你刚生成的 `cross-request-store.zip`
+   - 上传：你刚生成的 `cross-request-master-v*.zip`
    
 4. **填写商店列表信息**
 
@@ -80,23 +94,18 @@
 YApi 接口测试跨域助手 - 开发者工具，支持 CORS 绕过和 cURL 生成
 
 详细描述：
-Cross Request Master 是专为 API 开发者和测试人员设计的 Chrome 扩展。
+Cross Request Master 是面向 API 开发/测试的 Chrome 扩展：绕过 CORS 发请求、自动生成 cURL，并对 YApi「运行」页做增强。
 
 主要功能：
-• 跨域请求支持 - 在本地开发环境测试跨域 API
-• cURL 命令生成 - 自动生成完整的 cURL 命令便于分享
-• YApi 智能集成 - 自动识别并优化 YApi 平台体验
-• jQuery/Fetch 支持 - 兼容多种请求方式
-
-适用场景：
-- 本地开发环境测试跨域 API
-- API 接口调试和测试
-- 生成 cURL 命令用于文档和协作
-- YApi 平台的增强功能
+• 跨域请求支持（CORS bypass）- 由扩展后台代发请求
+• 内嵌 cURL 面板 - 在 YApi「运行」页 URL 下方展示并一键复制
+• 路径参数引导 - URL 含 `{param}` 时提示填写，避免请求失败
+• AI/MCP 导出 - 一键生成 MCP 配置/复制接口信息给 AI
+• jQuery/Fetch 兼容 - 支持多种请求方式与脚本能力
 
 重要提示：
 本扩展仅供开发测试使用，请勿在生产环境使用。
-扩展会修改网络请求以绕过 CORS 限制，使用时请注意安全。
+扩展不会上传你的请求数据，所有配置仅保存在本地浏览器。
 
 GitHub: https://github.com/leeguooooo/cross-request-master
 文档: https://github.com/leeguooooo/cross-request-master/blob/main/README.md

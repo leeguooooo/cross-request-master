@@ -9,7 +9,7 @@
 
 ### 2. manifest.json 审查
 - [x] 使用 Manifest V3
-- [x] 版本号正确（4.4.13）
+- [x] 版本号正确（4.5.10）
 - [ ] 考虑缩小权限范围（可选）
 - [x] 所有图标文件存在
 
@@ -18,9 +18,9 @@
 - [x] 32x32 图标
 - [x] 48x48 图标
 - [x] 128x128 图标
-- [ ] 商店展示图标 (440x280)
-- [ ] 截图 1-5 张 (1280x800 或 640x400)
-- [x] 宣传图片（已有 curl-generation-demo-new.png）
+- [x] 小型宣传图块 (440x280)（`images/store/promo-small-440x280.jpg`）
+- [x] 顶部宣传图块 (1400x560)（`images/store/promo-top-1400x560.jpg`）
+- [x] 截图 1-5 张 (1280x800 或 640x400)（见 `screenshots/store/`）
 
 ### 4. 商店列表信息
 
@@ -35,23 +35,18 @@
 
 #### 详细描述
 ```markdown
-Cross Request Master 是专为 API 开发者和测试人员设计的 Chrome 扩展。
+Cross Request Master 是面向 API 开发/测试的 Chrome 扩展：绕过 CORS 发请求、自动生成 cURL，并对 YApi「运行」页做增强。
 
 主要功能：
-• 跨域请求支持 - 在本地开发环境测试跨域 API
-• cURL 命令生成 - 自动生成完整的 cURL 命令便于分享
-• YApi 智能集成 - 自动识别并优化 YApi 平台体验
-• jQuery/Fetch 支持 - 兼容多种请求方式
-
-适用场景：
-- 本地开发环境测试跨域 API
-- API 接口调试和测试
-- 生成 cURL 命令用于文档和协作
-- YApi 平台的增强功能
+• 跨域请求支持（CORS bypass）- 由扩展后台代发请求
+• 内嵌 cURL 面板 - 在 YApi「运行」页 URL 下方展示并一键复制
+• 路径参数引导 - URL 含 `{param}` 时提示填写，避免请求失败
+• AI/MCP 导出 - 一键生成 MCP 配置/复制接口信息给 AI
+• jQuery/Fetch 兼容 - 支持多种请求方式与脚本能力
 
 重要提示：
 本扩展仅供开发测试使用，请勿在生产环境使用。
-扩展会修改网络请求以绕过 CORS 限制，使用时请注意安全。
+扩展不会上传你的请求数据，所有配置仅保存在本地浏览器。
 
 开源项目：
 https://github.com/leeguooooo/cross-request-master

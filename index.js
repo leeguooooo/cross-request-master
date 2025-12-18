@@ -53,6 +53,92 @@
   // 提供内联 fallback 确保扩展不会因为 helper 加载失败而崩溃
   const helpers = win.CrossRequestHelpers || {};
 
+  const resolveYapiUrlTemplate = (inputUrl) => {
+    if (!isYapiContext()) return inputUrl;
+    if (typeof inputUrl !== 'string') return inputUrl;
+    if (!inputUrl.includes('{')) return inputUrl;
+    if (!win.document) return inputUrl;
+
+    // 仅在接口测试（运行）面板存在时处理，避免影响 YApi 本身的内部请求
+    const postmanRoot = win.document.querySelector('.interface-test.postman');
+    if (!postmanRoot) return inputUrl;
+
+    const extract =
+      helpers.extractUrlPlaceholders ||
+      function (url) {
+        const re = /\{([^}]+)\}/g;
+        const seen = new Set();
+        const out = [];
+        let m;
+        while ((m = re.exec(url))) {
+          const name = String(m[1] || '').trim();
+          if (!name || seen.has(name)) continue;
+          seen.add(name);
+          out.push(name);
+        }
+        return out;
+      };
+
+    const names = extract(inputUrl);
+    if (!names.length) return inputUrl;
+
+    const values = {};
+
+    const findValueInput = (keyInput) => {
+      if (!keyInput) return null;
+      const row =
+        keyInput.closest('.ant-row') ||
+        keyInput.closest('.key-value-wrap') ||
+        keyInput.parentElement ||
+        postmanRoot;
+
+      const rowInputs = Array.from((row || postmanRoot).querySelectorAll('input'));
+      const idx = rowInputs.indexOf(keyInput);
+      const isCandidate = (el) => {
+        if (!el || el === keyInput) return false;
+        if (el.disabled) return false;
+        if (el.type === 'hidden') return false;
+        if (el.classList && el.classList.contains('ant-input-disabled')) return false;
+        return true;
+      };
+
+      if (idx >= 0) {
+        const after = rowInputs.slice(idx + 1).filter(isCandidate);
+        if (after.length) return after[0];
+      }
+
+      const any = rowInputs.filter(isCandidate);
+      return any.length ? any[0] : null;
+    };
+
+    const keyInputs = Array.from(postmanRoot.querySelectorAll('input[disabled]'));
+
+    names.forEach((name) => {
+      const keyInput = keyInputs.find((el) => (el.value || '').trim() === name);
+      if (!keyInput) return;
+      const valueInput = findValueInput(keyInput);
+      const value = valueInput && valueInput.value != null ? String(valueInput.value).trim() : '';
+      if (value) values[name] = value;
+    });
+
+    if (!Object.keys(values).length) return inputUrl;
+
+    const apply =
+      helpers.applyUrlPlaceholders ||
+      function (url, map) {
+        return url.replace(/\{([^}]+)\}/g, (match, rawName) => {
+          const name = String(rawName || '').trim();
+          if (!name) return match;
+          if (!Object.prototype.hasOwnProperty.call(map, name)) return match;
+          const v = map[name];
+          if (v === undefined || v === null) return match;
+          return String(v);
+        });
+      };
+
+    return apply(inputUrl, values);
+  };
+
   // Fallback: bodyToString
   if (!helpers.bodyToString) {
     console.warn('[Index] bodyToString helper 未加载，使用内联 fallback');
@@ -165,6 +251,9 @@
       const data = options.data || options.body;
       let url = options.url;
       let body = data;
+
+      // YApi 运行面板：将 /path/{param} 用当前输入值替换，避免请求失败/生成错误 cURL
+      url = resolveYapiUrlTemplate(url);
 
       // 对于 GET/HEAD 请求，将参数转换为查询字符串附加到 URL
       if ((method === 'GET' || method === 'HEAD') && data) {
@@ -379,7 +468,7 @@
 
       // 准备请求数据
       const requestData = {
-        url: options.url,
+        url: resolveYapiUrlTemplate(options.url),
         method: options.method || options.type || 'GET',
         headers: options.headers || {},
         data: options.data || options.body,
@@ -858,20 +947,74 @@
 
   // 自动隐藏定时器
   let curlHideTimer = null;
+  const CURL_INLINE_HOST_ID = 'cross-request-curl-inline-host';
 
   // 创建页面内的 cURL 显示框
   function createCurlDisplay() {
     // 检查是否已经存在
     const existingDisplay = document.getElementById('cross-request-curl-display');
     if (existingDisplay) {
-      // 重新绑定事件监听器，防止事件丢失
-      bindCurlDisplayEvents();
-      return existingDisplay;
+      // 如果节点被页面重绘移除，重新创建
+      if (!existingDisplay.isConnected) {
+        try {
+          existingDisplay.remove();
+        } catch (e) {
+          // ignore
+        }
+      } else {
+        // 重新绑定事件监听器，防止事件丢失
+        bindCurlDisplayEvents();
+        return existingDisplay;
+      }
     }
+
+    const resolveMount = () => {
+      try {
+        // YApi 的接口测试（运行）页：插入到 URL 行下方，避免遮挡页面内容
+        if (isYapiContext()) {
+          const postmanRoot = document.querySelector('.interface-test.postman');
+          const urlBar = postmanRoot && postmanRoot.querySelector('.url');
+          if (postmanRoot && urlBar) {
+            let host = document.getElementById(CURL_INLINE_HOST_ID);
+            if (!host) {
+              host = document.createElement('div');
+              host.id = CURL_INLINE_HOST_ID;
+              urlBar.insertAdjacentElement('afterend', host);
+            }
+            return { mode: 'inline', mountNode: host };
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      return { mode: 'overlay', mountNode: document.body };
+    };
+
+    const mount = resolveMount();
 
     const curlDisplay = document.createElement('div');
     curlDisplay.id = 'cross-request-curl-display';
-    curlDisplay.style.cssText = `
+    curlDisplay.setAttribute('data-mode', mount.mode);
+    curlDisplay.style.cssText =
+      mount.mode === 'inline'
+        ? `
+            position: relative;
+            width: 100%;
+            max-width: none;
+            margin: 10px 0 12px;
+            background: #2d3748;
+            color: #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            display: none;
+            overflow: hidden;
+            opacity: 1;
+            transition: opacity 0.2s ease-out;
+          `
+        : `
             position: fixed;
             top: 20px;
             right: 20px;
@@ -888,24 +1031,24 @@
             overflow: hidden;
             opacity: 1;
             transition: opacity 0.3s ease-out;
-        `;
+          `;
 
     curlDisplay.innerHTML = `
             <div style="padding: 12px; background: #4a5568; border-bottom: 1px solid #718096; display: flex; justify-content: space-between; align-items: center;">
                 <span style="font-weight: bold; color: #68d391;">cURL 命令</span>
                 <div>
                     <button id="curl-copy-btn" style="background: #48bb78; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-right: 4px; font-size: 11px;">复制</button>
-                    <button id="curl-disable-btn" style="background: #e53e3e; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-right: 4px; font-size: 11px;">永久关闭</button>
+                    <button id="curl-feedback-btn" style="background: #3182ce; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-right: 4px; font-size: 11px;">反馈</button>
                     <button id="curl-close-btn" style="background: #f56565; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">×</button>
                 </div>
             </div>
             <pre id="curl-command-text" style="margin: 0; padding: 12px; white-space: pre-wrap; word-break: break-all; overflow-y: auto; max-height: 200px; line-height: 1.4;"></pre>
         `;
 
-    if (document.body) {
-      document.body.appendChild(curlDisplay);
+    if (mount.mountNode) {
+      mount.mountNode.appendChild(curlDisplay);
     } else {
-      console.warn('[Index] document.body 不存在，无法显示 cURL');
+      console.warn('[Index] mountNode 不存在，无法显示 cURL');
       return null;
     }
 
@@ -919,9 +1062,9 @@
   function bindCurlDisplayEvents() {
     const copyBtn = document.getElementById('curl-copy-btn');
     const closeBtn = document.getElementById('curl-close-btn');
-    const disableBtn = document.getElementById('curl-disable-btn');
+    const feedbackBtn = document.getElementById('curl-feedback-btn');
 
-    if (!copyBtn || !closeBtn || !disableBtn) {
+    if (!copyBtn || !closeBtn || !feedbackBtn) {
       console.warn('[Index] cURL 显示框按钮元素未找到');
       return;
     }
@@ -929,7 +1072,7 @@
     // 清除旧的事件监听器（如果存在）
     copyBtn.onclick = null;
     closeBtn.onclick = null;
-    disableBtn.onclick = null;
+    feedbackBtn.onclick = null;
 
     // 重新绑定事件
     copyBtn.addEventListener('click', async () => {
@@ -956,14 +1099,17 @@
       hideCurlDisplay();
     });
 
-    disableBtn.addEventListener('click', () => {
-      debugLog('[Index] 永久关闭按钮被点击');
-      // 通过 DOM 事件发送消息给 content script
-      const event = new CustomEvent('curl-disable-request', {
-        detail: { disabled: true }
-      });
-      document.dispatchEvent(event);
-      hideCurlDisplay();
+    feedbackBtn.addEventListener('click', () => {
+      const url = 'https://github.com/leeguooooo/cross-request-master/issues';
+      try {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } catch (e) {
+        try {
+          location.href = url;
+        } catch (e2) {
+          // ignore
+        }
+      }
     });
 
     debugLog('[Index] cURL 显示框事件已重新绑定');
@@ -995,6 +1141,14 @@
       clearTimeout(curlHideTimer);
     }
 
+    const curlDisplay = document.getElementById('cross-request-curl-display');
+    const mode = curlDisplay ? curlDisplay.getAttribute('data-mode') : 'overlay';
+    // 内嵌到页面中就不自动隐藏，避免用户找不到刚才生成的 cURL
+    if (mode === 'inline') {
+      curlHideTimer = null;
+      return;
+    }
+
     // 设置新的3秒定时器
     curlHideTimer = setTimeout(() => {
       hideCurlDisplay();
@@ -1004,13 +1158,8 @@
 
   // 显示 cURL 命令
   function showCurlCommand(requestData) {
-    // 检查是否已被永久关闭
-    debugLog('[Index] 准备检查 cURL 禁用状态');
-    const event = new CustomEvent('curl-check-disabled', {
-      detail: { requestData: requestData }
-    });
-    document.dispatchEvent(event);
-    debugLog('[Index] curl-check-disabled 事件已发送');
+    // 直接显示（不再支持“永久关闭”）
+    displayCurlCommand(requestData);
   }
 
   // 显示 cURL 弹窗（由 content script 调用）
@@ -1075,7 +1224,7 @@
 
       // 准备请求数据
       const requestData = {
-        url: options.url,
+        url: resolveYapiUrlTemplate(options.url),
         method: options.type || options.method || 'GET',
         headers: options.headers || {},
         data: options.data,

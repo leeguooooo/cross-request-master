@@ -103,7 +103,6 @@ const CrossRequest = {
 
     // 只有完整模式才启用 cURL 事件监听
     if (!isSilent) {
-      this.initCurlEventListeners();
       this.initYapiAiAssist();
     }
 
@@ -117,6 +116,8 @@ const CrossRequest = {
     const STYLE_ID = 'crm-yapi-ai-style';
     const MODAL_ID = 'crm-yapi-ai-modal';
     const BTN_GROUP_ID = 'crm-yapi-ai-btn-group';
+    const PATH_BTN_ID = 'crm-yapi-path-param-btn';
+    const PATH_MODAL_ID = 'crm-yapi-path-param-modal';
 
     const tokenCache = new Map();
     let lastHref = location.href;
@@ -148,6 +149,26 @@ const CrossRequest = {
         #${MODAL_ID} pre { margin: 0; padding: 10px 10px; background: #0b1020; color: #d6deeb; border-radius: 8px; overflow: auto; font-size: 12px; line-height: 1.5; }
         #${MODAL_ID} .crm-copy { position: absolute; top: 8px; right: 8px; height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; cursor: pointer; font-size: 12px; }
         #${MODAL_ID} .crm-copy:hover { background: rgba(255,255,255,.14); }
+
+        /* YApi Run：路径参数填充（仅做布局约束，避免按钮被压缩换行） */
+        #${PATH_BTN_ID} { flex: 0 0 auto; flex-shrink: 0; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; margin-left: 8px; height: 32px; line-height: 30px; }
+
+        #${PATH_MODAL_ID} { position: fixed; inset: 0; z-index: 2147483647; display: none; }
+        #${PATH_MODAL_ID} .crm-mask { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
+        #${PATH_MODAL_ID} .crm-panel { position: absolute; top: 18vh; left: 50%; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); max-height: 70vh; background: #fff; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.2); overflow: hidden; display: flex; flex-direction: column; }
+        #${PATH_MODAL_ID} .crm-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #eee; }
+        #${PATH_MODAL_ID} .crm-title { font-size: 14px; font-weight: 600; color: #111; }
+        #${PATH_MODAL_ID} .crm-close { border: none; background: transparent; cursor: pointer; font-size: 18px; line-height: 18px; padding: 4px 6px; color: #666; }
+        #${PATH_MODAL_ID} .crm-body { padding: 14px; overflow: auto; }
+        #${PATH_MODAL_ID} .crm-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+        #${PATH_MODAL_ID} .crm-label { font-size: 12px; color: #111; font-weight: 600; }
+        #${PATH_MODAL_ID} .crm-input { height: 30px; border-radius: 8px; border: 1px solid #d0d7de; padding: 0 10px; font-size: 12px; outline: none; }
+        #${PATH_MODAL_ID} .crm-input:focus { border-color: #1677ff; box-shadow: 0 0 0 2px rgba(22,119,255,.12); }
+        #${PATH_MODAL_ID} .crm-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
+        #${PATH_MODAL_ID} .crm-btn { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid #d0d7de; background: #fff; color: #24292f; font-size: 12px; cursor: pointer; }
+        #${PATH_MODAL_ID} .crm-btn:hover { background: #f6f8fa; }
+        #${PATH_MODAL_ID} .crm-btn.crm-primary { background: #1677ff; border-color: #1677ff; color: #fff; }
+        #${PATH_MODAL_ID} .crm-btn.crm-primary:hover { background: #0958d9; border-color: #0958d9; }
       `;
       (document.head || document.documentElement).appendChild(style);
     };
@@ -223,6 +244,340 @@ const CrossRequest = {
       if (/[\s"'<>]/.test(s)) return false;
       return /^[^@]+@[^@]+\.[^@]+$/.test(s);
     };
+
+    const setInputValue = (input, value) => {
+      if (!input) return;
+      const next = String(value == null ? '' : value);
+      try {
+        const proto = window.HTMLInputElement && window.HTMLInputElement.prototype;
+        const setter = proto && Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        if (setter) {
+          setter.call(input, next);
+        } else {
+          input.value = next;
+        }
+      } catch (e) {
+        input.value = next;
+      }
+
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const parseUrlPlaceholders = (url) => {
+      const helpers = window.CrossRequestHelpers || {};
+      if (helpers.extractUrlPlaceholders) return helpers.extractUrlPlaceholders(url);
+      if (typeof url !== 'string') return [];
+      const re = /\{([^}]+)\}/g;
+      const seen = new Set();
+      const list = [];
+      let m;
+      while ((m = re.exec(url))) {
+        const name = String(m[1] || '').trim();
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
+        list.push(name);
+      }
+      return list;
+    };
+
+    const findPathParamValueInput = (root, name) => {
+      if (!root || !name) return null;
+
+      const collapseItems = Array.from(root.querySelectorAll('.ant-collapse-item'));
+      const pathItem = collapseItems.find((el) => {
+        const header = el.querySelector('.ant-collapse-header');
+        const text = header ? (header.textContent || '').replace(/\s+/g, ' ').trim() : '';
+        return /PATH PARAMETERS/i.test(text) || /路径参数/.test(text);
+      });
+
+      const scope = pathItem
+        ? pathItem.querySelector('.ant-collapse-content-box') || pathItem
+        : root;
+      const disabledInputs = Array.from(scope.querySelectorAll('input[disabled]'));
+      const keyInput = disabledInputs.find((el) => (el.value || '').trim() === name);
+      if (!keyInput) return null;
+
+      const isValueCandidate = (el) => {
+        if (!el || el === keyInput) return false;
+        if (el.disabled) return false;
+        if (el.type === 'hidden') return false;
+        if (el.classList && el.classList.contains('ant-input-disabled')) return false;
+        return true;
+      };
+
+      const row =
+        keyInput.closest('.ant-row') ||
+        keyInput.closest('.key-value-wrap') ||
+        keyInput.parentElement ||
+        scope;
+
+      const rowInputs = Array.from((row || scope).querySelectorAll('input'));
+      const rowKeyIndex = rowInputs.indexOf(keyInput);
+      if (rowKeyIndex >= 0) {
+        const after = rowInputs.slice(rowKeyIndex + 1).filter(isValueCandidate);
+        if (after.length) return after[0];
+      }
+
+      const anyInRow = rowInputs.filter(isValueCandidate);
+      if (anyInRow.length) return anyInRow[0];
+
+      // 兜底：从 scope 中找 keyInput 之后的第一个可编辑 input
+      const allScopeInputs = Array.from(scope.querySelectorAll('input'));
+      const idx = allScopeInputs.indexOf(keyInput);
+      for (let i = idx + 1; i < allScopeInputs.length; i++) {
+        const el = allScopeInputs[i];
+        if (isValueCandidate(el)) return el;
+      }
+
+      return null;
+    };
+
+    const buildPathParamStorageKey = (paramName) => {
+      const route = parseYapiInterfaceRoute();
+      if (route) return `__crm_yapi_path_param_${route.projectId}_${route.apiId}_${paramName}`;
+      return `__crm_yapi_path_param_${location.hostname}_${paramName}`;
+    };
+
+    const ensurePathParamModal = () => {
+      if (document.getElementById(PATH_MODAL_ID)) return;
+
+      const modal = document.createElement('div');
+      modal.id = PATH_MODAL_ID;
+      modal.innerHTML = `
+        <div class="crm-mask"></div>
+        <div class="crm-panel" role="dialog" aria-modal="true">
+          <div class="crm-header">
+            <div class="crm-title">填写路径参数</div>
+            <button class="crm-close" type="button" aria-label="Close">×</button>
+          </div>
+          <div class="crm-body"></div>
+        </div>
+      `;
+
+      const close = () => {
+        modal.style.display = 'none';
+      };
+
+      modal.querySelector('.crm-mask')?.addEventListener('click', close);
+      modal.querySelector('.crm-close')?.addEventListener('click', close);
+
+      (document.body || document.documentElement).appendChild(modal);
+    };
+
+    const openPathParamModal = (root, urlInput) => {
+      ensureStyle();
+      ensurePathParamModal();
+
+      const modal = document.getElementById(PATH_MODAL_ID);
+      const body = modal.querySelector('.crm-body');
+      if (!body) return;
+
+      body.innerHTML = '';
+
+      const placeholders = parseUrlPlaceholders(urlInput && urlInput.value ? urlInput.value : '');
+      if (!placeholders.length) {
+        const p = document.createElement('div');
+        p.textContent = '未检测到 {param} 占位符';
+        body.appendChild(p);
+        modal.style.display = 'block';
+        return;
+      }
+
+      const form = document.createElement('div');
+      const inputMap = new Map();
+
+      placeholders.forEach((name) => {
+        const field = document.createElement('div');
+        field.className = 'crm-field';
+
+        const label = document.createElement('div');
+        label.className = 'crm-label';
+        label.textContent = name;
+
+        const input = document.createElement('input');
+        input.className = 'crm-input';
+        input.type = 'text';
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+        input.name = `crm_path_param_${name}`;
+        input.id = `crm_path_param_${name}`;
+
+        const linkedValueInput = findPathParamValueInput(root, name);
+        const existing =
+          linkedValueInput && linkedValueInput.value ? String(linkedValueInput.value) : '';
+        const cached = sessionStorage.getItem(buildPathParamStorageKey(name)) || '';
+        input.value = existing || cached;
+
+        field.appendChild(label);
+        field.appendChild(input);
+        form.appendChild(field);
+
+        inputMap.set(name, { modalInput: input, linkedValueInput });
+      });
+
+      const actions = document.createElement('div');
+      actions.className = 'crm-actions';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'crm-btn';
+      cancelBtn.textContent = '取消';
+      cancelBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+      });
+
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'crm-btn crm-primary';
+      okBtn.textContent = '填入并发送';
+      okBtn.addEventListener('click', () => {
+        const missing = [];
+        inputMap.forEach(({ modalInput }, name) => {
+          const v = (modalInput.value || '').trim();
+          if (!v) missing.push(name);
+        });
+
+        if (missing.length) {
+          alert('请填写路径参数：' + missing.join(', '));
+          const first = inputMap.get(missing[0]);
+          if (first && first.modalInput) first.modalInput.focus();
+          return;
+        }
+
+        inputMap.forEach(({ modalInput, linkedValueInput }, name) => {
+          const v = (modalInput.value || '').trim();
+          if (linkedValueInput) setInputValue(linkedValueInput, v);
+          try {
+            sessionStorage.setItem(buildPathParamStorageKey(name), v);
+          } catch (e) {
+            // ignore
+          }
+        });
+
+        modal.style.display = 'none';
+
+        // 尝试触发一次发送（插件存在时通常可用）
+        const triggerSend = () => {
+          const urlBar = root.querySelector('.url');
+          if (!urlBar) return;
+          const candidates = Array.from(urlBar.querySelectorAll('button, span')).filter(
+            (el) => (el.textContent || '').replace(/\s+/g, '') === '发送'
+          );
+          const sendEl = candidates[0];
+          if (!sendEl) return;
+          const sendBtn = sendEl.closest ? sendEl.closest('button') || sendEl : sendEl;
+          if (sendBtn.tagName === 'BUTTON' && sendBtn.disabled) return;
+          if (sendBtn.classList && sendBtn.classList.contains('ant-btn-disabled')) return;
+          if (sendBtn.getAttribute && sendBtn.getAttribute('aria-disabled') === 'true') return;
+          sendBtn.click();
+        };
+
+        // 给 antd/react 一点时间同步 state，避免“闪一下又弹回”
+        requestAnimationFrame(() => requestAnimationFrame(triggerSend));
+      });
+
+      actions.appendChild(cancelBtn);
+      actions.appendChild(okBtn);
+
+      body.appendChild(form);
+      body.appendChild(actions);
+
+      modal.style.display = 'block';
+
+      const first = inputMap.values().next().value;
+      if (first && first.modalInput) first.modalInput.focus();
+    };
+
+    const mountPathParamButton = () => {
+      const root = document.querySelector('.interface-test.postman');
+      if (!root) {
+        const oldBtn = document.getElementById(PATH_BTN_ID);
+        if (oldBtn) oldBtn.remove();
+        return;
+      }
+
+      const urlBar = root.querySelector('.url');
+      if (!urlBar) return;
+
+      const urlInput = urlBar.querySelector('input.ant-input');
+      if (!urlInput) return;
+
+      const placeholders = parseUrlPlaceholders(urlInput.value || '');
+      const existingBtn = document.getElementById(PATH_BTN_ID);
+      if (!placeholders.length) {
+        if (existingBtn) existingBtn.remove();
+        return;
+      }
+
+      if (!existingBtn) {
+        ensureStyle();
+        const btn = document.createElement('button');
+        btn.id = PATH_BTN_ID;
+        btn.type = 'button';
+        btn.className = 'ant-btn';
+        btn.textContent = '填路径参数';
+        btn.addEventListener('click', () => {
+          const r = document.querySelector('.interface-test.postman');
+          const u = r ? r.querySelector('.url input.ant-input') : null;
+          if (r && u) openPathParamModal(r, u);
+        });
+
+        // 插在 URL 输入组与发送按钮之间，尽量不破坏原布局
+        const sendEl = Array.from(urlBar.querySelectorAll('button, span')).find(
+          (el) => (el.textContent || '').replace(/\s+/g, '') === '发送'
+        );
+        const sendBtn = sendEl && sendEl.closest ? sendEl.closest('button') || sendEl : sendEl;
+        if (sendBtn && sendBtn.insertAdjacentElement) {
+          sendBtn.insertAdjacentElement('beforebegin', btn);
+        } else {
+          urlBar.appendChild(btn);
+        }
+      }
+    };
+
+    const ensureSendClickIntercept = (() => {
+      let installed = false;
+      return () => {
+        if (installed) return;
+        installed = true;
+
+        document.addEventListener(
+          'click',
+          (e) => {
+            const root = document.querySelector('.interface-test.postman');
+            if (!root) return;
+            const urlBar = root.querySelector('.url');
+            if (!urlBar) return;
+
+            const target = e.target && e.target.closest ? e.target.closest('button, span') : null;
+            if (!target || !urlBar.contains(target)) return;
+
+            const text = (target.textContent || '').replace(/\s+/g, '');
+            if (text !== '发送') return;
+
+            const urlInput = urlBar.querySelector('input.ant-input');
+            if (!urlInput) return;
+
+            const placeholders = parseUrlPlaceholders(urlInput.value || '');
+            if (!placeholders.length) return;
+
+            const missing = placeholders.filter((name) => {
+              const valueInput = findPathParamValueInput(root, name);
+              return !valueInput || !(valueInput.value || '').trim();
+            });
+
+            if (!missing.length) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            openPathParamModal(root, urlInput);
+          },
+          true
+        );
+      };
+    })();
 
     const findTokenInObject = (obj) => {
       if (!obj || typeof obj !== 'object') return '';
@@ -1103,6 +1458,8 @@ const CrossRequest = {
         if (old) old.remove();
       }
       mountButtons();
+      mountPathParamButton();
+      ensureSendClickIntercept();
     };
 
     tick();
@@ -1118,6 +1475,7 @@ const CrossRequest = {
     // 使用链式加载确保执行顺序，避免竞态条件
     const helpers = [
       'src/helpers/query-string.js',
+      'src/helpers/path-params.js',
       'src/helpers/body-parser.js',
       'src/helpers/form-data.js',
       'src/helpers/yapi-openapi.js',
@@ -1365,77 +1723,10 @@ const CrossRequest = {
 
     document.dispatchEvent(errorEvent);
     node.remove();
-  },
-
-  // 监听 cURL 相关事件
-  initCurlEventListeners() {
-    console.log('[Content-Script] 开始初始化 cURL 事件监听器');
-
-    // 监听检查禁用状态事件
-    document.addEventListener('curl-check-disabled', (event) => {
-      const requestData = event.detail.requestData;
-      console.log('[Content-Script] 收到检查 cURL 禁用状态请求:', requestData);
-
-      // 向 background script 查询状态
-      chrome.runtime.sendMessage(
-        {
-          action: 'getCurlDisplayDisabled'
-        },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            console.warn(
-              '[Content-Script] 获取 cURL 状态失败，默认显示:',
-              chrome.runtime.lastError
-            );
-            // 失败时默认显示
-            this.showCurlCommand(requestData);
-            return;
-          }
-
-          if (response && response.disabled) {
-            console.log('[Content-Script] cURL 显示已被永久关闭');
-            return;
-          }
-
-          // 显示 cURL 弹窗
-          this.showCurlCommand(requestData);
-        }
-      );
-    });
-
-    // 监听禁用请求事件
-    document.addEventListener('curl-disable-request', (event) => {
-      const disabled = event.detail.disabled;
-      console.log('[Content-Script] 收到 cURL 禁用请求:', disabled);
-
-      // 向 background script 保存设置
-      chrome.runtime.sendMessage(
-        {
-          action: 'setCurlDisplayDisabled',
-          disabled: disabled
-        },
-        (_response) => {
-          if (chrome.runtime.lastError) {
-            console.warn('[Content-Script] 保存 cURL 禁用设置失败:', chrome.runtime.lastError);
-          } else {
-            console.log('[Content-Script] cURL 禁用设置已保存');
-          }
-        }
-      );
-    });
-
-    console.log('[Content-Script] cURL 事件监听器初始化完成');
-  },
-
-  // 显示 cURL 命令弹窗
-  showCurlCommand(requestData) {
-    console.log('[Content-Script] 准备发送 curl-show-command 事件:', requestData);
-    const event = new CustomEvent('curl-show-command', {
-      detail: requestData
-    });
-    document.dispatchEvent(event);
-    console.log('[Content-Script] curl-show-command 事件已发送');
   }
+
+  // cURL 显示逻辑已下沉到 index.js（页面脚本）
+  // 不再支持“永久关闭”按钮
 };
 
 // 监听来自 background 的调试消息
