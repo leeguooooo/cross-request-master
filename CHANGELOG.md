@@ -7,6 +7,21 @@
 
 ## [未发布]
 
+## [4.5.11] - 2025-12-18
+
+### 新增
+
+- **旧版上传兼容** - 支持 `crossRequest({ files, file })`（兼容 YMFE/cross-request PR #7）
+
+### 改进
+
+- **传输通道升级** - 优先使用 `MessageChannel` 与 content-script 通信，失败自动降级为 DOM 节点队列
+- **Header 兼容** - 自动移除 fetch 不允许设置的请求头（如 `Origin/Host/Cookie/User-Agent`），避免部分服务端拦截 `chrome-extension://` Origin
+
+### 变更
+
+- **请求头注入** - 不再默认从页面注入 `User-Agent` 与 `document.cookie`（本就无法通过 fetch 设置，且容易引起误解）
+
 ## [4.5.10] - 2025-12-17
 
 ### 新增
