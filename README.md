@@ -188,7 +188,7 @@ pnpm format
 
 - Issues: https://github.com/leeguooooo/cross-request-master/issues
 - YApi: https://github.com/YMFE/yapi
-- Yapi-MCP: https://github.com/lzsheng/Yapi-MCP
+- Yapi-MCP: https://github.com/leeguooooo/Yapi-MCP
 - YApi OpenAPI 文档: https://hellosean1025.github.io/yapi/openapi.html
 - Chrome Extension Docs: https://developer.chrome.com/docs/extensions/
 
