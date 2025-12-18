@@ -15,6 +15,7 @@
 const { bodyToString } = require('../src/helpers/body-parser.js');
 const { buildQueryString } = require('../src/helpers/query-string.js');
 const { safeLogResponse } = require('../src/helpers/logger.js');
+const { sanitizeRequestHeaders } = require('../src/helpers/request-headers.js');
 const {
     buildYapiCallbackParams,
     processBackgroundResponse
@@ -217,6 +218,58 @@ describe('processBackgroundResponse helper', () => {
             raw: 'not json'
         });
         expect(result.body).toBe('not json');
+    });
+});
+
+describe('sanitizeRequestHeaders helper', () => {
+    test('should drop forbidden headers case-insensitively', () => {
+        const { sanitizedHeaders, droppedHeaders } = sanitizeRequestHeaders({
+            'User-Agent': 'UA',
+            Cookie: 'a=b',
+            HOST: 'example.com',
+            Referer: 'https://example.com',
+            Connection: 'keep-alive',
+            'Content-Length': '123',
+            Accept: 'application/json',
+            'X-Custom': '1'
+        });
+
+        expect(sanitizedHeaders).toEqual({
+            Accept: 'application/json',
+            'X-Custom': '1'
+        });
+        expect(droppedHeaders).toEqual(
+            expect.arrayContaining([
+                'User-Agent',
+                'Cookie',
+                'HOST',
+                'Referer',
+                'Connection',
+                'Content-Length'
+            ])
+        );
+    });
+
+    test('should drop extension origin with protocol detail', () => {
+        const { sanitizedHeaders, droppedHeaders } = sanitizeRequestHeaders({
+            Origin: 'chrome-extension://abcdef',
+            'Content-Type': 'application/json'
+        });
+        expect(sanitizedHeaders).toEqual({
+            'Content-Type': 'application/json'
+        });
+        expect(droppedHeaders).toContain('Origin=chrome-extension://abcdef');
+    });
+
+    test('should keep non-extension origin out of sanitized headers (still forbidden)', () => {
+        const { sanitizedHeaders, droppedHeaders } = sanitizeRequestHeaders({
+            Origin: 'https://example.com',
+            Accept: '*/*'
+        });
+        expect(sanitizedHeaders).toEqual({
+            Accept: '*/*'
+        });
+        expect(droppedHeaders).toContain('Origin');
     });
 });
 

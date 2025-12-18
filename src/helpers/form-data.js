@@ -88,9 +88,68 @@
     return body;
   }
 
+  function resolveFileInput(inputRef) {
+    if (!inputRef) return null;
+    if (typeof inputRef === 'string' && typeof document !== 'undefined') {
+      return document.getElementById(inputRef);
+    }
+    return inputRef;
+  }
+
+  function getFirstFileFromInput(inputRef) {
+    const input = resolveFileInput(inputRef);
+    if (!input) return null;
+    const files = input.files;
+    if (!files || !files.length) return null;
+    return files[0] || null;
+  }
+
+  function buildMultipartBodyFromLegacyFiles(data, files, file) {
+    // Legacy interface from YMFE/cross-request PR #7:
+    // - options.files: { fieldName: inputElementId }
+    // - options.file:  inputElementId (single raw file body)
+    if (!files && !file) return null;
+
+    if (file) {
+      return getFirstFileFromInput(file);
+    }
+
+    const fd = new FormData();
+
+    // Append fields from data (if present)
+    if (data && typeof URLSearchParams !== 'undefined' && data instanceof URLSearchParams) {
+      for (const [k, v] of data.entries()) {
+        fd.append(k, v);
+      }
+    } else if (data && typeof FormData !== 'undefined' && data instanceof FormData) {
+      for (const [k, v] of data.entries()) {
+        fd.append(k, v);
+      }
+    } else if (data && typeof data === 'object') {
+      Object.keys(data).forEach((k) => {
+        const v = data[k];
+        if (v === undefined) return;
+        fd.append(k, v == null ? '' : String(v));
+      });
+    }
+
+    // Append files from input elements
+    if (files && typeof files === 'object') {
+      Object.keys(files).forEach((fieldName) => {
+        const inputRef = files[fieldName];
+        const picked = getFirstFileFromInput(inputRef);
+        if (!picked) return;
+        fd.append(fieldName, picked, picked.name || 'file');
+      });
+    }
+
+    return fd;
+  }
+
   window.CrossRequestHelpers = window.CrossRequestHelpers || {};
   window.CrossRequestHelpers.serializeFormData = serializeFormData;
   window.CrossRequestHelpers.serializeRequestBody = serializeRequestBody;
+  window.CrossRequestHelpers.buildMultipartBodyFromLegacyFiles = buildMultipartBodyFromLegacyFiles;
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -98,7 +157,9 @@
       serializeFileLike,
       serializeFormData,
       serializeRequestBody,
-      isFileLike
+      isFileLike,
+      buildMultipartBodyFromLegacyFiles,
+      getFirstFileFromInput
     };
   }
 })(typeof window !== 'undefined' ? window : global);

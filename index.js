@@ -243,12 +243,25 @@
 
       const promise = new Promise((resolve, reject) => {
         // 保存回调
-        this.pendingRequests.set(id, { resolve, reject });
+        this.pendingRequests.set(id, { resolve, reject, cleanup: null });
       });
 
       // 规范化 method 为大写，确保大小写不敏感的比较
       const method = (options.method || 'GET').toUpperCase();
-      const data = options.data || options.body;
+      // 兼容 YMFE/cross-request PR #7 的旧版文件上传参数：
+      // - options.files: { fieldName: inputElementId }
+      // - options.file:  inputElementId（单文件 raw body）
+      let data = options.data || options.body;
+      if (helpers.buildMultipartBodyFromLegacyFiles && (options.files || options.file)) {
+        try {
+          const multipart = helpers.buildMultipartBodyFromLegacyFiles(data, options.files, options.file);
+          if (multipart) {
+            data = multipart;
+          }
+        } catch (e) {
+          console.warn('[Index] 旧版 files/file 参数转换失败:', e.message);
+        }
+      }
       let url = options.url;
       let body = data;
 
@@ -287,12 +300,80 @@
         timeout: options.timeout || 30000
       };
 
-      // 将请求数据编码并插入到 DOM
-      const container = document.createElement('div');
-      container.id = `y-request-${id}`;
-      container.style.display = 'none';
-      container.textContent = btoa(encodeURIComponent(JSON.stringify(requestData)));
-      (document.body || document.documentElement).appendChild(container);
+      const pending = this.pendingRequests.get(id);
+
+      const tryPortTransport = () => {
+        if (typeof window === 'undefined' || typeof window.postMessage !== 'function') return false;
+        if (typeof MessageChannel === 'undefined') return false;
+
+        const channel = new MessageChannel();
+        const responsePort = channel.port1;
+        const requestPort = channel.port2;
+
+        const cleanup = () => {
+          try {
+            responsePort.onmessage = null;
+            responsePort.onmessageerror = null;
+            responsePort.close();
+          } catch (e) {
+            void e;
+          }
+        };
+
+        if (pending) {
+          pending.cleanup = cleanup;
+        }
+
+        responsePort.onmessage = (evt) => {
+          const msg = evt && evt.data ? evt.data : null;
+          if (!msg || msg.id !== id) return;
+          if (msg.type === 'y-request-response') {
+            this.handleResponse({ detail: { id: msg.id, response: msg.response } });
+          } else if (msg.type === 'y-request-error') {
+            this.handleError({ detail: { id: msg.id, error: msg.error } });
+          }
+        };
+
+        responsePort.onmessageerror = () => {
+          this.handleError({ detail: { id, error: '消息通道错误' } });
+        };
+
+        // 兼容部分浏览器需要显式 start()
+        try {
+          responsePort.start && responsePort.start();
+        } catch (e) {
+          void e;
+        }
+
+        const targetOrigin =
+          window.location && window.location.origin && window.location.origin !== 'null'
+            ? window.location.origin
+            : '*';
+
+        try {
+          window.postMessage(
+            { __crossRequestMaster: true, type: 'cross-request-port', request: requestData },
+            targetOrigin,
+            [requestPort]
+          );
+          return true;
+        } catch (e) {
+          cleanup();
+          if (pending) pending.cleanup = null;
+          return false;
+        }
+      };
+
+      const sentViaPort = tryPortTransport();
+
+      if (!sentViaPort) {
+        // 将请求数据编码并插入到 DOM（fallback）
+        const container = document.createElement('div');
+        container.id = `y-request-${id}`;
+        container.style.display = 'none';
+        container.textContent = btoa(encodeURIComponent(JSON.stringify(requestData)));
+        (document.body || document.documentElement).appendChild(container);
+      }
 
       // 设置超时
       setTimeout(() => {
@@ -307,6 +388,9 @@
             ok: false,
             isError: true
           };
+          if (pending && typeof pending.cleanup === 'function') {
+            pending.cleanup();
+          }
           pending.resolve(timeoutResponse);
           this.pendingRequests.delete(id);
         }
@@ -321,6 +405,9 @@
       const pending = this.pendingRequests.get(id);
 
       if (pending) {
+        if (typeof pending.cleanup === 'function') {
+          pending.cleanup();
+        }
         // 使用 response-handler helper 处理响应（如果可用）
         if (helpers.processBackgroundResponse) {
           // 使用提取的生产函数
@@ -441,6 +528,9 @@
       const pending = this.pendingRequests.get(id);
 
       if (pending) {
+        if (typeof pending.cleanup === 'function') {
+          pending.cleanup();
+        }
         pending.reject(new Error(error));
         this.pendingRequests.delete(id);
       }
@@ -475,10 +565,8 @@
         timeout: options.timeout || 30000
       };
 
-      // 添加常见的浏览器请求头
-      if (!requestData.headers['User-Agent']) {
-        requestData.headers['User-Agent'] = navigator.userAgent;
-      }
+      // 注意：fetch 不允许设置 User-Agent/Cookie/Host/Origin 等受限请求头，
+      // 在扩展中强行注入通常不会生效，且可能导致兼容性问题，因此不默认注入。
 
       // 只为非 GET/HEAD 请求添加 Content-Type（有数据时）
       if (requestData.data && requestData.method !== 'GET' && requestData.method !== 'HEAD') {
@@ -508,11 +596,7 @@
         requestData.headers['Accept'] = 'application/json, text/plain, */*';
       }
 
-      // 从当前页面获取可能的认证信息
-      const cookies = document.cookie;
-      if (cookies && !requestData.headers['Cookie']) {
-        requestData.headers['Cookie'] = cookies;
-      }
+      // 注意：不要从页面读取 document.cookie 并拼到请求头里（Cookie 受限且域不匹配）。
 
       debugLog('[Index] 捕获的请求数据:', requestData);
 
@@ -1231,10 +1315,8 @@
         timeout: options.timeout
       };
 
-      // 添加常见的浏览器请求头
-      if (!requestData.headers['User-Agent']) {
-        requestData.headers['User-Agent'] = navigator.userAgent;
-      }
+      // 注意：fetch 不允许设置 User-Agent/Cookie/Host/Origin 等受限请求头，
+      // 在扩展中强行注入通常不会生效，且可能导致兼容性问题，因此不默认注入。
 
       // 只为非 GET/HEAD 请求添加 Content-Type（有数据时）
       if (requestData.data && requestData.method !== 'GET' && requestData.method !== 'HEAD') {
@@ -1252,11 +1334,7 @@
         requestData.headers['Accept'] = 'application/json, text/plain, */*';
       }
 
-      // 从当前页面获取可能的认证信息
-      const cookies = document.cookie;
-      if (cookies && !requestData.headers['Cookie']) {
-        requestData.headers['Cookie'] = cookies;
-      }
+      // 注意：不要从页面读取 document.cookie 并拼到请求头里（Cookie 受限且域不匹配）。
 
       debugLog('[Index] jQuery ajax 捕获的请求数据:', requestData.url);
 

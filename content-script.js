@@ -1671,13 +1671,8 @@ const CrossRequest = {
     });
   },
 
-  // 处理响应
-  handleResponse(node, response, requestData) {
-    if (!window.__crossRequestSilentMode) {
-      console.log('[Content-Script] 发送响应事件');
-    }
-
-    const responsePayload = {
+  buildResponsePayload(response, requestData) {
+    const payload = {
       status: response.status || 0,
       statusText: response.statusText || 'OK',
       headers: response.headers || {},
@@ -1687,12 +1682,23 @@ const CrossRequest = {
     };
 
     if (Object.prototype.hasOwnProperty.call(response, 'bodyParsed')) {
-      responsePayload.bodyParsed = response.bodyParsed;
+      payload.bodyParsed = response.bodyParsed;
     }
 
     if (Object.prototype.hasOwnProperty.call(response, 'data')) {
-      responsePayload.data = response.data;
+      payload.data = response.data;
     }
+
+    return payload;
+  },
+
+  // 处理响应
+  handleResponse(node, response, requestData) {
+    if (!window.__crossRequestSilentMode) {
+      console.log('[Content-Script] 发送响应事件');
+    }
+
+    const responsePayload = this.buildResponsePayload(response, requestData);
 
     const responseEvent = new CustomEvent('y-request-response', {
       detail: {
@@ -1706,6 +1712,39 @@ const CrossRequest = {
       console.log('[Content-Script] 响应事件已触发');
     }
     node.remove();
+  },
+
+  handlePortRequest(requestData, port) {
+    const sendResponse = (payload) => {
+      try {
+        port.postMessage(payload);
+      } catch (e) {
+        console.error('[Content-Script] Port 响应发送失败:', e && e.message ? e.message : e);
+      } finally {
+        try {
+          port.close();
+        } catch (e) {
+          void e;
+        }
+      }
+    };
+
+    this.sendRequest(requestData).then(
+      (response) => {
+        sendResponse({
+          type: 'y-request-response',
+          id: requestData.id,
+          response: this.buildResponsePayload(response, requestData)
+        });
+      },
+      (error) => {
+        sendResponse({
+          type: 'y-request-error',
+          id: requestData.id,
+          error: error && error.message ? error.message : '未知错误'
+        });
+      }
+    );
   },
 
   // 处理错误
@@ -1728,6 +1767,21 @@ const CrossRequest = {
   // cURL 显示逻辑已下沉到 index.js（页面脚本）
   // 不再支持“永久关闭”按钮
 };
+
+// 监听来自页面脚本（index.js）的 Port 请求（优先通道，避免 DOM/base64 传输）
+window.addEventListener('message', (event) => {
+  if (event.source !== window) return;
+  const data = event.data;
+  if (!data || data.__crossRequestMaster !== true || data.type !== 'cross-request-port') return;
+
+  const port = event.ports && event.ports[0];
+  if (!port) return;
+
+  const requestData = data.request;
+  if (!requestData || !requestData.id) return;
+
+  CrossRequest.handlePortRequest(requestData, port);
+});
 
 // 监听来自 background 的调试消息
 chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {

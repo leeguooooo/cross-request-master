@@ -42,6 +42,10 @@ export interface CrossRequestOptions {
   headers?: Record<string, string>;
   data?: RequestBody;
   body?: RequestBody;
+  // Legacy interface (YMFE/cross-request PR #7): map form field -> file input element id/element
+  files?: Record<string, string | HTMLInputElement>;
+  // Legacy interface: file input element id/element as raw body
+  file?: string | HTMLInputElement;
   timeout?: number;
   success?: (res: any, header: Record<string, string>, data: YApiCallbackData) => void;
   error?: (err: any, header: Record<string, string>, data: YApiCallbackData) => void;

@@ -1,12 +1,17 @@
 'use strict';
 
 let safeLogResponse = null;
+let sanitizeRequestHeaders = null;
 
 try {
   /* global importScripts */
   importScripts('src/helpers/logger.js');
+  importScripts('src/helpers/request-headers.js');
   if (self.CrossRequestHelpers && self.CrossRequestHelpers.safeLogResponse) {
     safeLogResponse = self.CrossRequestHelpers.safeLogResponse;
+  }
+  if (self.CrossRequestHelpers && self.CrossRequestHelpers.sanitizeRequestHeaders) {
+    sanitizeRequestHeaders = self.CrossRequestHelpers.sanitizeRequestHeaders;
   }
 } catch (helperError) {
   console.warn('[Background] safeLogResponse helper 加载失败:', helperError);
@@ -52,6 +57,50 @@ if (!safeLogResponse) {
       tail: tailChars > 0 ? text.slice(-tailChars) : '',
       hint: '响应体过大，已截断显示'
     };
+  };
+}
+
+if (!sanitizeRequestHeaders) {
+  sanitizeRequestHeaders = function (headers = {}) {
+    const forbidden = new Set([
+      'accept-encoding',
+      'connection',
+      'content-length',
+      'cookie',
+      'host',
+      'origin',
+      'referer',
+      'user-agent'
+    ]);
+
+    const sanitizedHeaders = {};
+    const droppedHeaders = [];
+
+    Object.entries(headers || {}).forEach(([rawKey, value]) => {
+      const key = String(rawKey || '').trim();
+      if (!key) return;
+
+      const lowerKey = key.toLowerCase();
+      if (forbidden.has(lowerKey)) {
+        if (lowerKey === 'origin' && typeof value === 'string') {
+          const origin = value.trim();
+          if (
+            origin.startsWith('chrome-extension://') ||
+            origin.startsWith('moz-extension://') ||
+            origin.startsWith('safari-extension://')
+          ) {
+            droppedHeaders.push(`${key}=${origin}`);
+            return;
+          }
+        }
+        droppedHeaders.push(key);
+        return;
+      }
+
+      sanitizedHeaders[key] = value;
+    });
+
+    return { sanitizedHeaders, droppedHeaders };
   };
 }
 
@@ -195,9 +244,13 @@ async function handleCrossOriginRequest(request) {
   }
 
   // 构建请求选项
+  const { sanitizedHeaders, droppedHeaders } = sanitizeRequestHeaders(headers);
+  if (droppedHeaders && droppedHeaders.length) {
+    console.log('[Background] 已移除受限请求头（fetch 不支持设置）:', droppedHeaders);
+  }
   const fetchOptions = {
     method,
-    headers: new Headers(headers),
+    headers: new Headers(sanitizedHeaders),
     mode: 'cors',
     credentials: 'include'
   };
