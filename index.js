@@ -934,11 +934,26 @@
 
     // 添加请求头
     if (headers && typeof headers === 'object') {
-      Object.entries(headers).forEach(([key, value]) => {
-        // 过滤掉空值和过长的值（如 User-Agent）
-        if (value && value.trim && value.trim() !== '' && value.length < 200) {
-          curl += ` \\\n  -H "${key}: ${value}"`;
+      Object.entries(headers).forEach(([rawKey, rawValue]) => {
+        if (rawValue === undefined || rawValue === null) {
+          return;
         }
+        const key = String(rawKey);
+        const value = String(rawValue);
+        if (!value.trim()) {
+          return;
+        }
+        const lowerKey = key.toLowerCase();
+        const isNoiseHeader =
+          lowerKey === 'user-agent' ||
+          lowerKey === 'sec-ch-ua' ||
+          lowerKey === 'sec-ch-ua-mobile' ||
+          lowerKey === 'sec-ch-ua-platform';
+        // 过滤空值，且仅跳过过长且噪音的头（如 User-Agent）
+        if (isNoiseHeader && value.length > 200) {
+          return;
+        }
+        curl += ` \\\n  -H "${key}: ${value}"`;
       });
     }
 
