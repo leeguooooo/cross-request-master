@@ -7,6 +7,16 @@
 
 ## [未发布]
 
+## [4.5.13] - 2026-01-02
+
+### 新增
+
+- **Skill 一键安装** - 生成 `npx -y @leeguoo/yapi-mcp install-skill` 命令并写入 `~/.yapi/config.toml`
+
+### 变更
+
+- **MCP 配置入口** - 移除「当前项目 MCP 配置」，仅保留全局模式
+
 ## [4.5.12] - 2025-12-24
 
 ### 修复
@@ -465,6 +475,8 @@
 
 ## 版本链接
 
+[4.5.13]: https://github.com/leeguooooo/cross-request-master/compare/v4.5.12...v4.5.13
+[4.5.12]: https://github.com/leeguooooo/cross-request-master/compare/v4.5.11...v4.5.12
 [4.4.13]: https://github.com/leeguooooo/cross-request-master/compare/v4.4.12...v4.4.13
 [4.4.12]: https://github.com/leeguooooo/cross-request-master/compare/v4.4.11...v4.4.12
 [4.4.11]: https://github.com/leeguooooo/cross-request-master/compare/v4.4.10...v4.4.11

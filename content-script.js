@@ -118,6 +118,8 @@ const CrossRequest = {
     const BTN_GROUP_ID = 'crm-yapi-ai-btn-group';
     const PATH_BTN_ID = 'crm-yapi-path-param-btn';
     const PATH_MODAL_ID = 'crm-yapi-path-param-modal';
+    const HEADER_BTN_ID = 'crm-yapi-fixed-header-btn';
+    const HEADER_MODAL_ID = 'crm-yapi-fixed-header-modal';
 
     const tokenCache = new Map();
     let lastHref = location.href;
@@ -152,6 +154,7 @@ const CrossRequest = {
 
         /* YApi Run：路径参数填充（仅做布局约束，避免按钮被压缩换行） */
         #${PATH_BTN_ID} { flex: 0 0 auto; flex-shrink: 0; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; margin-left: 8px; height: 32px; line-height: 30px; }
+        #${HEADER_BTN_ID} { flex: 0 0 auto; flex-shrink: 0; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; margin-left: 8px; height: 32px; line-height: 30px; }
 
         #${PATH_MODAL_ID} { position: fixed; inset: 0; z-index: 2147483647; display: none; }
         #${PATH_MODAL_ID} .crm-mask { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
@@ -169,6 +172,29 @@ const CrossRequest = {
         #${PATH_MODAL_ID} .crm-btn:hover { background: #f6f8fa; }
         #${PATH_MODAL_ID} .crm-btn.crm-primary { background: #1677ff; border-color: #1677ff; color: #fff; }
         #${PATH_MODAL_ID} .crm-btn.crm-primary:hover { background: #0958d9; border-color: #0958d9; }
+
+        /* YApi Run：固定 Header */
+        #${HEADER_MODAL_ID} { position: fixed; inset: 0; z-index: 2147483647; display: none; }
+        #${HEADER_MODAL_ID} .crm-mask { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
+        #${HEADER_MODAL_ID} .crm-panel { position: absolute; top: 18vh; left: 50%; transform: translateX(-50%); width: min(620px, calc(100vw - 32px)); max-height: 70vh; background: #fff; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.2); overflow: hidden; display: flex; flex-direction: column; }
+        #${HEADER_MODAL_ID} .crm-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #eee; }
+        #${HEADER_MODAL_ID} .crm-title { font-size: 14px; font-weight: 600; color: #111; }
+        #${HEADER_MODAL_ID} .crm-close { border: none; background: transparent; cursor: pointer; font-size: 18px; line-height: 18px; padding: 4px 6px; color: #666; }
+        #${HEADER_MODAL_ID} .crm-body { padding: 14px; overflow: auto; }
+        #${HEADER_MODAL_ID} .crm-hint { font-size: 12px; color: #666; margin-bottom: 10px; }
+        #${HEADER_MODAL_ID} .crm-header-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+        #${HEADER_MODAL_ID} .crm-input { height: 30px; border-radius: 8px; border: 1px solid #d0d7de; padding: 0 10px; font-size: 12px; outline: none; }
+        #${HEADER_MODAL_ID} .crm-input:focus { border-color: #1677ff; box-shadow: 0 0 0 2px rgba(22,119,255,.12); }
+        #${HEADER_MODAL_ID} .crm-header-key { flex: 0 0 160px; min-width: 120px; }
+        #${HEADER_MODAL_ID} .crm-header-value { flex: 1 1 240px; min-width: 200px; }
+        #${HEADER_MODAL_ID} .crm-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
+        #${HEADER_MODAL_ID} .crm-btn { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid #d0d7de; background: #fff; color: #24292f; font-size: 12px; cursor: pointer; }
+        #${HEADER_MODAL_ID} .crm-btn:hover { background: #f6f8fa; }
+        #${HEADER_MODAL_ID} .crm-btn.crm-primary { background: #1677ff; border-color: #1677ff; color: #fff; }
+        #${HEADER_MODAL_ID} .crm-btn.crm-primary:hover { background: #0958d9; border-color: #0958d9; }
+        #${HEADER_MODAL_ID} .crm-btn.crm-danger { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+        #${HEADER_MODAL_ID} .crm-btn.crm-danger:hover { background: #fee2e2; }
+        #${HEADER_MODAL_ID} .crm-tools { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; }
       `;
       (document.head || document.documentElement).appendChild(style);
     };
@@ -339,6 +365,86 @@ const CrossRequest = {
       return `__crm_yapi_path_param_${location.hostname}_${paramName}`;
     };
 
+    const buildFixedHeaderStorageKey = () => {
+      const helpers = window.CrossRequestHelpers || {};
+      if (helpers.buildFixedHeaderStorageKey) return helpers.buildFixedHeaderStorageKey();
+      const host = location && location.host ? location.host : location.hostname || 'unknown';
+      return `__crm_fixed_headers_${host}`;
+    };
+
+    const normalizeHeaderEntries = (input) => {
+      const helpers = window.CrossRequestHelpers || {};
+      if (helpers.normalizeHeaderEntries) return helpers.normalizeHeaderEntries(input);
+
+      let rawList = [];
+      if (!input) return [];
+      if (Array.isArray(input)) {
+        rawList = input;
+      } else if (typeof input === 'object') {
+        if (Array.isArray(input.headers)) {
+          rawList = input.headers;
+        } else {
+          rawList = Object.entries(input).map(([key, value]) => ({ key, value }));
+        }
+      } else {
+        return [];
+      }
+
+      const entries = [];
+      rawList.forEach((item) => {
+        if (!item) return;
+        if (Array.isArray(item)) {
+          if (item.length < 2) return;
+          entries.push({ key: item[0], value: item[1] });
+          return;
+        }
+        if (typeof item === 'object') {
+          const key = item.key || item.name || item.header || '';
+          let value = '';
+          if (Object.prototype.hasOwnProperty.call(item, 'value')) {
+            value = item.value;
+          } else if (Object.prototype.hasOwnProperty.call(item, 'val')) {
+            value = item.val;
+          }
+          entries.push({ key, value });
+        }
+      });
+
+      return entries
+        .map(({ key, value }) => ({
+          key: String(key == null ? '' : key).trim(),
+          value: value == null ? '' : String(value)
+        }))
+        .filter((entry) => entry.key);
+    };
+
+    const readFixedHeaderEntries = () => {
+      const storageKey = buildFixedHeaderStorageKey();
+      if (!storageKey) return [];
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) return [];
+        return normalizeHeaderEntries(JSON.parse(raw));
+      } catch (e) {
+        return [];
+      }
+    };
+
+    const saveFixedHeaderEntries = (entries) => {
+      const storageKey = buildFixedHeaderStorageKey();
+      if (!storageKey) return;
+      try {
+        const list = Array.isArray(entries) ? entries : [];
+        if (!list.length) {
+          localStorage.removeItem(storageKey);
+          return;
+        }
+        localStorage.setItem(storageKey, JSON.stringify(list));
+      } catch (e) {
+        // ignore
+      }
+    };
+
     const ensurePathParamModal = () => {
       if (document.getElementById(PATH_MODAL_ID)) return;
 
@@ -349,6 +455,32 @@ const CrossRequest = {
         <div class="crm-panel" role="dialog" aria-modal="true">
           <div class="crm-header">
             <div class="crm-title">填写路径参数</div>
+            <button class="crm-close" type="button" aria-label="Close">×</button>
+          </div>
+          <div class="crm-body"></div>
+        </div>
+      `;
+
+      const close = () => {
+        modal.style.display = 'none';
+      };
+
+      modal.querySelector('.crm-mask')?.addEventListener('click', close);
+      modal.querySelector('.crm-close')?.addEventListener('click', close);
+
+      (document.body || document.documentElement).appendChild(modal);
+    };
+
+    const ensureHeaderModal = () => {
+      if (document.getElementById(HEADER_MODAL_ID)) return;
+
+      const modal = document.createElement('div');
+      modal.id = HEADER_MODAL_ID;
+      modal.innerHTML = `
+        <div class="crm-mask"></div>
+        <div class="crm-panel" role="dialog" aria-modal="true">
+          <div class="crm-header">
+            <div class="crm-title">固定 Header</div>
             <button class="crm-close" type="button" aria-label="Close">×</button>
           </div>
           <div class="crm-body"></div>
@@ -489,6 +621,135 @@ const CrossRequest = {
       if (first && first.modalInput) first.modalInput.focus();
     };
 
+    const openHeaderModal = () => {
+      ensureStyle();
+      ensureHeaderModal();
+
+      const modal = document.getElementById(HEADER_MODAL_ID);
+      const body = modal.querySelector('.crm-body');
+      if (!body) return;
+
+      body.innerHTML = '';
+
+      const hint = document.createElement('div');
+      hint.className = 'crm-hint';
+      hint.textContent = '固定 Header 会自动追加到当前站点的跨域请求（本地保存）。';
+      body.appendChild(hint);
+
+      const list = document.createElement('div');
+      const existing = readFixedHeaderEntries();
+
+      const addRow = (entry = {}) => {
+        const row = document.createElement('div');
+        row.className = 'crm-header-row';
+
+        const keyInput = document.createElement('input');
+        keyInput.className = 'crm-input crm-header-key';
+        keyInput.type = 'text';
+        keyInput.placeholder = 'Header 名称';
+        keyInput.autocomplete = 'off';
+        keyInput.spellcheck = false;
+        keyInput.value = entry.key != null ? String(entry.key) : '';
+
+        const valueInput = document.createElement('input');
+        valueInput.className = 'crm-input crm-header-value';
+        valueInput.type = 'text';
+        valueInput.placeholder = 'Header 值';
+        valueInput.autocomplete = 'off';
+        valueInput.spellcheck = false;
+        valueInput.value = entry.value != null ? String(entry.value) : '';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'crm-btn crm-danger';
+        removeBtn.textContent = '删除';
+        removeBtn.addEventListener('click', () => {
+          row.remove();
+        });
+
+        row.appendChild(keyInput);
+        row.appendChild(valueInput);
+        row.appendChild(removeBtn);
+        list.appendChild(row);
+      };
+
+      if (existing.length) {
+        existing.forEach((entry) => addRow(entry));
+      } else {
+        addRow();
+      }
+
+      const tools = document.createElement('div');
+      tools.className = 'crm-tools';
+
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'crm-btn';
+      addBtn.textContent = '新增 Header';
+      addBtn.addEventListener('click', () => addRow());
+
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'crm-btn';
+      clearBtn.textContent = '清空';
+      clearBtn.addEventListener('click', () => {
+        list.innerHTML = '';
+        addRow();
+      });
+
+      tools.appendChild(addBtn);
+      tools.appendChild(clearBtn);
+
+      const actions = document.createElement('div');
+      actions.className = 'crm-actions';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'crm-btn';
+      cancelBtn.textContent = '取消';
+      cancelBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+      });
+
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'crm-btn crm-primary';
+      okBtn.textContent = '保存';
+      okBtn.addEventListener('click', () => {
+        const rows = Array.from(list.querySelectorAll('.crm-header-row'));
+        const map = new Map();
+
+        rows.forEach((row) => {
+          const inputs = row.querySelectorAll('input');
+          const keyInput = inputs[0];
+          const valueInput = inputs[1];
+          const rawKey = keyInput ? String(keyInput.value || '').trim() : '';
+          const rawValue = valueInput ? String(valueInput.value || '') : '';
+          if (!rawKey) return;
+          const lower = rawKey.toLowerCase();
+          if (map.has(lower)) {
+            map.delete(lower);
+          }
+          map.set(lower, { key: rawKey, value: rawValue });
+        });
+
+        const finalEntries = Array.from(map.values());
+        saveFixedHeaderEntries(finalEntries);
+        modal.style.display = 'none';
+      });
+
+      body.appendChild(list);
+      body.appendChild(tools);
+      actions.appendChild(cancelBtn);
+      actions.appendChild(okBtn);
+      body.appendChild(actions);
+
+      modal.style.display = 'block';
+
+      const firstInput = list.querySelector('input');
+      if (firstInput) firstInput.focus();
+    };
+
     const mountPathParamButton = () => {
       const root = document.querySelector('.interface-test.postman');
       if (!root) {
@@ -533,6 +794,45 @@ const CrossRequest = {
         } else {
           urlBar.appendChild(btn);
         }
+      }
+    };
+
+    const mountHeaderButton = () => {
+      const root = document.querySelector('.interface-test.postman');
+      if (!root) {
+        const oldBtn = document.getElementById(HEADER_BTN_ID);
+        if (oldBtn) oldBtn.remove();
+        return;
+      }
+
+      const urlBar = root.querySelector('.url');
+      if (!urlBar) return;
+
+      const existingBtn = document.getElementById(HEADER_BTN_ID);
+      if (existingBtn) return;
+
+      ensureStyle();
+      const btn = document.createElement('button');
+      btn.id = HEADER_BTN_ID;
+      btn.type = 'button';
+      btn.className = 'ant-btn';
+      btn.textContent = '固定 Header';
+      btn.addEventListener('click', () => openHeaderModal());
+
+      const pathBtn = document.getElementById(PATH_BTN_ID);
+      if (pathBtn && pathBtn.insertAdjacentElement) {
+        pathBtn.insertAdjacentElement('afterend', btn);
+        return;
+      }
+
+      const sendEl = Array.from(urlBar.querySelectorAll('button, span')).find(
+        (el) => (el.textContent || '').replace(/\s+/g, '') === '发送'
+      );
+      const sendBtn = sendEl && sendEl.closest ? sendEl.closest('button') || sendEl : sendEl;
+      if (sendBtn && sendBtn.insertAdjacentElement) {
+        sendBtn.insertAdjacentElement('beforebegin', btn);
+      } else {
+        urlBar.appendChild(btn);
       }
     };
 
@@ -736,76 +1036,6 @@ const CrossRequest = {
       throw new Error('未能自动获取项目 token（请确认已登录且有项目权限）');
     };
 
-    const buildMcpConfigBlocks = ({ origin, projectId, projectName, token }) => {
-      const mcpPkg = '@leeguoo/yapi-mcp';
-      const baseUrl = String(origin || '').replace(/\/$/, '');
-      const yapiToken = `${projectId}:${token}`;
-      const normalizedProjectName = String(projectName || '')
-        .replace(/\s+/g, ' ')
-        .replace(/\n/g, ' ')
-        .trim();
-      const serverNameBase = normalizedProjectName || `project-${projectId}`;
-      const serverName = `${serverNameBase}-${projectId}-mcp`;
-      const cliServerName = /\s/.test(serverName) ? JSON.stringify(serverName) : serverName;
-
-      const stdioArgs = [
-        '-y',
-        mcpPkg,
-        '--stdio',
-        `--yapi-base-url=${baseUrl}`,
-        `--yapi-token=${yapiToken}`
-      ];
-
-      const cursor = JSON.stringify(
-        {
-          mcpServers: {
-            [serverName]: {
-              command: 'npx',
-              args: stdioArgs
-            }
-          }
-        },
-        null,
-        2
-      );
-
-      const codex = `[mcp_servers.${JSON.stringify(serverName)}]\ncommand = "npx"\nargs = ${JSON.stringify(
-        stdioArgs
-      )}\n`;
-
-      const gemini = JSON.stringify(
-        {
-          mcpServers: {
-            [serverName]: {
-              command: 'npx',
-              args: stdioArgs
-            }
-          }
-        },
-        null,
-        2
-      );
-
-      const claudeCode = `claude mcp add --transport stdio ${cliServerName} -- npx ${stdioArgs
-        .map((a) => (a.includes(' ') ? JSON.stringify(a) : a))
-        .join(' ')}`;
-
-      const geminiCli = `gemini mcp add --transport stdio ${cliServerName} npx ${stdioArgs
-        .map((a) => (a.includes(' ') ? JSON.stringify(a) : a))
-        .join(' ')}`;
-
-      const rawCommand = `npx ${stdioArgs.join(' ')}`;
-
-      return {
-        cursor,
-        codex,
-        gemini,
-        claudeCode,
-        geminiCli,
-        rawCommand,
-        serverName
-      };
-    };
     const buildGlobalMcpConfigBlocks = ({ origin, email }) => {
       const mcpPkg = '@leeguoo/yapi-mcp';
       const baseUrl = String(origin || '').replace(/\/$/, '');
@@ -873,6 +1103,12 @@ const CrossRequest = {
         rawCommand,
         serverName
       };
+    };
+
+    const buildSkillInstallCommand = ({ origin, email }) => {
+      const baseUrl = String(origin || '').replace(/\/$/, '');
+      const safeEmail = looksLikeEmail(email) ? String(email).trim() : 'YOUR_EMAIL';
+      return `npx -y @leeguoo/yapi-mcp install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-email=${safeEmail} --force`;
     };
 
     const getCookieValue = (key) => {
@@ -1332,60 +1568,56 @@ const CrossRequest = {
       const origin = location.origin;
 
       try {
-        const mcpMode = mode === 'global' ? 'global' : 'project';
-        if (mcpMode === 'global') {
-          if (headerTitle) headerTitle.textContent = 'MCP 配置（所有项目）';
-          if (panelTitle) panelTitle.textContent = 'MCP 配置（所有项目）';
-          if (panelHint) {
-            panelHint.textContent =
-              '全局模式：邮箱会尽量自动填入；只需填写密码。启动后先在对话里调用一次 yapi_update_token 自动缓存所有项目 token。';
-          }
-        } else {
-          if (headerTitle) headerTitle.textContent = 'MCP 配置（当前项目）';
-          if (panelTitle) panelTitle.textContent = 'MCP 配置（当前项目）';
-          if (panelHint)
-            panelHint.textContent =
-              '已按当前项目自动拼好（Cursor / Codex / Gemini CLI / Claude Code）。';
+      const isSkill = mode === 'skill';
+      if (isSkill) {
+        if (headerTitle) headerTitle.textContent = 'Skill 一键安装';
+        if (panelTitle) panelTitle.textContent = 'Codex Skill 一键安装';
+        if (panelHint) {
+          panelHint.textContent =
+            '执行后会安装到 $CODEX_HOME/skills/yapi 和 ~/.claude/skills/yapi，并写入 ~/.yapi/config.toml；无需预装，npx 会自动下载。';
         }
-
-        let blocks;
-        if (mcpMode === 'global') {
-          const email = await resolveCurrentUserEmail(origin);
-          blocks = buildGlobalMcpConfigBlocks({ origin, email });
-        } else {
-          const [token, projectName] = await Promise.all([
-            resolveProjectToken(origin, route.projectId),
-            resolveProjectName(origin, route.projectId)
-          ]);
-          blocks = buildMcpConfigBlocks({
-            origin,
-            projectId: route.projectId,
-            projectName,
-            token
-          });
+      } else {
+        if (headerTitle) headerTitle.textContent = 'MCP 配置（所有项目）';
+        if (panelTitle) panelTitle.textContent = 'MCP 配置（所有项目）';
+        if (panelHint) {
+          panelHint.textContent =
+            '全局模式：邮箱会尽量自动填入；只需填写密码。启动后先在对话里调用一次 yapi_update_token 自动缓存所有项目 token。';
         }
+      }
 
+      if (isSkill) {
+        const email = await resolveCurrentUserEmail(origin);
+        const command = buildSkillInstallCommand({ origin, email });
         mcpContainer.textContent = '';
         mcpContainer.style.display = 'block';
-        mcpContainer.appendChild(
-          renderCodeBlock(`Cursor（mcpServers: ${blocks.serverName}）`, blocks.cursor)
-        );
-        mcpContainer.appendChild(
-          renderCodeBlock(`Codex（mcp_servers: ${blocks.serverName}）`, blocks.codex)
-        );
-        mcpContainer.appendChild(
-          renderCodeBlock(`Gemini CLI（mcpServers: ${blocks.serverName}）`, blocks.gemini)
-        );
-        mcpContainer.appendChild(
-          renderCodeBlock(`Claude Code（命令行: ${blocks.serverName}）`, blocks.claudeCode + '\n')
-        );
-        mcpContainer.appendChild(
-          renderCodeBlock(`Gemini CLI（命令行: ${blocks.serverName}）`, blocks.geminiCli + '\n')
-        );
-        mcpContainer.appendChild(renderCodeBlock('通用（直接运行）', blocks.rawCommand + '\n'));
-      } catch (e) {
-        mcpContainer.textContent =
-          'MCP 配置生成失败：' + (e && e.message ? e.message : String(e || ''));
+        mcpContainer.appendChild(renderCodeBlock('Codex Skill 一键安装', command + '\n'));
+        return;
+      }
+
+      const email = await resolveCurrentUserEmail(origin);
+      const blocks = buildGlobalMcpConfigBlocks({ origin, email });
+
+      mcpContainer.textContent = '';
+      mcpContainer.style.display = 'block';
+      mcpContainer.appendChild(
+        renderCodeBlock(`Cursor（mcpServers: ${blocks.serverName}）`, blocks.cursor)
+      );
+      mcpContainer.appendChild(
+        renderCodeBlock(`Codex（mcp_servers: ${blocks.serverName}）`, blocks.codex)
+      );
+      mcpContainer.appendChild(
+        renderCodeBlock(`Gemini CLI（mcpServers: ${blocks.serverName}）`, blocks.gemini)
+      );
+      mcpContainer.appendChild(
+        renderCodeBlock(`Claude Code（命令行: ${blocks.serverName}）`, blocks.claudeCode + '\n')
+      );
+      mcpContainer.appendChild(
+        renderCodeBlock(`Gemini CLI（命令行: ${blocks.serverName}）`, blocks.geminiCli + '\n')
+      );
+      mcpContainer.appendChild(renderCodeBlock('通用（直接运行）', blocks.rawCommand + '\n'));
+    } catch (e) {
+      mcpContainer.textContent =
+        '配置生成失败：' + (e && e.message ? e.message : String(e || ''));
       }
     };
 
@@ -1430,14 +1662,14 @@ const CrossRequest = {
       const mcpGlobalBtn = document.createElement('button');
       mcpGlobalBtn.className = 'crm-btn';
       mcpGlobalBtn.type = 'button';
-      mcpGlobalBtn.textContent = '所有项目 MCP 配置';
+      mcpGlobalBtn.textContent = 'MCP 配置';
       mcpGlobalBtn.addEventListener('click', () => openModal('global'));
 
-      const mcpProjectBtn = document.createElement('button');
-      mcpProjectBtn.className = 'crm-btn';
-      mcpProjectBtn.type = 'button';
-      mcpProjectBtn.textContent = '当前项目 MCP 配置';
-      mcpProjectBtn.addEventListener('click', () => openModal('project'));
+      const skillBtn = document.createElement('button');
+      skillBtn.className = 'crm-btn';
+      skillBtn.type = 'button';
+      skillBtn.textContent = 'Skill 一键安装';
+      skillBtn.addEventListener('click', () => openModal('skill'));
 
       const copyBtn = document.createElement('button');
       copyBtn.className = 'crm-btn crm-primary';
@@ -1446,7 +1678,7 @@ const CrossRequest = {
       copyBtn.addEventListener('click', () => copyMarkdownDirectly(copyBtn));
 
       group.appendChild(mcpGlobalBtn);
-      group.appendChild(mcpProjectBtn);
+      group.appendChild(skillBtn);
       group.appendChild(copyBtn);
       titleEl.appendChild(group);
     };
@@ -1459,6 +1691,7 @@ const CrossRequest = {
       }
       mountButtons();
       mountPathParamButton();
+      mountHeaderButton();
       ensureSendClickIntercept();
     };
 
@@ -1476,6 +1709,7 @@ const CrossRequest = {
     const helpers = [
       'src/helpers/query-string.js',
       'src/helpers/path-params.js',
+      'src/helpers/fixed-headers.js',
       'src/helpers/body-parser.js',
       'src/helpers/form-data.js',
       'src/helpers/yapi-openapi.js',

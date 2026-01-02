@@ -27,7 +27,9 @@
 - 跨域请求（CORS bypass）：在页面侧调用 `crossRequest`，由扩展后台代发
 - 内嵌 cURL：YApi「运行」页 URL 下方展示可复制的 cURL 命令
 - 路径参数引导：URL 含 `{param}` 时提示填写，避免请求失败
+- 固定 Header：为跨域请求自动追加自定义 Header
 - AI/MCP 导出：一键生成 MCP 配置 / 复制接口信息给 AI
+- Skill 一键安装：生成 npx 命令并写入 `~/.yapi/config.toml`
 - jQuery/Fetch 支持：兼容 `$.ajax` / `fetch` / 脚本能力
 - Manifest V3：兼容最新 Chrome 扩展标准
 
@@ -52,7 +54,7 @@ cd cross-request-master
 
 在接口详情页（基本信息区域右上角）额外提供：
 - **所有项目 MCP 配置**：全局模式（账号密码登录），只需配置一次，后续可自动缓存所有项目 token（生成配置默认使用 `@leeguoo/yapi-mcp`）
-- **当前项目 MCP 配置**：项目 token 模式（自动拼好 `projectId:token`），适合单项目/少量项目
+- **Skill 一键安装**：生成 `npx -y @leeguoo/yapi-mcp install-skill` 命令，自动写入 `~/.yapi/config.toml`
 - **复制当前页面给 AI**：把当前接口信息整理成 Markdown（仅接口相关字段）复制到剪贴板
 
 ### YApi OpenAPI（Yapi-MCP tool 同名方法）
