@@ -139,6 +139,103 @@
     return apply(inputUrl, values);
   };
 
+  const buildFixedHeaderStorageKey = () => {
+    if (helpers.buildFixedHeaderStorageKey) return helpers.buildFixedHeaderStorageKey();
+    const host =
+      win.location && win.location.host
+        ? win.location.host
+        : win.location && win.location.hostname
+        ? win.location.hostname
+        : 'unknown';
+    return `__crm_fixed_headers_${host}`;
+  };
+
+  const normalizeHeaderEntries = (input) => {
+    if (helpers.normalizeHeaderEntries) return helpers.normalizeHeaderEntries(input);
+
+    let rawList = [];
+    if (!input) return [];
+    if (Array.isArray(input)) {
+      rawList = input;
+    } else if (typeof input === 'object') {
+      if (Array.isArray(input.headers)) {
+        rawList = input.headers;
+      } else {
+        rawList = Object.entries(input).map(([key, value]) => ({ key, value }));
+      }
+    } else {
+      return [];
+    }
+
+    const entries = [];
+    rawList.forEach((item) => {
+      if (!item) return;
+      if (Array.isArray(item)) {
+        if (item.length < 2) return;
+        entries.push({ key: item[0], value: item[1] });
+        return;
+      }
+      if (typeof item === 'object') {
+        const key = item.key || item.name || item.header || '';
+        let value = '';
+        if (Object.prototype.hasOwnProperty.call(item, 'value')) {
+          value = item.value;
+        } else if (Object.prototype.hasOwnProperty.call(item, 'val')) {
+          value = item.val;
+        }
+        entries.push({ key, value });
+      }
+    });
+
+    return entries
+      .map(({ key, value }) => ({
+        key: String(key == null ? '' : key).trim(),
+        value: value == null ? '' : String(value)
+      }))
+      .filter((entry) => entry.key);
+  };
+
+  const readFixedHeaderEntries = () => {
+    const storageKey = buildFixedHeaderStorageKey();
+    if (!storageKey) return [];
+    try {
+      const raw = win.localStorage ? win.localStorage.getItem(storageKey) : '';
+      if (!raw) return [];
+      return normalizeHeaderEntries(JSON.parse(raw));
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const mergeFixedHeaders = (headers, entries) => {
+    if (helpers.mergeFixedHeaders) {
+      return helpers.mergeFixedHeaders(headers, entries, { preferExisting: true });
+    }
+
+    const base =
+      headers && typeof headers === 'object' && !Array.isArray(headers) ? { ...headers } : {};
+    const normalized = normalizeHeaderEntries(entries);
+    if (!normalized.length) return base;
+
+    const existingKeys = new Set(Object.keys(base).map((key) => key.toLowerCase()));
+    normalized.forEach(({ key, value }) => {
+      const lower = key.toLowerCase();
+      if (existingKeys.has(lower)) return;
+      base[key] = value;
+      existingKeys.add(lower);
+    });
+
+    return base;
+  };
+
+  const applyFixedHeaders = (headers) => {
+    const fixedEntries = readFixedHeaderEntries();
+    if (!fixedEntries.length) {
+      return headers || {};
+    }
+    return mergeFixedHeaders(headers, fixedEntries);
+  };
+
   // Fallback: bodyToString
   if (!helpers.bodyToString) {
     console.warn('[Index] bodyToString helper 未加载，使用内联 fallback');
@@ -295,7 +392,7 @@
         id,
         url,
         method,
-        headers: options.headers || {},
+        headers: applyFixedHeaders(options.headers || {}),
         body,
         timeout: options.timeout || 30000
       };
@@ -565,6 +662,8 @@
         timeout: options.timeout || 30000
       };
 
+      requestData.headers = applyFixedHeaders(requestData.headers);
+
       // 注意：fetch 不允许设置 User-Agent/Cookie/Host/Origin 等受限请求头，
       // 在扩展中强行注入通常不会生效，且可能导致兼容性问题，因此不默认注入。
 
@@ -592,7 +691,9 @@
       }
 
       // 添加常见的请求头
-      if (!requestData.headers['Accept']) {
+      const hasAccept =
+        !!requestData.headers['Accept'] || !!requestData.headers['accept'];
+      if (!hasAccept) {
         requestData.headers['Accept'] = 'application/json, text/plain, */*';
       }
 
@@ -1330,6 +1431,8 @@
         timeout: options.timeout
       };
 
+      requestData.headers = applyFixedHeaders(requestData.headers);
+
       // 注意：fetch 不允许设置 User-Agent/Cookie/Host/Origin 等受限请求头，
       // 在扩展中强行注入通常不会生效，且可能导致兼容性问题，因此不默认注入。
 
@@ -1345,7 +1448,9 @@
       }
 
       // 添加常见的请求头
-      if (!requestData.headers['Accept']) {
+      const hasAccept =
+        !!requestData.headers['Accept'] || !!requestData.headers['accept'];
+      if (!hasAccept) {
         requestData.headers['Accept'] = 'application/json, text/plain, */*';
       }
 

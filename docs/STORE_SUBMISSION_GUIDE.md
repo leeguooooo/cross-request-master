@@ -111,6 +111,7 @@ Cross Request Master 是面向 API 开发/测试的 Chrome 扩展：绕过 CORS 
 • 跨域请求支持（CORS bypass）- 由扩展后台代发请求
 • 内嵌 cURL 面板 - 在 YApi「运行」页 URL 下方展示并一键复制
 • 路径参数引导 - URL 含 `{param}` 时提示填写，避免请求失败
+• 固定 Header - 为跨域请求自动追加自定义 Header
 • AI/MCP 导出 - 一键生成 MCP 配置/复制接口信息给 AI
 • jQuery/Fetch 兼容 - 支持多种请求方式与脚本能力
 

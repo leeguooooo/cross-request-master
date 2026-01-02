@@ -17,6 +17,11 @@ const { buildQueryString } = require('../src/helpers/query-string.js');
 const { safeLogResponse } = require('../src/helpers/logger.js');
 const { sanitizeRequestHeaders } = require('../src/helpers/request-headers.js');
 const {
+    buildFixedHeaderStorageKey,
+    normalizeHeaderEntries,
+    mergeFixedHeaders
+} = require('../src/helpers/fixed-headers.js');
+const {
     buildYapiCallbackParams,
     processBackgroundResponse
 } = require('../src/helpers/response-handler.js');
@@ -218,6 +223,40 @@ describe('processBackgroundResponse helper', () => {
             raw: 'not json'
         });
         expect(result.body).toBe('not json');
+    });
+});
+
+describe('fixed headers helper', () => {
+
+    test('normalizeHeaderEntries should parse object map', () => {
+        const result = normalizeHeaderEntries({ Authorization: 'token', 'X-Test': 1 });
+        expect(result).toEqual([
+            { key: 'Authorization', value: 'token' },
+            { key: 'X-Test', value: '1' }
+        ]);
+    });
+
+    test('normalizeHeaderEntries should parse array entries', () => {
+        const result = normalizeHeaderEntries([
+            { key: 'Accept', value: 'application/json' },
+            ['X-Flag', 'on']
+        ]);
+        expect(result).toEqual([
+            { key: 'Accept', value: 'application/json' },
+            { key: 'X-Flag', value: 'on' }
+        ]);
+    });
+
+    test('mergeFixedHeaders should keep existing headers (case-insensitive)', () => {
+        const merged = mergeFixedHeaders(
+            { Authorization: 'keep' },
+            [{ key: 'authorization', value: 'override' }, { key: 'X-App', value: '1' }]
+        );
+        expect(merged).toEqual({ Authorization: 'keep', 'X-App': '1' });
+    });
+
+    test('buildFixedHeaderStorageKey should include host', () => {
+        expect(buildFixedHeaderStorageKey('example.com')).toBe('__crm_fixed_headers_example.com');
     });
 });
 
