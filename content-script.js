@@ -141,7 +141,10 @@ const CrossRequest = {
         #${MODAL_ID} .crm-panel { position: absolute; top: 10vh; left: 50%; transform: translateX(-50%); width: min(980px, calc(100vw - 32px)); max-height: 80vh; background: #fff; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.2); overflow: hidden; display: flex; flex-direction: column; }
         #${MODAL_ID} .crm-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #eee; }
         #${MODAL_ID} .crm-title { font-size: 14px; font-weight: 600; color: #111; }
+        #${MODAL_ID} .crm-header-actions { display: flex; align-items: center; gap: 8px; }
         #${MODAL_ID} .crm-close { border: none; background: transparent; cursor: pointer; font-size: 18px; line-height: 18px; padding: 4px 6px; color: #666; }
+        #${MODAL_ID} .crm-feedback { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid #d0d7de; background: #fff; color: #24292f; font-size: 12px; text-decoration: none; }
+        #${MODAL_ID} .crm-feedback:hover { background: #f6f8fa; }
         #${MODAL_ID} .crm-tabs { display: flex; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #eee; background: #f8fafc; flex-wrap: wrap; }
         #${MODAL_ID} .crm-tab { border: 1px solid #d0d7de; background: #fff; color: #24292f; padding: 4px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; }
         #${MODAL_ID} .crm-tab.active { background: #111827; border-color: #111827; color: #fff; }
@@ -1516,7 +1519,15 @@ const CrossRequest = {
 	        <div class="crm-panel" role="dialog" aria-modal="true">
 	          <div class="crm-header">
 	            <div class="crm-title">YApi 工具箱</div>
-	            <button class="crm-close" aria-label="Close">×</button>
+              <div class="crm-header-actions">
+                <a
+                  class="crm-feedback"
+                  href="https://github.com/leeguooooo/cross-request-master/issues/new"
+                  target="_blank"
+                  rel="noreferrer"
+                >问题反馈</a>
+	              <button class="crm-close" aria-label="Close">×</button>
+              </div>
 	          </div>
             <div class="crm-tabs" role="tablist">
               <button class="crm-tab" type="button" data-tab="mcp">MCP 配置</button>
