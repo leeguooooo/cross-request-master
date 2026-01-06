@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
 import readline from "readline";
+import { isMmdcAvailable, isPandocAvailable, renderMarkdownToHtml } from "./docs/markdown";
 import { runInstallSkill } from "./skill/install";
 import { YApiAuthService } from "./services/yapi/auth";
 
@@ -674,60 +674,6 @@ function normalizeBindingDir(rootDir: string, bindingDir: string): string {
   return relative;
 }
 
-function ensurePandoc(): void {
-  try {
-    execFileSync("pandoc", ["--version"], { stdio: "ignore" });
-  } catch (error) {
-    throw new Error("pandoc not found. Install pandoc first.");
-  }
-}
-
-function ensureMmdc(): void {
-  try {
-    execFileSync("mmdc", ["--version"], { stdio: "ignore" });
-  } catch (error) {
-    throw new Error("mmdc (mermaid-cli) not found. Install it to render Mermaid diagrams.");
-  }
-}
-
-function stripSvgProlog(svg: string): string {
-  return svg
-    .replace(/^\s*<\?xml[^>]*>\s*/i, "")
-    .replace(/^\s*<!DOCTYPE[^>]*>\s*/i, "")
-    .trim();
-}
-
-function renderMermaidToSvg(source: string): string {
-  ensureMmdc();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "yapi-docs-sync-"));
-  const inputPath = path.join(tmpDir, "diagram.mmd");
-  const outputPath = path.join(tmpDir, "diagram.svg");
-  try {
-    fs.writeFileSync(inputPath, source, "utf8");
-    execFileSync("mmdc", ["-i", inputPath, "-o", outputPath, "-b", "transparent"], { stdio: "pipe" });
-    const svg = fs.readFileSync(outputPath, "utf8");
-    return stripSvgProlog(svg);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-}
-
-function preprocessMarkdown(markdown: string, options: DocsSyncOptions): string {
-  if (options.noMermaid) return markdown;
-  const pattern = /```mermaid\s*\r?\n([\s\S]*?)\r?\n```/g;
-  return markdown.replace(pattern, (_match, content: string) => {
-    const svg = renderMermaidToSvg(String(content || "").trim());
-    return `<div class="mermaid-diagram">\n${svg}\n</div>`;
-  });
-}
-
-function markdownToHtml(markdown: string): string {
-  return execFileSync("pandoc", ["-f", "gfm+hard_line_breaks", "-t", "html"], {
-    input: markdown,
-    encoding: "utf8",
-  });
-}
-
 function loadMapping(dirPath: string): { mapping: DocsSyncMapping; mappingPath: string } {
   const mappingPath = path.join(dirPath, ".yapi.json");
   if (!fs.existsSync(mappingPath)) {
@@ -904,7 +850,7 @@ async function syncDocsDir(
     }
 
     const markdown = fs.readFileSync(mdPath, "utf8");
-    const html = markdownToHtml(preprocessMarkdown(markdown, options));
+    const html = renderMarkdownToHtml(markdown, { noMermaid: options.noMermaid });
     if (!options.dryRun && docId) {
       await updateInterface(docId, markdown, html, request);
     }
@@ -1057,7 +1003,12 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
   }
 
   try {
-    ensurePandoc();
+    if (!isPandocAvailable()) {
+      console.warn("pandoc not found, fallback to markdown-it renderer.");
+    }
+    if (!options.noMermaid && !isMmdcAvailable()) {
+      console.warn("mmdc not found, Mermaid blocks will stay as code.");
+    }
 
     if (options.bindings.length && options.dirs.length) {
       console.error("use --binding or --dir, not both");

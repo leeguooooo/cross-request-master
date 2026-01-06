@@ -10,6 +10,7 @@ import { YApiService } from "./services/yapi/api";
 import { ProjectInfoCache } from "./services/yapi/cache";
 import { Logger } from "./services/yapi/logger";
 import { YApiAuthService } from "./services/yapi/auth";
+import { renderMarkdownToHtml } from "./docs/markdown";
 
 type JsonLike = unknown;
 
@@ -56,6 +57,16 @@ function normalizeTagInput(value: JsonLike): { ok: true; value: string[] } | { o
     return { ok: true, value: trimmed.split(/[\s,]+/).map(s => s.trim()).filter(Boolean) };
   }
   return { ok: false, error: "tag 需要是字符串或字符串数组" };
+}
+
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
 }
 
 export class YapiMcpServer {
@@ -303,8 +314,14 @@ export class YapiMcpServer {
       params.tag = tagResult.value;
 
       params.status = input.status ?? (isUpdate ? (current as any)?.status : "undone");
-      params.desc = input.desc ?? (isUpdate ? (current as any)?.desc : "");
-      params.markdown = input.markdown ?? (isUpdate ? (current as any)?.markdown : "");
+      const markdownRaw = input.markdown ?? (isUpdate ? (current as any)?.markdown : "");
+      const markdownText = String(markdownRaw ?? "");
+      params.markdown = markdownText;
+      try {
+        params.desc = renderMarkdownToHtml(markdownText);
+      } catch (error) {
+        return { ok: false, error: `markdown 转 html 失败: ${formatErrorMessage(error)}` };
+      }
       params.message = input.message ?? (isUpdate ? (current as any)?.message : "");
 
       const reqParamsRaw = input.req_params !== undefined ? input.req_params : isUpdate ? (current as any)?.req_params : [];
@@ -583,8 +600,14 @@ export class YapiMcpServer {
         switch_notice: z.boolean().optional().describe("开启接口运行通知，默认true"),
         api_opened: z.boolean().optional().describe("开启API文档页面，默认true"),
         message: z.string().optional().describe("接口备注信息（对应 openapi 示例中的 message 字段）"),
-        desc: z.string().optional().describe("接口简要描述（不要把请求/响应结构都塞进 desc；结构请写到 req_* / res_body）"),
-        markdown: z.string().optional().describe("markdown格式的接口描述（补充说明/示例；结构仍建议写到 req_* / res_body）")
+        desc: z
+          .string()
+          .optional()
+          .describe("接口简要描述（会由 markdown 转成 HTML 后覆盖；结构请写到 req_* / res_body）"),
+        markdown: z
+          .string()
+          .optional()
+          .describe("markdown格式的接口描述（会转成 HTML 写入 desc；补充说明/示例写这里）")
       },
       async ({
         projectId,
@@ -785,8 +808,8 @@ export class YapiMcpServer {
         switch_notice: z.boolean().optional().describe("是否通知"),
         api_opened: z.boolean().optional().describe("是否公开"),
         message: z.string().optional().describe("接口备注信息"),
-        desc: z.string().optional().describe("接口描述"),
-        markdown: z.string().optional().describe("markdown 描述"),
+        desc: z.string().optional().describe("接口描述（会由 markdown 自动生成）"),
+        markdown: z.string().optional().describe("markdown 描述（会自动转 HTML 写入 desc）"),
       },
       async (input) => {
         try {
@@ -827,8 +850,8 @@ export class YapiMcpServer {
         switch_notice: z.boolean().optional().describe("是否通知"),
         api_opened: z.boolean().optional().describe("是否公开"),
         message: z.string().optional().describe("接口备注信息"),
-        desc: z.string().optional().describe("接口描述"),
-        markdown: z.string().optional().describe("markdown 描述"),
+        desc: z.string().optional().describe("接口描述（会由 markdown 自动生成）"),
+        markdown: z.string().optional().describe("markdown 描述（会自动转 HTML 写入 desc）"),
       },
       async (input) => {
         try {
@@ -869,8 +892,8 @@ export class YapiMcpServer {
         switch_notice: z.boolean().optional().describe("是否通知"),
         api_opened: z.boolean().optional().describe("是否公开"),
         message: z.string().optional().describe("接口备注信息"),
-        desc: z.string().optional().describe("接口描述"),
-        markdown: z.string().optional().describe("markdown 描述"),
+        desc: z.string().optional().describe("接口描述（会由 markdown 自动生成）"),
+        markdown: z.string().optional().describe("markdown 描述（会自动转 HTML 写入 desc）"),
       },
       async (input) => {
         try {
