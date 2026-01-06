@@ -323,6 +323,9 @@ export class YapiMcpServer {
       params.req_headers = reqHeadersParsed.value;
 
       params.req_body_type = input.req_body_type ?? (isUpdate ? (current as any)?.req_body_type : "");
+      if (!isUpdate && !params.req_body_type) {
+        params.req_body_type = "json";
+      }
 
       const reqBodyFormRaw = input.req_body_form !== undefined ? input.req_body_form : isUpdate ? (current as any)?.req_body_form : [];
       const reqBodyFormParsed = normalizeJsonArrayInput(reqBodyFormRaw, "req_body_form");
@@ -343,9 +346,15 @@ export class YapiMcpServer {
       const resBodyNormalized = normalizeStringOrJson(resBodyRaw, "res_body");
       if (!resBodyNormalized.ok) return { ok: false, error: resBodyNormalized.error };
       params.res_body = resBodyNormalized.value;
+      if (!isUpdate && !params.res_body) {
+        params.res_body = "{\"type\":\"object\",\"title\":\"title\",\"properties\":{}}";
+      }
 
       params.res_body_is_json_schema =
         input.res_body_is_json_schema ?? (isUpdate ? (current as any)?.res_body_is_json_schema : undefined);
+      if (!isUpdate && params.res_body_is_json_schema === undefined) {
+        params.res_body_is_json_schema = true;
+      }
 
       params.switch_notice = input.switch_notice ?? (isUpdate ? (current as any)?.switch_notice : undefined);
       params.api_opened = input.api_opened ?? (isUpdate ? (current as any)?.api_opened : undefined);
