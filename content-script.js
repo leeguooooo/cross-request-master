@@ -111,7 +111,7 @@ const CrossRequest = {
     }
   },
 
-  // YApi 接口页：AI 辅助（MCP 配置 + Markdown 复制）
+  // YApi 接口页：AI 辅助（MCP + Skill + CLI + Markdown 复制）
   initYapiAiAssist() {
     const STYLE_ID = 'crm-yapi-ai-style';
     const MODAL_ID = 'crm-yapi-ai-modal';
@@ -142,11 +142,21 @@ const CrossRequest = {
         #${MODAL_ID} .crm-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #eee; }
         #${MODAL_ID} .crm-title { font-size: 14px; font-weight: 600; color: #111; }
         #${MODAL_ID} .crm-close { border: none; background: transparent; cursor: pointer; font-size: 18px; line-height: 18px; padding: 4px 6px; color: #666; }
+        #${MODAL_ID} .crm-tabs { display: flex; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #eee; background: #f8fafc; flex-wrap: wrap; }
+        #${MODAL_ID} .crm-tab { border: 1px solid #d0d7de; background: #fff; color: #24292f; padding: 4px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; }
+        #${MODAL_ID} .crm-tab.active { background: #111827; border-color: #111827; color: #fff; }
+        #${MODAL_ID} .crm-tab:focus { outline: none; box-shadow: 0 0 0 2px rgba(17,24,39,.12); }
         #${MODAL_ID} .crm-body { padding: 14px; overflow: auto; }
         #${MODAL_ID} .crm-section { margin-bottom: 16px; }
         #${MODAL_ID} .crm-section h3 { font-size: 13px; margin: 0 0 8px; color: #111; }
         #${MODAL_ID} .crm-row { display: flex; gap: 10px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
         #${MODAL_ID} .crm-hint { font-size: 12px; color: #666; }
+        #${MODAL_ID} .crm-hint a { color: #1677ff; text-decoration: none; }
+        #${MODAL_ID} .crm-hint a:hover { text-decoration: underline; }
+        #${MODAL_ID} .crm-btn { height: 30px; padding: 0 12px; border-radius: 6px; border: 1px solid #d0d7de; background: #fff; color: #24292f; font-size: 12px; cursor: pointer; }
+        #${MODAL_ID} .crm-btn:hover { background: #f6f8fa; }
+        #${MODAL_ID} .crm-btn.crm-primary { background: #1677ff; border-color: #1677ff; color: #fff; }
+        #${MODAL_ID} .crm-btn.crm-primary:hover { background: #0958d9; border-color: #0958d9; }
         #${MODAL_ID} .crm-code { position: relative; }
         #${MODAL_ID} pre { margin: 0; padding: 10px 10px; background: #0b1020; color: #d6deeb; border-radius: 8px; overflow: auto; font-size: 12px; line-height: 1.5; }
         #${MODAL_ID} .crm-copy { position: absolute; top: 8px; right: 8px; height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; cursor: pointer; font-size: 12px; }
@@ -1505,15 +1515,16 @@ const CrossRequest = {
 	        <div class="crm-mask"></div>
 	        <div class="crm-panel" role="dialog" aria-modal="true">
 	          <div class="crm-header">
-	            <div class="crm-title">MCP 配置</div>
+	            <div class="crm-title">YApi 工具箱</div>
 	            <button class="crm-close" aria-label="Close">×</button>
 	          </div>
+            <div class="crm-tabs" role="tablist">
+              <button class="crm-tab" type="button" data-tab="mcp">MCP 配置</button>
+              <button class="crm-tab" type="button" data-tab="skill">Skill 一键安装</button>
+              <button class="crm-tab" type="button" data-tab="cli">CLI 使用</button>
+            </div>
 	          <div class="crm-body">
-	            <div class="crm-section">
-	              <h3 id="crm-mcp-title">MCP 配置</h3>
-	              <div class="crm-hint" id="crm-mcp-hint">已按当前项目自动拼好（Cursor / Codex / Gemini CLI / Claude Code）。</div>
-	              <div id="crm-mcp-content" style="margin-top: 10px;"></div>
-	            </div>
+	            <div id="crm-tool-content" style="margin-top: 4px;"></div>
 	          </div>
 	        </div>
 	      `;
@@ -1526,6 +1537,11 @@ const CrossRequest = {
       modal.querySelector('.crm-close').addEventListener('click', close);
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && modal.style.display !== 'none') close();
+      });
+      modal.querySelectorAll('.crm-tab').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          setActiveTab(modal, btn.dataset.tab);
+        });
       });
 
       return modal;
@@ -1550,7 +1566,139 @@ const CrossRequest = {
       return container;
     };
 
-    const openModal = async (mode) => {
+    const renderSectionHeader = (title, hint) => {
+      const container = document.createElement('div');
+      container.className = 'crm-section';
+      const titleEl = document.createElement('h3');
+      titleEl.textContent = title;
+      const hintEl = document.createElement('div');
+      hintEl.className = 'crm-hint';
+      hintEl.textContent = hint || '';
+      container.appendChild(titleEl);
+      container.appendChild(hintEl);
+      return { container, hintEl };
+    };
+
+    const renderCliPanel = (container) => {
+      const { container: header, hintEl } = renderSectionHeader(
+        'CLI 安装与文档同步',
+        '一键复制命令安装本地 CLI，并按绑定同步文档到 YApi。',
+      );
+      const link = document.createElement('a');
+      link.href = 'https://github.com/leeguooooo/cross-request-master';
+      link.target = '_blank';
+      link.rel = 'noreferrer';
+      link.textContent = 'cross-request-master';
+      if (hintEl) {
+        hintEl.appendChild(document.createTextNode(' 项目地址：'));
+        hintEl.appendChild(link);
+      }
+      container.appendChild(header);
+
+      container.appendChild(
+        renderCodeBlock(
+          '一键安装 CLI（本地）',
+          'npm i -g @leeguoo/yapi-mcp\n',
+        ),
+      );
+      container.appendChild(
+        renderCodeBlock(
+          '基础使用',
+          'yapi login\nyapi --path /api/interface/get --query id=123\n',
+        ),
+      );
+      container.appendChild(
+        renderCodeBlock(
+          '文档同步（绑定后执行）',
+          [
+            'yapi docs-sync bind add --name projectA --dir docs/release-notes --project-id 267 --catid 3667',
+            'yapi docs-sync --binding projectA',
+            '# 或同步 .yapi/docs-sync.json 内全部绑定',
+            'yapi docs-sync',
+          ].join('\n') + '\n',
+        ),
+      );
+    };
+
+    const renderMcpPanel = async (container, origin) => {
+      const { container: header } = renderSectionHeader(
+        'MCP 配置（所有项目）',
+        '全局模式：邮箱会尽量自动填入；只需填写密码。启动后先在对话里调用一次 yapi_update_token 自动缓存所有项目 token。',
+      );
+      container.appendChild(header);
+
+      const email = await resolveCurrentUserEmail(origin);
+      const blocks = buildGlobalMcpConfigBlocks({ origin, email });
+      container.appendChild(
+        renderCodeBlock(`Cursor（mcpServers: ${blocks.serverName}）`, blocks.cursor),
+      );
+      container.appendChild(
+        renderCodeBlock(`Codex（mcp_servers: ${blocks.serverName}）`, blocks.codex),
+      );
+      container.appendChild(
+        renderCodeBlock(`Gemini CLI（mcpServers: ${blocks.serverName}）`, blocks.gemini),
+      );
+      container.appendChild(
+        renderCodeBlock(`Claude Code（命令行: ${blocks.serverName}）`, blocks.claudeCode + '\n'),
+      );
+      container.appendChild(
+        renderCodeBlock(`Gemini CLI（命令行: ${blocks.serverName}）`, blocks.geminiCli + '\n'),
+      );
+      container.appendChild(renderCodeBlock('通用（直接运行）', blocks.rawCommand + '\n'));
+    };
+
+    const renderSkillPanel = async (container, origin) => {
+      const { container: header } = renderSectionHeader(
+        'Codex Skill 一键安装',
+        '执行后会安装到 $CODEX_HOME/skills/yapi 和 ~/.claude/skills/yapi，并写入 ~/.yapi/config.toml；无需预装，npx 会自动下载。',
+      );
+      container.appendChild(header);
+
+      const email = await resolveCurrentUserEmail(origin);
+      const command = buildSkillInstallCommand({ origin, email });
+      container.appendChild(renderCodeBlock('Codex Skill 一键安装', command + '\n'));
+    };
+
+    let activeTab = 'mcp';
+    let renderToken = 0;
+
+    const setActiveTab = async (modal, tab) => {
+      activeTab = tab || activeTab;
+      const tabButtons = Array.from(modal.querySelectorAll('.crm-tab'));
+      tabButtons.forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.tab === activeTab);
+      });
+
+      const content = modal.querySelector('#crm-tool-content');
+      if (!content) return;
+      const origin = location.origin;
+      const currentToken = ++renderToken;
+      content.textContent = '生成中...';
+
+      try {
+        if (activeTab === 'cli') {
+          content.textContent = '';
+          renderCliPanel(content);
+          return;
+        }
+
+        const nextContent = document.createElement('div');
+        if (activeTab === 'skill') {
+          await renderSkillPanel(nextContent, origin);
+        } else {
+          await renderMcpPanel(nextContent, origin);
+        }
+        if (currentToken !== renderToken) return;
+        content.textContent = '';
+        content.appendChild(nextContent);
+      } catch (e) {
+        if (currentToken !== renderToken) return;
+        content.textContent =
+          '配置生成失败：' + (e && e.message ? e.message : String(e || ''));
+      }
+    };
+
+    const openModal = async (tab) => {
       const route = parseYapiInterfaceRoute();
       if (!route) return;
 
@@ -1558,72 +1706,12 @@ const CrossRequest = {
       const modal = ensureModal();
       modal.style.display = 'block';
 
-      const headerTitle = modal.querySelector('.crm-title');
-      const panelTitle = modal.querySelector('#crm-mcp-title');
-      const panelHint = modal.querySelector('#crm-mcp-hint');
-
-      const mcpContainer = modal.querySelector('#crm-mcp-content');
-      mcpContainer.textContent = '生成中...';
-
-      const origin = location.origin;
-
-      try {
-      const isSkill = mode === 'skill';
-      if (isSkill) {
-        if (headerTitle) headerTitle.textContent = 'Skill 一键安装';
-        if (panelTitle) panelTitle.textContent = 'Codex Skill 一键安装';
-        if (panelHint) {
-          panelHint.textContent =
-            '执行后会安装到 $CODEX_HOME/skills/yapi 和 ~/.claude/skills/yapi，并写入 ~/.yapi/config.toml；无需预装，npx 会自动下载。';
-        }
-      } else {
-        if (headerTitle) headerTitle.textContent = 'MCP 配置（所有项目）';
-        if (panelTitle) panelTitle.textContent = 'MCP 配置（所有项目）';
-        if (panelHint) {
-          panelHint.textContent =
-            '全局模式：邮箱会尽量自动填入；只需填写密码。启动后先在对话里调用一次 yapi_update_token 自动缓存所有项目 token。';
-        }
-      }
-
-      if (isSkill) {
-        const email = await resolveCurrentUserEmail(origin);
-        const command = buildSkillInstallCommand({ origin, email });
-        mcpContainer.textContent = '';
-        mcpContainer.style.display = 'block';
-        mcpContainer.appendChild(renderCodeBlock('Codex Skill 一键安装', command + '\n'));
-        return;
-      }
-
-      const email = await resolveCurrentUserEmail(origin);
-      const blocks = buildGlobalMcpConfigBlocks({ origin, email });
-
-      mcpContainer.textContent = '';
-      mcpContainer.style.display = 'block';
-      mcpContainer.appendChild(
-        renderCodeBlock(`Cursor（mcpServers: ${blocks.serverName}）`, blocks.cursor)
-      );
-      mcpContainer.appendChild(
-        renderCodeBlock(`Codex（mcp_servers: ${blocks.serverName}）`, blocks.codex)
-      );
-      mcpContainer.appendChild(
-        renderCodeBlock(`Gemini CLI（mcpServers: ${blocks.serverName}）`, blocks.gemini)
-      );
-      mcpContainer.appendChild(
-        renderCodeBlock(`Claude Code（命令行: ${blocks.serverName}）`, blocks.claudeCode + '\n')
-      );
-      mcpContainer.appendChild(
-        renderCodeBlock(`Gemini CLI（命令行: ${blocks.serverName}）`, blocks.geminiCli + '\n')
-      );
-      mcpContainer.appendChild(renderCodeBlock('通用（直接运行）', blocks.rawCommand + '\n'));
-    } catch (e) {
-      mcpContainer.textContent =
-        '配置生成失败：' + (e && e.message ? e.message : String(e || ''));
-      }
+      await setActiveTab(modal, tab || activeTab);
     };
 
     const copyMarkdownDirectly = async (btn) => {
       const route = parseYapiInterfaceRoute();
-      if (!route) return;
+      if (!route) return false;
       btn.disabled = true;
       const origin = location.origin;
 
@@ -1632,8 +1720,10 @@ const CrossRequest = {
         const md = api ? interfaceToMarkdown(api) : '';
         if (!md) throw new Error('未能获取接口详情');
         await safeWriteClipboard(md);
+        return true;
       } catch (e) {
         console.error('[Content-Script] 复制接口 Markdown 失败:', e);
+        return false;
       } finally {
         btn.disabled = false;
       }
@@ -1659,26 +1749,32 @@ const CrossRequest = {
       const group = document.createElement('span');
       group.id = BTN_GROUP_ID;
 
-      const mcpGlobalBtn = document.createElement('button');
-      mcpGlobalBtn.className = 'crm-btn';
-      mcpGlobalBtn.type = 'button';
-      mcpGlobalBtn.textContent = 'MCP 配置';
-      mcpGlobalBtn.addEventListener('click', () => openModal('global'));
-
-      const skillBtn = document.createElement('button');
-      skillBtn.className = 'crm-btn';
-      skillBtn.type = 'button';
-      skillBtn.textContent = 'Skill 一键安装';
-      skillBtn.addEventListener('click', () => openModal('skill'));
+      const toolBtn = document.createElement('button');
+      toolBtn.className = 'crm-btn crm-primary';
+      toolBtn.type = 'button';
+      toolBtn.textContent = 'YApi 工具';
+      toolBtn.addEventListener('click', () => openModal());
 
       const copyBtn = document.createElement('button');
-      copyBtn.className = 'crm-btn crm-primary';
+      copyBtn.className = 'crm-btn';
       copyBtn.type = 'button';
-      copyBtn.textContent = '复制当前页面给 AI';
-      copyBtn.addEventListener('click', () => copyMarkdownDirectly(copyBtn));
+      copyBtn.textContent = '复制给 AI';
+      copyBtn.addEventListener('click', async () => {
+        const ok = await copyMarkdownDirectly(copyBtn);
+        if (ok) {
+          copyBtn.textContent = '已复制';
+          setTimeout(() => {
+            copyBtn.textContent = '复制给 AI';
+          }, 1400);
+        } else {
+          copyBtn.textContent = '复制失败';
+          setTimeout(() => {
+            copyBtn.textContent = '复制给 AI';
+          }, 1400);
+        }
+      });
 
-      group.appendChild(mcpGlobalBtn);
-      group.appendChild(skillBtn);
+      group.appendChild(toolBtn);
       group.appendChild(copyBtn);
       titleEl.appendChild(group);
     };

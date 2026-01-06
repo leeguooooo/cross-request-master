@@ -1,0 +1,82 @@
+{
+  "name": "@leeguoo/yapi-mcp",
+  "version": "0.3.2",
+  "description": "YApi Auto MCP Server - Model Context Protocol server for YApi integration, enables AI tools like Cursor to interact with YApi API documentation",
+  "main": "dist/index.js",
+  "bin": {
+    "yapi-auto-mcp": "dist/cli.js",
+    "yapi-mcp": "dist/cli.js",
+    "yapi": "dist/yapi-cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias",
+    "type-check": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "start:cli": "cross-env NODE_ENV=cli node dist/index.js",
+    "start:http": "node dist/index.js",
+    "dev": "cross-env NODE_ENV=development tsx watch src/index.ts",
+    "dev:cli": "cross-env NODE_ENV=development tsx watch src/index.ts --stdio",
+    "smoke:global": "pnpm build && tsx scripts/smoke-global.ts",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "inspect": "pnpx @modelcontextprotocol/inspector",
+    "prepare": "pnpm run build && chmod +x ./dist/cli.js ./dist/yapi-cli.js",
+    "pub:release": "pnpm build && npm publish"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leeguooooo/Yapi-MCP.git"
+  },
+  "keywords": [
+    "yapi",
+    "mcp",
+    "typescript",
+    "model-context-protocol",
+    "api-documentation",
+    "cursor",
+    "ai-tools",
+    "api-management",
+    "yapi-integration",
+    "claude",
+    "anthropic",
+    "ai-assistant",
+    "interface-management",
+    "api-design",
+    "documentation-tool"
+  ],
+  "author": "liangzhensheng <372959130@qq.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "@types/yargs": "^17.0.33",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "remeda": "^2.20.1",
+    "yargs": "^17.7.2",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.17.32",
+    "@typescript-eslint/eslint-plugin": "^8.24.0",
+    "@typescript-eslint/parser": "^8.24.0",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.20.1",
+    "eslint-config-prettier": "^10.0.1",
+    "prettier": "^3.5.0",
+    "tsc-alias": "^1.8.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

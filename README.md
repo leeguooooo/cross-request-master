@@ -6,6 +6,9 @@
 
 面向 API 开发/测试的 Chrome 扩展：绕过 CORS 发请求、自动生成 cURL，并对 YApi「运行」页做增强（内嵌 cURL、路径参数 `{param}` 引导填写）。
 
+本仓库包含生态内的 CLI/MCP 子项目：`packages/yapi-mcp`（发布包名保持为 `@leeguoo/yapi-mcp`，不影响扩展打包）。
+
+
 <p align="center">
   <img
     src="screenshots/store/store-2-yapi-run-curl-1280x800.jpg"
@@ -28,8 +31,8 @@
 - 内嵌 cURL：YApi「运行」页 URL 下方展示可复制的 cURL 命令
 - 路径参数引导：URL 含 `{param}` 时提示填写，避免请求失败
 - 固定 Header：为跨域请求自动追加自定义 Header
-- AI/MCP 导出：一键生成 MCP 配置 / 复制接口信息给 AI
-- Skill 一键安装：生成 npx 命令并写入 `~/.yapi/config.toml`
+- YApi 工具箱：一键生成 MCP 配置 / Skill 安装 / CLI 使用与 docs-sync
+- 复制给 AI：把当前接口信息整理为 Markdown 一键复制
 - jQuery/Fetch 支持：兼容 `$.ajax` / `fetch` / 脚本能力
 - Manifest V3：兼容最新 Chrome 扩展标准
 
@@ -53,9 +56,8 @@ cd cross-request-master
 安装后直接在 YApi「运行」页发送请求即可，扩展会自动处理跨域、显示 cURL，并把 JSON 响应解析为对象供脚本使用。
 
 在接口详情页（基本信息区域右上角）额外提供：
-- **所有项目 MCP 配置**：全局模式（账号密码登录），只需配置一次，后续可自动缓存所有项目 token（生成配置默认使用 `@leeguoo/yapi-mcp`）
-- **Skill 一键安装**：生成 `npx -y @leeguoo/yapi-mcp install-skill` 命令，自动写入 `~/.yapi/config.toml`
-- **复制当前页面给 AI**：把当前接口信息整理成 Markdown（仅接口相关字段）复制到剪贴板
+- **YApi 工具箱**：包含 MCP 配置（所有项目）、Skill 一键安装、CLI 使用与 docs-sync 说明（自动拼好命令）
+- **复制给 AI**：把当前接口信息整理成 Markdown（仅接口相关字段）复制到剪贴板
 
 ### YApi OpenAPI（Yapi-MCP tool 同名方法）
 

@@ -1,6 +1,6 @@
 {
   "name": "cross-request-master",
-  "version": "4.5.14",
+  "version": "4.5.15",
   "description": "YApi 跨域请求扩展",
   "private": true,
   "types": "types/cross-request.d.ts",
@@ -13,6 +13,7 @@
     "format:check": "prettier --check \"*.js\" \"*.json\" \"*.md\"",
     "hooks:install": "git config core.hooksPath .githooks",
     "release:check": "node scripts/check-release.js",
+    "publish:cli": "pnpm -C packages/yapi-mcp pub:release",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
