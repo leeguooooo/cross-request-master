@@ -98,6 +98,9 @@ npx -y @leeguoo/yapi-mcp yapi docs-sync
 
 说明：
 - 绑定配置保存在 `.yapi/docs-sync.json`（自动维护 `files`：文件名 → API id）
+- 绑定模式同步后会写入 `.yapi/docs-sync.links.json`（本地文档 → YApi 文档 URL）
+- 绑定模式同步后会写入 `.yapi/docs-sync.projects.json`（项目元数据/环境缓存）
+- 绑定模式同步后会写入 `.yapi/docs-sync.deployments.json`（本地文档 → 已部署 URL）
 - 兼容旧方式：`--dir` 读取目录内 `.yapi.json` 的 `project_id/catid` 与 `source_files`
 - 管理绑定：`yapi docs-sync bind list|get|add|update|remove`
 - 可用 `--dry-run` 只做转换不更新
