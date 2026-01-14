@@ -14,6 +14,34 @@ let cachedPandocAvailable: boolean | null = null;
 let cachedMmdcAvailable: boolean | null = null;
 let cachedMarkdownIt: MarkdownIt | null = null;
 
+function stripAnsi(input: string): string {
+  return input.replace(/\u001b\[[0-9;]*m/g, "");
+}
+
+function formatMermaidError(error: unknown): string {
+  if (!error || typeof error !== "object") return "未知错误";
+  const err = error as { message?: string; stderr?: unknown; stdout?: unknown };
+  const parts: string[] = [];
+  if (err.message) {
+    parts.push(stripAnsi(err.message).trim());
+  }
+  const extra = [err.stderr, err.stdout].find(
+    (value) => typeof value === "string" || Buffer.isBuffer(value),
+  );
+  if (extra) {
+    const text = stripAnsi(
+      typeof extra === "string" ? extra : Buffer.from(extra as Buffer).toString("utf8"),
+    );
+    const line = text.split(/\r?\n/).map((item) => item.trim()).find(Boolean);
+    if (line && !parts.join(" ").includes(line)) {
+      parts.push(line);
+    }
+  }
+  const merged = parts.join(" | ").trim();
+  if (!merged) return "未知错误";
+  return merged.length > 300 ? `${merged.slice(0, 300)}...` : merged;
+}
+
 export function isPandocAvailable(): boolean {
   if (cachedPandocAvailable !== null) return cachedPandocAvailable;
   try {
@@ -96,15 +124,22 @@ function renderMermaidToSvg(source: string): MermaidRenderResult {
   const attempts: Array<{ text: string; normalized: boolean }> = [{ text: source, normalized: false }];
   if (normalized !== source) attempts.push({ text: normalized, normalized: true });
   let lastError: unknown;
+  let normalizedTried = false;
   for (const attempt of attempts) {
     try {
       return { svg: renderMermaidWithMmdc(attempt.text), normalized: attempt.normalized };
     } catch (error) {
+      if (attempt.normalized) normalizedTried = true;
       lastError = error;
     }
   }
-  if (lastError instanceof Error) throw lastError;
-  throw new Error("Failed to render mermaid diagram.");
+  if (lastError instanceof Error) {
+    const suffix = normalizedTried ? " (auto label normalization attempted)" : "";
+    throw new Error(`${lastError.message}${suffix}`);
+  }
+  throw new Error(
+    normalizedTried ? "Failed to render mermaid diagram after label normalization." : "Failed to render mermaid diagram.",
+  );
 }
 
 export function preprocessMarkdown(markdown: string, options: MarkdownRenderOptions = {}): string {
@@ -129,9 +164,10 @@ export function preprocessMarkdown(markdown: string, options: MarkdownRenderOpti
         }
       }
       return `<div class="mermaid-diagram">\n${result.svg}\n</div>`;
-    } catch {
+    } catch (error) {
       if (shouldLog) {
-        logger(`Mermaid 块 #${index} 渲染失败，保持代码块原样。`);
+        const message = formatMermaidError(error);
+        logger(`Mermaid 块 #${index} 渲染失败，保持代码块原样。原因: ${message}`);
       }
       return match;
     }
