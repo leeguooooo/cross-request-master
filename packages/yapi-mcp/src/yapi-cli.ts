@@ -1307,9 +1307,11 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
   try {
     if (!isPandocAvailable()) {
       console.warn("pandoc not found, fallback to markdown-it renderer.");
+      console.warn("Install pandoc: https://pandoc.org/installing.html");
     }
     if (!options.noMermaid && !isMmdcAvailable()) {
       console.warn("mmdc not found, Mermaid blocks will stay as code.");
+      console.warn("Install mermaid-cli: npm i -g @mermaid-js/mermaid-cli");
     }
 
     if (options.bindings.length && options.dirs.length) {

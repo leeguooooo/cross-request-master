@@ -53,8 +53,7 @@ function stripSvgProlog(svg: string): string {
     .trim();
 }
 
-function renderMermaidToSvg(source: string): string {
-  ensureMmdc();
+function renderMermaidWithMmdc(source: string): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "yapi-docs-sync-"));
   const inputPath = path.join(tmpDir, "diagram.mmd");
   const outputPath = path.join(tmpDir, "diagram.svg");
@@ -66,6 +65,39 @@ function renderMermaidToSvg(source: string): string {
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
+}
+
+function normalizeMermaidLabels(source: string): string {
+  return source.replace(/(?<!\[)\[([^\]\n]+)\](?!\])/g, (match, label: string) => {
+    const trimmed = String(label || "").trim();
+    if (!trimmed || !/[()]/.test(trimmed)) return match;
+    if (
+      (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'"))
+    ) {
+      return match;
+    }
+    if (trimmed.startsWith("(") && trimmed.endsWith(")")) return match;
+    const escaped = trimmed.replace(/"/g, '\\"');
+    return `["${escaped}"]`;
+  });
+}
+
+function renderMermaidToSvg(source: string): string {
+  ensureMmdc();
+  const attempts = [source];
+  const normalized = normalizeMermaidLabels(source);
+  if (normalized !== source) attempts.push(normalized);
+  let lastError: unknown;
+  for (const attempt of attempts) {
+    try {
+      return renderMermaidWithMmdc(attempt);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError instanceof Error) throw lastError;
+  throw new Error("Failed to render mermaid diagram.");
 }
 
 export function preprocessMarkdown(markdown: string, options: MarkdownRenderOptions = {}): string {
