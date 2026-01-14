@@ -6,6 +6,8 @@ import MarkdownIt from "markdown-it";
 
 export type MarkdownRenderOptions = {
   noMermaid?: boolean;
+  logMermaid?: boolean;
+  logger?: (message: string) => void;
 };
 
 let cachedPandocAvailable: boolean | null = null;
@@ -67,6 +69,11 @@ function renderMermaidWithMmdc(source: string): string {
   }
 }
 
+type MermaidRenderResult = {
+  svg: string;
+  normalized: boolean;
+};
+
 function normalizeMermaidLabels(source: string): string {
   return source.replace(/(?<!\[)\[([^\]\n]+)\](?!\])/g, (match, label: string) => {
     const trimmed = String(label || "").trim();
@@ -83,15 +90,15 @@ function normalizeMermaidLabels(source: string): string {
   });
 }
 
-function renderMermaidToSvg(source: string): string {
+function renderMermaidToSvg(source: string): MermaidRenderResult {
   ensureMmdc();
-  const attempts = [source];
   const normalized = normalizeMermaidLabels(source);
-  if (normalized !== source) attempts.push(normalized);
+  const attempts: Array<{ text: string; normalized: boolean }> = [{ text: source, normalized: false }];
+  if (normalized !== source) attempts.push({ text: normalized, normalized: true });
   let lastError: unknown;
   for (const attempt of attempts) {
     try {
-      return renderMermaidWithMmdc(attempt);
+      return { svg: renderMermaidWithMmdc(attempt.text), normalized: attempt.normalized };
     } catch (error) {
       lastError = error;
     }
@@ -104,11 +111,28 @@ export function preprocessMarkdown(markdown: string, options: MarkdownRenderOpti
   if (options.noMermaid) return markdown;
   if (!isMmdcAvailable()) return markdown;
   const pattern = /```mermaid\s*\r?\n([\s\S]*?)\r?\n```/g;
+  const shouldLog = Boolean(options.logMermaid);
+  const logger = options.logger || console.log;
+  let index = 0;
   return markdown.replace(pattern, (match, content: string) => {
+    index += 1;
+    if (shouldLog) {
+      logger(`已识别 Mermaid 块 #${index}，开始渲染...`);
+    }
     try {
-      const svg = renderMermaidToSvg(String(content || "").trim());
-      return `<div class="mermaid-diagram">\n${svg}\n</div>`;
+      const result = renderMermaidToSvg(String(content || "").trim());
+      if (shouldLog) {
+        if (result.normalized) {
+          logger(`Mermaid 块 #${index} 渲染成功（已自动修正 label）。`);
+        } else {
+          logger(`Mermaid 块 #${index} 渲染成功。`);
+        }
+      }
+      return `<div class="mermaid-diagram">\n${result.svg}\n</div>`;
     } catch {
+      if (shouldLog) {
+        logger(`Mermaid 块 #${index} 渲染失败，保持代码块原样。`);
+      }
       return match;
     }
   });

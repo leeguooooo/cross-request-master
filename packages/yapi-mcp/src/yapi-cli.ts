@@ -1059,7 +1059,12 @@ async function syncDocsDir(
     }
 
     const markdown = fs.readFileSync(mdPath, "utf8");
-    const html = renderMarkdownToHtml(markdown, { noMermaid: options.noMermaid });
+    const logPrefix = `[docs-sync:${relName}]`;
+    const html = renderMarkdownToHtml(markdown, {
+      noMermaid: options.noMermaid,
+      logMermaid: true,
+      logger: (message) => console.log(`${logPrefix} ${message}`),
+    });
     if (!options.dryRun && docId) {
       await updateInterface(docId, markdown, html, request);
     }
