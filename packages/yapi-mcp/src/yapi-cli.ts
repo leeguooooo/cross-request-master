@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -46,6 +47,7 @@ type DocsSyncOptions = {
   bindings: string[];
   dryRun?: boolean;
   noMermaid?: boolean;
+  force?: boolean;
   help?: boolean;
 };
 
@@ -55,6 +57,7 @@ type DocsSyncMapping = {
   template_id?: number;
   source_files?: string[];
   files?: Record<string, number>;
+  file_hashes?: Record<string, string>;
   [key: string]: unknown;
 };
 
@@ -362,6 +365,7 @@ function parseDocsSyncArgs(argv: string[]): DocsSyncOptions {
     if (arg.startsWith("--binding=")) { options.bindings.push(arg.slice(10)); continue; }
     if (arg === "--dry-run") { options.dryRun = true; continue; }
     if (arg === "--no-mermaid") { options.noMermaid = true; continue; }
+    if (arg === "--force") { options.force = true; continue; }
     if (arg.startsWith("-")) continue;
     options.dirs.push(arg);
   }
@@ -428,6 +432,7 @@ function usage(): string {
     "  --binding <name>       use binding from .yapi/docs-sync.json (repeatable)",
     "  --dry-run              compute but do not update YApi or mapping files",
     "  --no-mermaid           do not render mermaid code blocks",
+    "  --force                sync all files even if unchanged",
     "Docs-sync bind actions:",
     "  list, get, add, update, remove",
     "  -V, --version          print version",
@@ -455,6 +460,7 @@ function docsSyncUsage(): string {
     "  --binding <name>       use binding from .yapi/docs-sync.json (repeatable)",
     "  --dry-run              compute but do not update YApi or mapping files",
     "  --no-mermaid           do not render mermaid code blocks",
+    "  --force                sync all files even if unchanged",
     "  -h, --help             show help",
   ].join("\n");
 }
@@ -818,6 +824,13 @@ function saveMapping(mapping: DocsSyncMapping, mappingPath: string): void {
   fs.writeFileSync(mappingPath, `${JSON.stringify(mapping, null, 2)}\n`, "utf8");
 }
 
+function buildDocsSyncHash(markdown: string, options: DocsSyncOptions): string {
+  const hash = crypto.createHash("sha1");
+  hash.update(options.noMermaid ? "no-mermaid\n" : "mermaid\n");
+  hash.update(markdown);
+  return hash.digest("hex");
+}
+
 function resolveSourceFiles(dirPath: string, mapping: DocsSyncMapping): string[] {
   const sources = Array.isArray(mapping.source_files) ? mapping.source_files : [];
   if (!sources.length) {
@@ -1014,8 +1027,13 @@ async function syncDocsDir(
   mapping: DocsSyncMapping,
   options: DocsSyncOptions,
   request: YapiRequest,
-): Promise<{ updated: number; created: number; files: Record<string, DocsSyncFileInfo> }> {
-  mapping.files = mapping.files || {};
+): Promise<{ updated: number; created: number; skipped: number; files: Record<string, DocsSyncFileInfo> }> {
+  if (!mapping.files || typeof mapping.files !== "object") {
+    mapping.files = {};
+  }
+  if (!mapping.file_hashes || typeof mapping.file_hashes !== "object") {
+    mapping.file_hashes = {};
+  }
 
   const envProjectId = process.env.YAPI_PROJECT_ID;
   const envCatId = process.env.YAPI_CATID;
@@ -1032,6 +1050,7 @@ async function syncDocsDir(
 
   let updated = 0;
   let created = 0;
+  let skipped = 0;
   const fileInfos: Record<string, DocsSyncFileInfo> = {};
   const files = resolveSourceFiles(dirPath, mapping);
   for (const mdPath of files) {
@@ -1059,6 +1078,13 @@ async function syncDocsDir(
     }
 
     const markdown = fs.readFileSync(mdPath, "utf8");
+    const contentHash = buildDocsSyncHash(markdown, options);
+    const previousHash = mapping.file_hashes[relName];
+    if (!options.force && docId && previousHash && previousHash === contentHash) {
+      skipped += 1;
+      continue;
+    }
+
     const logPrefix = `[docs-sync:${relName}]`;
     const html = renderMarkdownToHtml(markdown, {
       noMermaid: options.noMermaid,
@@ -1068,10 +1094,13 @@ async function syncDocsDir(
     if (!options.dryRun && docId) {
       await updateInterface(docId, markdown, html, request);
     }
+    if (docId) {
+      mapping.file_hashes[relName] = contentHash;
+    }
     updated += 1;
   }
 
-  return { updated, created, files: fileInfos };
+  return { updated, created, skipped, files: fileInfos };
 }
 
 function buildEnvUrls(
@@ -1267,6 +1296,7 @@ async function runDocsSyncBindings(rawArgs: string[]): Promise<number> {
     template_id: existing.template_id,
     source_files: existing.source_files ? [...existing.source_files] : undefined,
     files: existing.files ? { ...existing.files } : {},
+    file_hashes: existing.file_hashes ? { ...existing.file_hashes } : {},
   };
 
   if (options.dir) {
@@ -1499,7 +1529,9 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
         }
 
         const result = await syncDocsDir(dirPath, binding, options, request);
-        console.log(`synced=${result.updated} created=${result.created} binding=${name} dir=${dirPath}`);
+        console.log(
+          `synced=${result.updated} created=${result.created} skipped=${result.skipped} binding=${name} dir=${dirPath}`,
+        );
         bindingResults[name] = { binding, files: result.files };
       }
 
@@ -1521,7 +1553,7 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
           saveMapping(mapping, mappingPath);
         }
 
-        console.log(`synced=${result.updated} created=${result.created} dir=${dirPath}`);
+        console.log(`synced=${result.updated} created=${result.created} skipped=${result.skipped} dir=${dirPath}`);
       }
     }
 

@@ -104,6 +104,7 @@ npx -y @leeguoo/yapi-mcp yapi docs-sync
 - 兼容旧方式：`--dir` 读取目录内 `.yapi.json` 的 `project_id/catid` 与 `source_files`
 - 管理绑定：`yapi docs-sync bind list|get|add|update|remove`
 - 可用 `--dry-run` 只做转换不更新
+- 默认只同步内容变更的文件，如需全量更新使用 `--force`
 - 如需跳过 Mermaid 渲染，使用 `--no-mermaid`
 
 ### 手动方式：使用 npx（无需安装）

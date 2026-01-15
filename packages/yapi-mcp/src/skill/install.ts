@@ -25,6 +25,7 @@ const SKILL_MD = [
   "## Docs sync",
   "- Bind local docs to YApi category with `yapi docs-sync bind add --name <binding> --dir <path> --project-id <id> --catid <id>` (stored in `.yapi/docs-sync.json`).",
   "- Sync with `yapi docs-sync --binding <binding>` or run all bindings with `yapi docs-sync`.",
+  "- Default syncs only changed files; use `--force` to sync everything.",
   "- Extra mappings (generated after docs-sync run in binding mode):",
   "  - `.yapi/docs-sync.links.json`: local docs to YApi doc URLs.",
   "  - `.yapi/docs-sync.projects.json`: cached project metadata/envs.",
