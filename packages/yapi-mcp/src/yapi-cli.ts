@@ -27,6 +27,7 @@ type Options = {
   data?: string;
   dataFile?: string;
   timeout?: number;
+  q?: string;
   noPretty?: boolean;
   help?: boolean;
   version?: boolean;
@@ -206,7 +207,10 @@ function parseSimpleToml(text: string): Record<string, string> {
     const key = line.slice(0, idx).trim();
     let value = line.slice(idx + 1).trim();
     if (!key) continue;
-    if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     data[key] = value;
@@ -239,7 +243,11 @@ function resolveToken(tokenValue: string, projectId: string): string {
   return tokenValue;
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -286,41 +294,154 @@ function parseArgs(argv: string[]): Options {
       options.version = true;
       continue;
     }
-    if (arg === "--config") { options.config = argv[++i]; continue; }
-    if (arg.startsWith("--config=")) { options.config = arg.slice(9); continue; }
-    if (arg === "--base-url") { options.baseUrl = argv[++i]; continue; }
-    if (arg.startsWith("--base-url=")) { options.baseUrl = arg.slice(11); continue; }
-    if (arg === "--token") { options.token = argv[++i]; continue; }
-    if (arg.startsWith("--token=")) { options.token = arg.slice(8); continue; }
-    if (arg === "--project-id") { options.projectId = argv[++i]; continue; }
-    if (arg.startsWith("--project-id=")) { options.projectId = arg.slice(13); continue; }
-    if (arg === "--auth-mode") { options.authMode = argv[++i]; continue; }
-    if (arg.startsWith("--auth-mode=")) { options.authMode = arg.slice(12); continue; }
-    if (arg === "--email") { options.email = argv[++i]; continue; }
-    if (arg.startsWith("--email=")) { options.email = arg.slice(8); continue; }
-    if (arg === "--password") { options.password = argv[++i]; continue; }
-    if (arg.startsWith("--password=")) { options.password = arg.slice(11); continue; }
-    if (arg === "--cookie") { options.cookie = argv[++i]; continue; }
-    if (arg.startsWith("--cookie=")) { options.cookie = arg.slice(9); continue; }
-    if (arg === "--token-param") { options.tokenParam = argv[++i]; continue; }
-    if (arg.startsWith("--token-param=")) { options.tokenParam = arg.slice(14); continue; }
-    if (arg === "--method") { options.method = argv[++i]; continue; }
-    if (arg.startsWith("--method=")) { options.method = arg.slice(9); continue; }
-    if (arg === "--path") { options.path = argv[++i]; continue; }
-    if (arg.startsWith("--path=")) { options.path = arg.slice(7); continue; }
-    if (arg === "--url") { options.url = argv[++i]; continue; }
-    if (arg.startsWith("--url=")) { options.url = arg.slice(6); continue; }
-    if (arg === "--query") { options.query?.push(argv[++i]); continue; }
-    if (arg.startsWith("--query=")) { options.query?.push(arg.slice(8)); continue; }
-    if (arg === "--header") { options.header?.push(argv[++i]); continue; }
-    if (arg.startsWith("--header=")) { options.header?.push(arg.slice(9)); continue; }
-    if (arg === "--data") { options.data = argv[++i]; continue; }
-    if (arg.startsWith("--data=")) { options.data = arg.slice(7); continue; }
-    if (arg === "--data-file") { options.dataFile = argv[++i]; continue; }
-    if (arg.startsWith("--data-file=")) { options.dataFile = arg.slice(12); continue; }
-    if (arg === "--timeout") { options.timeout = Number(argv[++i]); continue; }
-    if (arg.startsWith("--timeout=")) { options.timeout = Number(arg.slice(10)); continue; }
-    if (arg === "--no-pretty") { options.noPretty = true; continue; }
+    if (arg === "--config") {
+      options.config = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--config=")) {
+      options.config = arg.slice(9);
+      continue;
+    }
+    if (arg === "--base-url") {
+      options.baseUrl = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--base-url=")) {
+      options.baseUrl = arg.slice(11);
+      continue;
+    }
+    if (arg === "--token") {
+      options.token = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--token=")) {
+      options.token = arg.slice(8);
+      continue;
+    }
+    if (arg === "--project-id") {
+      options.projectId = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--project-id=")) {
+      options.projectId = arg.slice(13);
+      continue;
+    }
+    if (arg === "--auth-mode") {
+      options.authMode = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--auth-mode=")) {
+      options.authMode = arg.slice(12);
+      continue;
+    }
+    if (arg === "--email") {
+      options.email = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--email=")) {
+      options.email = arg.slice(8);
+      continue;
+    }
+    if (arg === "--password") {
+      options.password = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--password=")) {
+      options.password = arg.slice(11);
+      continue;
+    }
+    if (arg === "--cookie") {
+      options.cookie = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--cookie=")) {
+      options.cookie = arg.slice(9);
+      continue;
+    }
+    if (arg === "--token-param") {
+      options.tokenParam = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--token-param=")) {
+      options.tokenParam = arg.slice(14);
+      continue;
+    }
+    if (arg === "--method") {
+      options.method = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--method=")) {
+      options.method = arg.slice(9);
+      continue;
+    }
+    if (arg === "--path") {
+      options.path = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--path=")) {
+      options.path = arg.slice(7);
+      continue;
+    }
+    if (arg === "--url") {
+      options.url = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--url=")) {
+      options.url = arg.slice(6);
+      continue;
+    }
+    if (arg === "--query") {
+      options.query?.push(argv[++i]);
+      continue;
+    }
+    if (arg.startsWith("--query=")) {
+      options.query?.push(arg.slice(8));
+      continue;
+    }
+    if (arg === "--q" || arg === "-q") {
+      options.q = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--q=")) {
+      options.q = arg.slice(4);
+      continue;
+    }
+    if (arg === "--header") {
+      options.header?.push(argv[++i]);
+      continue;
+    }
+    if (arg.startsWith("--header=")) {
+      options.header?.push(arg.slice(9));
+      continue;
+    }
+    if (arg === "--data") {
+      options.data = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--data=")) {
+      options.data = arg.slice(7);
+      continue;
+    }
+    if (arg === "--data-file") {
+      options.dataFile = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--data-file=")) {
+      options.dataFile = arg.slice(12);
+      continue;
+    }
+    if (arg === "--timeout") {
+      options.timeout = Number(argv[++i]);
+      continue;
+    }
+    if (arg.startsWith("--timeout=")) {
+      options.timeout = Number(arg.slice(10));
+      continue;
+    }
+    if (arg === "--no-pretty") {
+      options.noPretty = true;
+      continue;
+    }
   }
   return options;
 }
@@ -339,33 +460,114 @@ function parseDocsSyncArgs(argv: string[]): DocsSyncOptions {
       options.help = true;
       continue;
     }
-    if (arg === "--config") { options.config = argv[++i]; continue; }
-    if (arg.startsWith("--config=")) { options.config = arg.slice(9); continue; }
-    if (arg === "--base-url") { options.baseUrl = argv[++i]; continue; }
-    if (arg.startsWith("--base-url=")) { options.baseUrl = arg.slice(11); continue; }
-    if (arg === "--token") { options.token = argv[++i]; continue; }
-    if (arg.startsWith("--token=")) { options.token = arg.slice(8); continue; }
-    if (arg === "--project-id") { options.projectId = argv[++i]; continue; }
-    if (arg.startsWith("--project-id=")) { options.projectId = arg.slice(13); continue; }
-    if (arg === "--auth-mode") { options.authMode = argv[++i]; continue; }
-    if (arg.startsWith("--auth-mode=")) { options.authMode = arg.slice(12); continue; }
-    if (arg === "--email") { options.email = argv[++i]; continue; }
-    if (arg.startsWith("--email=")) { options.email = arg.slice(8); continue; }
-    if (arg === "--password") { options.password = argv[++i]; continue; }
-    if (arg.startsWith("--password=")) { options.password = arg.slice(11); continue; }
-    if (arg === "--cookie") { options.cookie = argv[++i]; continue; }
-    if (arg.startsWith("--cookie=")) { options.cookie = arg.slice(9); continue; }
-    if (arg === "--token-param") { options.tokenParam = argv[++i]; continue; }
-    if (arg.startsWith("--token-param=")) { options.tokenParam = arg.slice(14); continue; }
-    if (arg === "--timeout") { options.timeout = Number(argv[++i]); continue; }
-    if (arg.startsWith("--timeout=")) { options.timeout = Number(arg.slice(10)); continue; }
-    if (arg === "--dir") { options.dirs.push(argv[++i]); continue; }
-    if (arg.startsWith("--dir=")) { options.dirs.push(arg.slice(6)); continue; }
-    if (arg === "--binding") { options.bindings.push(argv[++i]); continue; }
-    if (arg.startsWith("--binding=")) { options.bindings.push(arg.slice(10)); continue; }
-    if (arg === "--dry-run") { options.dryRun = true; continue; }
-    if (arg === "--no-mermaid") { options.noMermaid = true; continue; }
-    if (arg === "--force") { options.force = true; continue; }
+    if (arg === "--config") {
+      options.config = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--config=")) {
+      options.config = arg.slice(9);
+      continue;
+    }
+    if (arg === "--base-url") {
+      options.baseUrl = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--base-url=")) {
+      options.baseUrl = arg.slice(11);
+      continue;
+    }
+    if (arg === "--token") {
+      options.token = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--token=")) {
+      options.token = arg.slice(8);
+      continue;
+    }
+    if (arg === "--project-id") {
+      options.projectId = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--project-id=")) {
+      options.projectId = arg.slice(13);
+      continue;
+    }
+    if (arg === "--auth-mode") {
+      options.authMode = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--auth-mode=")) {
+      options.authMode = arg.slice(12);
+      continue;
+    }
+    if (arg === "--email") {
+      options.email = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--email=")) {
+      options.email = arg.slice(8);
+      continue;
+    }
+    if (arg === "--password") {
+      options.password = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--password=")) {
+      options.password = arg.slice(11);
+      continue;
+    }
+    if (arg === "--cookie") {
+      options.cookie = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--cookie=")) {
+      options.cookie = arg.slice(9);
+      continue;
+    }
+    if (arg === "--token-param") {
+      options.tokenParam = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--token-param=")) {
+      options.tokenParam = arg.slice(14);
+      continue;
+    }
+    if (arg === "--timeout") {
+      options.timeout = Number(argv[++i]);
+      continue;
+    }
+    if (arg.startsWith("--timeout=")) {
+      options.timeout = Number(arg.slice(10));
+      continue;
+    }
+    if (arg === "--dir") {
+      options.dirs.push(argv[++i]);
+      continue;
+    }
+    if (arg.startsWith("--dir=")) {
+      options.dirs.push(arg.slice(6));
+      continue;
+    }
+    if (arg === "--binding") {
+      options.bindings.push(argv[++i]);
+      continue;
+    }
+    if (arg.startsWith("--binding=")) {
+      options.bindings.push(arg.slice(10));
+      continue;
+    }
+    if (arg === "--dry-run") {
+      options.dryRun = true;
+      continue;
+    }
+    if (arg === "--no-mermaid") {
+      options.noMermaid = true;
+      continue;
+    }
+    if (arg === "--force") {
+      options.force = true;
+      continue;
+    }
     if (arg.startsWith("-")) continue;
     options.dirs.push(arg);
   }
@@ -383,21 +585,66 @@ function parseDocsSyncBindArgs(argv: string[]): DocsSyncBindArgs {
       options.help = true;
       continue;
     }
-    if (arg === "--name" || arg === "--binding") { options.name = argv[++i]; continue; }
-    if (arg.startsWith("--name=")) { options.name = arg.slice(7); continue; }
-    if (arg.startsWith("--binding=")) { options.name = arg.slice(10); continue; }
-    if (arg === "--dir") { options.dir = argv[++i]; continue; }
-    if (arg.startsWith("--dir=")) { options.dir = arg.slice(6); continue; }
-    if (arg === "--project-id") { options.projectId = Number(argv[++i]); continue; }
-    if (arg.startsWith("--project-id=")) { options.projectId = Number(arg.slice(13)); continue; }
-    if (arg === "--catid" || arg === "--cat-id") { options.catId = Number(argv[++i]); continue; }
-    if (arg.startsWith("--catid=")) { options.catId = Number(arg.slice(8)); continue; }
-    if (arg.startsWith("--cat-id=")) { options.catId = Number(arg.slice(9)); continue; }
-    if (arg === "--template-id") { options.templateId = Number(argv[++i]); continue; }
-    if (arg.startsWith("--template-id=")) { options.templateId = Number(arg.slice(14)); continue; }
-    if (arg === "--source-file") { options.sourceFiles?.push(argv[++i]); continue; }
-    if (arg.startsWith("--source-file=")) { options.sourceFiles?.push(arg.slice(14)); continue; }
-    if (arg === "--clear-source-files") { options.clearSourceFiles = true; continue; }
+    if (arg === "--name" || arg === "--binding") {
+      options.name = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--name=")) {
+      options.name = arg.slice(7);
+      continue;
+    }
+    if (arg.startsWith("--binding=")) {
+      options.name = arg.slice(10);
+      continue;
+    }
+    if (arg === "--dir") {
+      options.dir = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--dir=")) {
+      options.dir = arg.slice(6);
+      continue;
+    }
+    if (arg === "--project-id") {
+      options.projectId = Number(argv[++i]);
+      continue;
+    }
+    if (arg.startsWith("--project-id=")) {
+      options.projectId = Number(arg.slice(13));
+      continue;
+    }
+    if (arg === "--catid" || arg === "--cat-id") {
+      options.catId = Number(argv[++i]);
+      continue;
+    }
+    if (arg.startsWith("--catid=")) {
+      options.catId = Number(arg.slice(8));
+      continue;
+    }
+    if (arg.startsWith("--cat-id=")) {
+      options.catId = Number(arg.slice(9));
+      continue;
+    }
+    if (arg === "--template-id") {
+      options.templateId = Number(argv[++i]);
+      continue;
+    }
+    if (arg.startsWith("--template-id=")) {
+      options.templateId = Number(arg.slice(14));
+      continue;
+    }
+    if (arg === "--source-file") {
+      options.sourceFiles?.push(argv[++i]);
+      continue;
+    }
+    if (arg.startsWith("--source-file=")) {
+      options.sourceFiles?.push(arg.slice(14));
+      continue;
+    }
+    if (arg === "--clear-source-files") {
+      options.clearSourceFiles = true;
+      continue;
+    }
   }
   return options;
 }
@@ -409,6 +656,8 @@ function usage(): string {
     "  yapi docs-sync [options] [dir...]",
     "  yapi docs-sync bind <action> [options]",
     "  yapi login [options]",
+    "  yapi whoami [options]",
+    "  yapi search [options]",
     "  yapi install-skill [options]",
     "Options:",
     "  --config <path>        config file path (default: ~/.yapi/config.toml)",
@@ -418,6 +667,8 @@ function usage(): string {
     "  --auth-mode <mode>     token or global",
     "  --email <email>        login email for global mode",
     "  --password <pwd>       login password for global mode",
+    "  --cookie <cookie>      cookie for global mode",
+    "  --q <keyword>          search keyword (for yapi search)",
     "  --path <path>          API path (e.g., /api/interface/get)",
     "  --url <url>            full URL (overrides base-url/path)",
     "  --query key=value      query param (repeatable)",
@@ -499,8 +750,51 @@ function loginUsage(): string {
   ].join("\n");
 }
 
+function whoamiUsage(): string {
+  return [
+    "Usage:",
+    "  yapi whoami [options]",
+    "Options:",
+    "  --config <path>        config file path (default: ~/.yapi/config.toml)",
+    "  --base-url <url>       YApi base URL",
+    "  --token <token>        project token (supports projectId:token)",
+    "  --project-id <id>      select token for project",
+    "  --auth-mode <mode>     token or global",
+    "  --email <email>        login email for global mode",
+    "  --password <pwd>       login password for global mode",
+    "  --cookie <cookie>      cookie for global mode",
+    "  --token-param <name>   token query param name (default: token)",
+    "  --timeout <ms>         request timeout in ms",
+    "  --no-pretty            print raw response",
+    "  -h, --help             show help",
+  ].join("\n");
+}
+
+function searchUsage(): string {
+  return [
+    "Usage:",
+    "  yapi search --q <keyword>",
+    "Options:",
+    "  --config <path>        config file path (default: ~/.yapi/config.toml)",
+    "  --base-url <url>       YApi base URL",
+    "  --token <token>        project token (supports projectId:token)",
+    "  --project-id <id>      select token for project",
+    "  --auth-mode <mode>     token or global",
+    "  --email <email>        login email for global mode",
+    "  --password <pwd>       login password for global mode",
+    "  --cookie <cookie>      cookie for global mode",
+    "  --token-param <name>   token query param name (default: token)",
+    "  --q <keyword>          search keyword",
+    "  --timeout <ms>         request timeout in ms",
+    "  --no-pretty            print raw response",
+    "  -h, --help             show help",
+  ].join("\n");
+}
+
 function escapeTomlValue(value: string): string {
-  return String(value || "").replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"');
 }
 
 function formatToml(config: Record<string, string>): string {
@@ -519,7 +813,11 @@ function writeConfig(filePath: string, config: Record<string, string>): void {
 }
 
 function promptText(question: string): Promise<string> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true,
+  });
   return new Promise((resolve) => {
     rl.question(question, (answer) => {
       rl.close();
@@ -529,17 +827,23 @@ function promptText(question: string): Promise<string> {
 }
 
 function promptHidden(question: string): Promise<string> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-  const originalWrite = (rl as unknown as { _writeToOutput?: (value: string) => void })._writeToOutput;
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true,
+  });
+  const originalWrite = (rl as unknown as { _writeToOutput?: (value: string) => void })
+    ._writeToOutput;
   (rl as unknown as { stdoutMuted?: boolean }).stdoutMuted = true;
-  (rl as unknown as { _writeToOutput?: (value: string) => void })._writeToOutput = function writeToOutput(value: string) {
-    if ((rl as unknown as { stdoutMuted?: boolean }).stdoutMuted) return;
-    if (typeof originalWrite === "function") {
-      originalWrite.call(this, value);
-    } else {
-      (rl as unknown as { output: NodeJS.WritableStream }).output.write(value);
-    }
-  };
+  (rl as unknown as { _writeToOutput?: (value: string) => void })._writeToOutput =
+    function writeToOutput(value: string) {
+      if ((rl as unknown as { stdoutMuted?: boolean }).stdoutMuted) return;
+      if (typeof originalWrite === "function") {
+        originalWrite.call(this, value);
+      } else {
+        (rl as unknown as { output: NodeJS.WritableStream }).output.write(value);
+      }
+    };
   return new Promise((resolve) => {
     rl.question(question, (answer) => {
       (rl as unknown as { stdoutMuted?: boolean }).stdoutMuted = false;
@@ -557,7 +861,9 @@ async function promptRequired(question: string, hidden: boolean): Promise<string
   }
 }
 
-async function initConfigIfMissing(options: ConfigInitOptions): Promise<{ configPath: string; config: Record<string, string> } | null> {
+async function initConfigIfMissing(
+  options: ConfigInitOptions,
+): Promise<{ configPath: string; config: Record<string, string> } | null> {
   const hasBaseUrl = Boolean(options.baseUrl);
   const hasEmail = Boolean(options.email);
   const hasPassword = Boolean(options.password);
@@ -588,6 +894,155 @@ function readVersion(): string {
   } catch {
     return "unknown";
   }
+}
+
+type SimpleRequestResult = {
+  ok: boolean;
+  queryItems?: [string, string][];
+};
+
+type SimpleRequestQueryBuilder = (options: Options) => SimpleRequestResult;
+
+async function runSimpleRequest(
+  rawArgs: string[],
+  usageFn: () => string,
+  endpoint: string,
+  requireBaseUrl: boolean,
+  buildQueryItems?: SimpleRequestQueryBuilder,
+): Promise<number> {
+  const options = parseArgs(rawArgs);
+  if (options.help) {
+    console.log(usageFn());
+    return 0;
+  }
+  if (options.version) {
+    console.log(readVersion());
+    return 0;
+  }
+
+  const configPath = options.config || globalConfigPath();
+  const config = fs.existsSync(configPath)
+    ? parseSimpleToml(fs.readFileSync(configPath, "utf8"))
+    : {};
+
+  const baseUrl = options.baseUrl || config.base_url || "";
+  if (requireBaseUrl && !baseUrl) {
+    console.error("missing --base-url or config base_url");
+    return 2;
+  }
+
+  const projectId = options.projectId || config.project_id || "";
+  const rawToken = options.token || config.token || "";
+  const token = resolveToken(rawToken, projectId);
+
+  let authMode = (options.authMode || config.auth_mode || "").trim().toLowerCase();
+  if (!authMode) {
+    authMode = token
+      ? "token"
+      : options.email || options.password || config.email || config.password
+        ? "global"
+        : "token";
+  }
+  if (authMode !== "token" && authMode !== "global") {
+    console.error("invalid --auth-mode (use token or global)");
+    return 2;
+  }
+
+  const headers: Record<string, string> = {};
+  if (options.cookie) {
+    headers.Cookie = options.cookie;
+  }
+
+  const email = options.email || config.email || "";
+  const password = options.password || config.password || "";
+  const authService =
+    authMode === "global"
+      ? new YApiAuthService(baseUrl, email || "", password || "", "warn", {
+          timeoutMs: options.timeout || 30000,
+        })
+      : null;
+  const canRelogin =
+    authMode === "global" &&
+    Boolean(authService) &&
+    Boolean(email) &&
+    Boolean(password) &&
+    !options.cookie;
+
+  if (!headers.Cookie && authMode === "global") {
+    const cachedCookie = authService?.getCachedCookieHeader();
+    if (cachedCookie) {
+      headers.Cookie = cachedCookie;
+    } else if (email && password && authService) {
+      try {
+        headers.Cookie = await authService.getCookieHeaderWithLogin();
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        return 2;
+      }
+    } else {
+      console.error("missing email/password for global auth");
+      return 2;
+    }
+  }
+
+  let queryItems: [string, string][] = [];
+  if (buildQueryItems) {
+    const result = buildQueryItems(options);
+    if (!result.ok) return 2;
+    queryItems = result.queryItems || [];
+  }
+
+  const url = buildUrl(
+    baseUrl,
+    endpoint,
+    queryItems,
+    authMode === "token" ? token : "",
+    options.tokenParam || "token",
+  );
+
+  const sendOnce = async () => {
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: "GET",
+        headers,
+      },
+      options.timeout || 30000,
+    );
+    const text = await response.text();
+    return { response, text, json: parseJsonMaybe(text) };
+  };
+
+  let result: { response: Response; text: string; json: unknown | null };
+  try {
+    result = await sendOnce();
+  } catch (error) {
+    console.error("request failed: " + (error instanceof Error ? error.message : String(error)));
+    return 2;
+  }
+
+  if (canRelogin && looksLikeAuthError(result.response.status, result.json)) {
+    try {
+      headers.Cookie = await authService!.getCookieHeaderWithLogin({ forceLogin: true });
+      result = await sendOnce();
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      return 2;
+    }
+  }
+
+  const { text } = result;
+  if (options.noPretty) {
+    console.log(text);
+    return 0;
+  }
+  try {
+    const payload = result.json ?? JSON.parse(text);
+    console.log(JSON.stringify(payload, null, 2));
+  } catch {
+    console.log(text);
+  }
+  return 0;
 }
 
 async function runLogin(rawArgs: string[]): Promise<number> {
@@ -650,7 +1105,9 @@ async function runLogin(rawArgs: string[]): Promise<number> {
   }
 
   try {
-    const authService = new YApiAuthService(baseUrl, email, password, "warn", { timeoutMs: options.timeout || 30000 });
+    const authService = new YApiAuthService(baseUrl, email, password, "warn", {
+      timeoutMs: options.timeout || 30000,
+    });
     await authService.getCookieHeaderWithLogin({ forceLogin: true });
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
@@ -659,6 +1116,21 @@ async function runLogin(rawArgs: string[]): Promise<number> {
 
   console.log("login success (cookie cached in ~/.yapi-mcp/auth-*.json)");
   return 0;
+}
+
+async function runWhoami(rawArgs: string[]): Promise<number> {
+  return await runSimpleRequest(rawArgs, whoamiUsage, "/api/user/status", true);
+}
+
+async function runSearch(rawArgs: string[]): Promise<number> {
+  return await runSimpleRequest(rawArgs, searchUsage, "/api/project/search", true, (options) => {
+    const keyword = String(options.q || "").trim();
+    if (!keyword) {
+      console.error("missing --q for search");
+      return { ok: false };
+    }
+    return { ok: true, queryItems: [["q", keyword]] };
+  });
 }
 
 function findDocsSyncHome(startDir: string): string | null {
@@ -850,12 +1322,18 @@ function resolveSourceFiles(dirPath: string, mapping: DocsSyncMapping): string[]
 }
 
 function normalizeUiBaseUrl(baseUrl: string): string {
-  const trimmed = String(baseUrl || "").trim().replace(/\/+$/, "");
+  const trimmed = String(baseUrl || "")
+    .trim()
+    .replace(/\/+$/, "");
   if (!trimmed) return "";
   return trimmed.endsWith("/api") ? trimmed.slice(0, -4) : trimmed;
 }
 
-function buildInterfaceWebUrl(baseUrl: string, projectId: number | string, apiId: number | string): string {
+function buildInterfaceWebUrl(
+  baseUrl: string,
+  projectId: number | string,
+  apiId: number | string,
+): string {
   const base = normalizeUiBaseUrl(baseUrl);
   const pid = encodeURIComponent(String(projectId ?? ""));
   const aid = encodeURIComponent(String(apiId ?? ""));
@@ -871,7 +1349,9 @@ function normalizePathSegment(value: string): string {
 }
 
 function buildEnvUrl(domain: string, basepath: string, apiPath: string): string {
-  const base = String(domain || "").trim().replace(/\/+$/, "");
+  const base = String(domain || "")
+    .trim()
+    .replace(/\/+$/, "");
   if (!base) return "";
   const normalizedBasepath = normalizePathSegment(basepath);
   const normalizedPath = normalizePathSegment(apiPath);
@@ -882,9 +1362,14 @@ function normalizeProjectEnvs(raw: unknown): DocsSyncProjectEnv[] {
   if (!Array.isArray(raw)) return [];
   const result: DocsSyncProjectEnv[] = [];
   raw.forEach((item) => {
-    const name = item && typeof item === "object" && "name" in item ? String((item as any).name || "").trim() : "";
+    const name =
+      item && typeof item === "object" && "name" in item
+        ? String((item as any).name || "").trim()
+        : "";
     const domain =
-      item && typeof item === "object" && "domain" in item ? String((item as any).domain || "").trim() : "";
+      item && typeof item === "object" && "domain" in item
+        ? String((item as any).domain || "").trim()
+        : "";
     if (!domain) return;
     result.push({ name: name || domain, domain });
   });
@@ -929,7 +1414,11 @@ async function listExistingInterfaces(
   byTitle: Record<string, number>;
   byId: Record<string, { path?: string; title?: string }>;
 }> {
-  const resp = await request("/api/interface/list_cat", "GET", { catid: catId, page: 1, limit: 10000 });
+  const resp = await request("/api/interface/list_cat", "GET", {
+    catid: catId,
+    page: 1,
+    limit: 10000,
+  });
   if (resp?.errcode !== 0) {
     throw new Error(`list_cat failed: ${resp?.errmsg || "unknown error"}`);
   }
@@ -973,7 +1462,7 @@ function buildAddPayload(
     req_body_form: template.req_body_form || [],
     req_body_is_json_schema: template.req_body_is_json_schema ?? true,
     res_body_type: template.res_body_type || "json",
-    res_body: template.res_body || "{\"type\":\"object\",\"title\":\"title\",\"properties\":{}}",
+    res_body: template.res_body || '{"type":"object","title":"title","properties":{}}',
     res_body_is_json_schema: template.res_body_is_json_schema ?? true,
     tag: template.tag || [],
   };
@@ -1027,7 +1516,12 @@ async function syncDocsDir(
   mapping: DocsSyncMapping,
   options: DocsSyncOptions,
   request: YapiRequest,
-): Promise<{ updated: number; created: number; skipped: number; files: Record<string, DocsSyncFileInfo> }> {
+): Promise<{
+  updated: number;
+  created: number;
+  skipped: number;
+  files: Record<string, DocsSyncFileInfo>;
+}> {
   if (!mapping.files || typeof mapping.files !== "object") {
     mapping.files = {};
   }
@@ -1086,15 +1580,19 @@ async function syncDocsDir(
     }
 
     const logPrefix = `[docs-sync:${relName}]`;
+    let mermaidFailed = false;
     const html = renderMarkdownToHtml(markdown, {
       noMermaid: options.noMermaid,
       logMermaid: true,
       logger: (message) => console.log(`${logPrefix} ${message}`),
+      onMermaidError: () => {
+        mermaidFailed = true;
+      },
     });
     if (!options.dryRun && docId) {
       await updateInterface(docId, markdown, html, request);
     }
-    if (docId) {
+    if (docId && !mermaidFailed) {
       mapping.file_hashes[relName] = contentHash;
     }
     updated += 1;
@@ -1128,7 +1626,10 @@ function buildEnvUrls(
 async function updateDocsSyncCaches(
   homeDir: string,
   baseUrl: string,
-  bindingResults: Record<string, { binding: DocsSyncBinding; files: Record<string, DocsSyncFileInfo> }>,
+  bindingResults: Record<
+    string,
+    { binding: DocsSyncBinding; files: Record<string, DocsSyncFileInfo> }
+  >,
   request: YapiRequest,
 ): Promise<void> {
   const linksConfig = loadDocsSyncLinks(homeDir);
@@ -1219,7 +1720,9 @@ async function runDocsSyncBindings(rawArgs: string[]): Promise<number> {
       console.log("no docs-sync bindings (missing .yapi/docs-sync.json)");
       return 0;
     }
-    console.error("missing .yapi/docs-sync.json (run in project root or create one with docs-sync bind add)");
+    console.error(
+      "missing .yapi/docs-sync.json (run in project root or create one with docs-sync bind add)",
+    );
     return 2;
   }
 
@@ -1281,7 +1784,11 @@ async function runDocsSyncBindings(rawArgs: string[]): Promise<number> {
   }
 
   if (action === "add") {
-    if (!options.dir || !Number.isFinite(options.projectId ?? NaN) || !Number.isFinite(options.catId ?? NaN)) {
+    if (
+      !options.dir ||
+      !Number.isFinite(options.projectId ?? NaN) ||
+      !Number.isFinite(options.catId ?? NaN)
+    ) {
       console.error("add requires --dir, --project-id, and --catid");
       console.error(docsSyncBindUsage());
       return 2;
@@ -1358,7 +1865,12 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
     const docsSyncConfig = docsSyncHome ? loadDocsSyncConfig(docsSyncHome) : null;
     let bindingNames = options.bindings;
     let useBindings = bindingNames.length > 0;
-    if (!useBindings && !options.dirs.length && docsSyncConfig && Object.keys(docsSyncConfig.bindings).length) {
+    if (
+      !useBindings &&
+      !options.dirs.length &&
+      docsSyncConfig &&
+      Object.keys(docsSyncConfig.bindings).length
+    ) {
       useBindings = true;
       bindingNames = Object.keys(docsSyncConfig.bindings);
     }
@@ -1420,7 +1932,7 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
     if (!authMode) {
       authMode = token
         ? "token"
-        : (options.email || options.password || config.email || config.password)
+        : options.email || options.password || config.email || config.password
           ? "global"
           : "token";
     }
@@ -1434,9 +1946,16 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
     const password = options.password || config.password || "";
     const authService =
       authMode === "global"
-        ? new YApiAuthService(baseUrl, email || "", password || "", "warn", { timeoutMs: options.timeout || 30000 })
+        ? new YApiAuthService(baseUrl, email || "", password || "", "warn", {
+            timeoutMs: options.timeout || 30000,
+          })
         : null;
-    const canRelogin = authMode === "global" && Boolean(authService) && Boolean(email) && Boolean(password) && !options.cookie;
+    const canRelogin =
+      authMode === "global" &&
+      Boolean(authService) &&
+      Boolean(email) &&
+      Boolean(password) &&
+      !options.cookie;
 
     if (options.cookie) {
       headers.Cookie = options.cookie;
@@ -1506,7 +2025,9 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
       }
 
       if (!result.response.ok) {
-        throw new Error(`request failed: ${result.response.status} ${result.response.statusText} ${result.text}`);
+        throw new Error(
+          `request failed: ${result.response.status} ${result.response.statusText} ${result.text}`,
+        );
       }
       if (!result.json) {
         throw new Error(`invalid JSON response from ${endpoint}`);
@@ -1517,7 +2038,10 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
     if (useBindings) {
       const rootDir = path.dirname(docsSyncHome!);
       const configForBindings = docsSyncConfig!;
-      const bindingResults: Record<string, { binding: DocsSyncBinding; files: Record<string, DocsSyncFileInfo> }> = {};
+      const bindingResults: Record<
+        string,
+        { binding: DocsSyncBinding; files: Record<string, DocsSyncFileInfo> }
+      > = {};
       for (const name of bindingNames) {
         const binding = configForBindings.bindings[name];
         if (!binding) {
@@ -1553,7 +2077,9 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
           saveMapping(mapping, mappingPath);
         }
 
-        console.log(`synced=${result.updated} created=${result.created} skipped=${result.skipped} dir=${dirPath}`);
+        console.log(
+          `synced=${result.updated} created=${result.created} skipped=${result.skipped} dir=${dirPath}`,
+        );
       }
     }
 
@@ -1572,6 +2098,12 @@ async function main(): Promise<number> {
   }
   if (rawArgs[0] === "login") {
     return await runLogin(rawArgs.slice(1));
+  }
+  if (rawArgs[0] === "whoami") {
+    return await runWhoami(rawArgs.slice(1));
+  }
+  if (rawArgs[0] === "search") {
+    return await runSearch(rawArgs.slice(1));
   }
   if (rawArgs[0] === "docs-sync") {
     return await runDocsSync(rawArgs.slice(1));
@@ -1644,7 +2176,11 @@ async function main(): Promise<number> {
 
   let authMode = (options.authMode || config.auth_mode || "").trim().toLowerCase();
   if (!authMode) {
-    authMode = token ? "token" : (options.email || options.password || config.email || config.password) ? "global" : "token";
+    authMode = token
+      ? "token"
+      : options.email || options.password || config.email || config.password
+        ? "global"
+        : "token";
   }
   if (authMode !== "token" && authMode !== "global") {
     console.error("invalid --auth-mode (use token or global)");
@@ -1665,9 +2201,16 @@ async function main(): Promise<number> {
   const password = options.password || config.password || "";
   const authService =
     authMode === "global"
-      ? new YApiAuthService(authBaseUrl, email || "", password || "", "warn", { timeoutMs: options.timeout || 30000 })
+      ? new YApiAuthService(authBaseUrl, email || "", password || "", "warn", {
+          timeoutMs: options.timeout || 30000,
+        })
       : null;
-  const canRelogin = authMode === "global" && Boolean(authService) && Boolean(email) && Boolean(password) && !options.cookie;
+  const canRelogin =
+    authMode === "global" &&
+    Boolean(authService) &&
+    Boolean(email) &&
+    Boolean(password) &&
+    !options.cookie;
 
   if (options.cookie) {
     headers.Cookie = options.cookie;
@@ -1692,7 +2235,13 @@ async function main(): Promise<number> {
   for (const query of options.query || []) {
     queryItems.push(parseKeyValue(query));
   }
-  const url = buildUrl(baseUrl, endpoint, queryItems, authMode === "token" ? token : "", options.tokenParam || "token");
+  const url = buildUrl(
+    baseUrl,
+    endpoint,
+    queryItems,
+    authMode === "token" ? token : "",
+    options.tokenParam || "token",
+  );
 
   let dataRaw: string | null = null;
   if (options.dataFile) {

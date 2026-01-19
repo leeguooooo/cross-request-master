@@ -1,6 +1,6 @@
 {
   "name": "@leeguoo/yapi-mcp",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "description": "YApi Auto MCP Server - Model Context Protocol server for YApi integration, enables AI tools like Cursor to interact with YApi API documentation",
   "main": "dist/index.js",
   "bin": {
@@ -66,6 +66,9 @@
     "remeda": "^2.20.1",
     "yargs": "^17.7.2",
     "zod": "^3.24.2"
+  },
+  "optionalDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.12.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

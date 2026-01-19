@@ -8,14 +8,16 @@ export type MarkdownRenderOptions = {
   noMermaid?: boolean;
   logMermaid?: boolean;
   logger?: (message: string) => void;
+  onMermaidError?: (error: unknown) => void;
 };
 
 let cachedPandocAvailable: boolean | null = null;
 let cachedMmdcAvailable: boolean | null = null;
+let cachedMmdcCommand: string | null = null;
 let cachedMarkdownIt: MarkdownIt | null = null;
 
 function stripAnsi(input: string): string {
-  return input.replace(/\u001b\[[0-9;]*m/g, "");
+  return input.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
 function formatMermaidError(error: unknown): string {
@@ -32,7 +34,10 @@ function formatMermaidError(error: unknown): string {
     const text = stripAnsi(
       typeof extra === "string" ? extra : Buffer.from(extra as Buffer).toString("utf8"),
     );
-    const line = text.split(/\r?\n/).map((item) => item.trim()).find(Boolean);
+    const line = text
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .find(Boolean);
     if (line && !parts.join(" ").includes(line)) {
       parts.push(line);
     }
@@ -53,10 +58,22 @@ export function isPandocAvailable(): boolean {
   return cachedPandocAvailable;
 }
 
+function resolveMmdcCommand(): string {
+  if (cachedMmdcCommand) return cachedMmdcCommand;
+  const binName = process.platform === "win32" ? "mmdc.cmd" : "mmdc";
+  const localBin = path.resolve(__dirname, "..", "..", "node_modules", ".bin", binName);
+  if (fs.existsSync(localBin)) {
+    cachedMmdcCommand = localBin;
+    return cachedMmdcCommand;
+  }
+  cachedMmdcCommand = binName;
+  return cachedMmdcCommand;
+}
+
 export function isMmdcAvailable(): boolean {
   if (cachedMmdcAvailable !== null) return cachedMmdcAvailable;
   try {
-    execFileSync("mmdc", ["--version"], { stdio: "ignore" });
+    execFileSync(resolveMmdcCommand(), ["--version"], { stdio: "ignore" });
     cachedMmdcAvailable = true;
   } catch {
     cachedMmdcAvailable = false;
@@ -89,7 +106,10 @@ function renderMermaidWithMmdc(source: string): string {
   const outputPath = path.join(tmpDir, "diagram.svg");
   try {
     fs.writeFileSync(inputPath, source, "utf8");
-    execFileSync("mmdc", ["-i", inputPath, "-o", outputPath, "-b", "transparent"], { stdio: "pipe" });
+    const mmdcCommand = resolveMmdcCommand();
+    execFileSync(mmdcCommand, ["-i", inputPath, "-o", outputPath, "-b", "transparent"], {
+      stdio: "pipe",
+    });
     const svg = fs.readFileSync(outputPath, "utf8");
     return stripSvgProlog(svg);
   } finally {
@@ -121,7 +141,9 @@ function normalizeMermaidLabels(source: string): string {
 function renderMermaidToSvg(source: string): MermaidRenderResult {
   ensureMmdc();
   const normalized = normalizeMermaidLabels(source);
-  const attempts: Array<{ text: string; normalized: boolean }> = [{ text: source, normalized: false }];
+  const attempts: Array<{ text: string; normalized: boolean }> = [
+    { text: source, normalized: false },
+  ];
   if (normalized !== source) attempts.push({ text: normalized, normalized: true });
   let lastError: unknown;
   let normalizedTried = false;
@@ -138,7 +160,9 @@ function renderMermaidToSvg(source: string): MermaidRenderResult {
     throw new Error(`${lastError.message}${suffix}`);
   }
   throw new Error(
-    normalizedTried ? "Failed to render mermaid diagram after label normalization." : "Failed to render mermaid diagram.",
+    normalizedTried
+      ? "Failed to render mermaid diagram after label normalization."
+      : "Failed to render mermaid diagram.",
   );
 }
 
@@ -169,6 +193,9 @@ export function preprocessMarkdown(markdown: string, options: MarkdownRenderOpti
         const message = formatMermaidError(error);
         logger(`Mermaid 块 #${index} 渲染失败，保持代码块原样。原因: ${message}`);
       }
+      if (options.onMermaidError) {
+        options.onMermaidError(error);
+      }
       return match;
     }
   });
@@ -187,6 +214,9 @@ export function markdownToHtml(markdown: string): string {
   return cachedMarkdownIt.render(markdown);
 }
 
-export function renderMarkdownToHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
+export function renderMarkdownToHtml(
+  markdown: string,
+  options: MarkdownRenderOptions = {},
+): string {
   return markdownToHtml(preprocessMarkdown(markdown, options));
 }

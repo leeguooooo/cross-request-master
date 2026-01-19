@@ -77,6 +77,8 @@ CLI 使用示例（走同一份 `~/.yapi/config.toml`）：
 npx -y @leeguoo/yapi-mcp yapi -V
 npx -y @leeguoo/yapi-mcp yapi -h
 npx -y @leeguoo/yapi-mcp yapi login
+npx -y @leeguoo/yapi-mcp yapi whoami
+npx -y @leeguoo/yapi-mcp yapi search --q keyword
 npx -y @leeguoo/yapi-mcp yapi --path /api/interface/get --query id=123
 ```
 
@@ -105,6 +107,8 @@ npx -y @leeguoo/yapi-mcp yapi docs-sync
 - 管理绑定：`yapi docs-sync bind list|get|add|update|remove`
 - 可用 `--dry-run` 只做转换不更新
 - 默认只同步内容变更的文件，如需全量更新使用 `--force`
+- Mermaid 预渲染依赖 `mmdc`（安装时会尝试拉取，失败不影响同步）
+- `pandoc` 需手动安装（用于完整 Markdown 渲染）
 - 如需跳过 Mermaid 渲染，使用 `--no-mermaid`
 
 ### 手动方式：使用 npx（无需安装）
