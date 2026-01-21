@@ -71,6 +71,8 @@ npx -y @leeguoo/yapi-mcp install-skill \
   --yapi-password=your_password
 ```
 
+Skill 模板来源：`packages/yapi-mcp/skill-template/SKILL.md`（发布后从包内复制到技能目录）。
+
 CLI 使用示例（走同一份 `~/.yapi/config.toml`）：
 
 ```bash
