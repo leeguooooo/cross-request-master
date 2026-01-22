@@ -62,7 +62,19 @@ Yapi Auto MCP Server 是一个基于 [Model Context Protocol](https://modelconte
 
 ### Skill 一键安装与 CLI
 
-一条命令把 Skill 安装到 Codex / Claude Code，并写入 `~/.yapi/config.toml`（缺省会提示输入）：
+一条命令把 Skill 安装到 Codex / Claude Code / Cursor，并写入 `~/.yapi/config.toml`（缺省会提示输入）：
+
+```bash
+# 推荐：全局安装后使用 yapi 命令
+npm install -g @leeguoo/yapi-mcp
+
+yapi install-skill \
+  --yapi-base-url=https://your-yapi-domain.com \
+  --yapi-email=your_email@example.com \
+  --yapi-password=your_password
+```
+
+也可以用 npx 临时运行（不全局安装）：
 
 ```bash
 npx -y @leeguoo/yapi-mcp install-skill \
@@ -71,17 +83,35 @@ npx -y @leeguoo/yapi-mcp install-skill \
   --yapi-password=your_password
 ```
 
+Skill 安装目录：
+- Codex: `~/.codex/skills/yapi/`
+- Claude Code: `~/.claude/skills/yapi/`
+- Cursor: `~/.cursor/skills/yapi/`
+
 Skill 模板来源：`packages/yapi-mcp/skill-template/SKILL.md`（发布后从包内复制到技能目录）。
 
-CLI 使用示例（走同一份 `~/.yapi/config.toml`）：
+### CLI 使用
+
+推荐全局安装后直接使用 `yapi` 命令（走同一份 `~/.yapi/config.toml`）：
 
 ```bash
-npx -y @leeguoo/yapi-mcp yapi -V
-npx -y @leeguoo/yapi-mcp yapi -h
-npx -y @leeguoo/yapi-mcp yapi login
-npx -y @leeguoo/yapi-mcp yapi whoami
-npx -y @leeguoo/yapi-mcp yapi search --q keyword
-npx -y @leeguoo/yapi-mcp yapi --path /api/interface/get --query id=123
+# 检查版本
+yapi --version
+
+# 查看帮助
+yapi -h
+
+# 登录（交互式，会提示输入 base_url/email/password）
+yapi login
+
+# 检查当前登录用户
+yapi whoami
+
+# 搜索接口
+yapi search --q keyword
+
+# 获取接口详情
+yapi --path /api/interface/get --query id=123
 ```
 
 全局模式下可先执行 `yapi login` 缓存登录态（`~/.yapi-mcp/auth-*.json`），权限失效会自动重新登录。
@@ -89,15 +119,15 @@ npx -y @leeguoo/yapi-mcp yapi --path /api/interface/get --query id=123
 Markdown 同步到 YApi（支持 Mermaid 预渲染，需 `pandoc` + `mmdc`）：
 
 ```bash
-npx -y @leeguoo/yapi-mcp yapi docs-sync bind add \
+yapi docs-sync bind add \
   --name projectA \
   --dir docs/release-notes \
   --project-id 267 \
   --catid 3667
 
-npx -y @leeguoo/yapi-mcp yapi docs-sync --binding projectA
+yapi docs-sync --binding projectA
 # 或同步 .yapi/docs-sync.json 内的所有绑定
-npx -y @leeguoo/yapi-mcp yapi docs-sync
+yapi docs-sync
 ```
 
 说明：

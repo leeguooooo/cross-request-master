@@ -1121,7 +1121,11 @@ const CrossRequest = {
     const buildSkillInstallCommand = ({ origin, email }) => {
       const baseUrl = String(origin || '').replace(/\/$/, '');
       const safeEmail = looksLikeEmail(email) ? String(email).trim() : 'YOUR_EMAIL';
-      return `npx -y @leeguoo/yapi-mcp install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-email=${safeEmail} --force`;
+      return `# 先全局安装 yapi CLI（如已安装可跳过）
+npm install -g @leeguoo/yapi-mcp
+
+# 安装 Skill 到 Codex/Claude/Cursor
+yapi install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-email=${safeEmail} --force`;
     };
 
     const getCookieValue = (key) => {
@@ -1660,14 +1664,14 @@ const CrossRequest = {
 
     const renderSkillPanel = async (container, origin) => {
       const { container: header } = renderSectionHeader(
-        'Codex Skill 一键安装',
-        '执行后会安装到 $CODEX_HOME/skills/yapi 和 ~/.claude/skills/yapi，并写入 ~/.yapi/config.toml；无需预装，npx 会自动下载。',
+        'Skill 一键安装（Codex/Claude/Cursor）',
+        '执行后会安装到 ~/.codex/skills/yapi、~/.claude/skills/yapi、~/.cursor/skills/yapi，并写入 ~/.yapi/config.toml。',
       );
       container.appendChild(header);
 
       const email = await resolveCurrentUserEmail(origin);
       const command = buildSkillInstallCommand({ origin, email });
-      container.appendChild(renderCodeBlock('Codex Skill 一键安装', command + '\n'));
+      container.appendChild(renderCodeBlock('Skill 一键安装', command + '\n'));
     };
 
     let activeTab = 'mcp';

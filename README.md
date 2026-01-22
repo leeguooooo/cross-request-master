@@ -31,7 +31,7 @@
 - 内嵌 cURL：YApi「运行」页 URL 下方展示可复制的 cURL 命令
 - 路径参数引导：URL 含 `{param}` 时提示填写，避免请求失败
 - 固定 Header：为跨域请求自动追加自定义 Header
-- YApi 工具箱：一键生成 MCP 配置 / Skill 安装 / CLI 使用与 docs-sync
+- YApi 工具箱：一键生成 MCP 配置 / Skill 安装（支持 Codex/Claude/Cursor）/ CLI 使用与 docs-sync
 - 复制给 AI：把当前接口信息整理为 Markdown 一键复制
 - jQuery/Fetch 支持：兼容 `$.ajax` / `fetch` / 脚本能力
 - Manifest V3：兼容最新 Chrome 扩展标准
@@ -56,7 +56,7 @@ cd cross-request-master
 安装后直接在 YApi「运行」页发送请求即可，扩展会自动处理跨域、显示 cURL，并把 JSON 响应解析为对象供脚本使用。
 
 在接口详情页（基本信息区域右上角）额外提供：
-- **YApi 工具箱**：包含 MCP 配置（所有项目）、Skill 一键安装、CLI 使用与 docs-sync 说明（自动拼好命令）
+- **YApi 工具箱**：包含 MCP 配置（所有项目）、Skill 一键安装（支持 Codex/Claude/Cursor）、CLI 使用与 docs-sync 说明（自动拼好命令）
 - **复制给 AI**：把当前接口信息整理成 Markdown（仅接口相关字段）复制到剪贴板
 
 ### YApi OpenAPI（Yapi-MCP tool 同名方法）

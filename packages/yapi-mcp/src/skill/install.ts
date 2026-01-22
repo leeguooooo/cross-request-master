@@ -54,6 +54,7 @@ type InstallArgs = {
   "yapi-home"?: string;
   "codex-home"?: string;
   "claude-home"?: string;
+  "cursor-home"?: string;
   force?: boolean;
 };
 
@@ -180,6 +181,7 @@ export async function runInstallSkill(rawArgs: string[]): Promise<void> {
       "yapi-home": { type: "string", describe: "Override YApi config home (default: ~/.yapi)" },
       "codex-home": { type: "string", describe: "Override CODEX_HOME" },
       "claude-home": { type: "string", describe: "Override Claude home (default: ~/.claude)" },
+      "cursor-home": { type: "string", describe: "Override Cursor home (default: ~/.cursor)" },
       force: {
         type: "boolean",
         default: false,
@@ -194,10 +196,13 @@ export async function runInstallSkill(rawArgs: string[]): Promise<void> {
     argv["codex-home"] || process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
   const claudeHome =
     argv["claude-home"] || process.env.CLAUDE_HOME || path.join(os.homedir(), ".claude");
+  const cursorHome =
+    argv["cursor-home"] || process.env.CURSOR_HOME || path.join(os.homedir(), ".cursor");
   const globalConfigPath = path.join(yapiHome, "config.toml");
   const targets = [
     { label: "Codex", root: path.join(codexHome, "skills", SKILL_NAME) },
     { label: "Claude", root: path.join(claudeHome, "skills", SKILL_NAME) },
+    { label: "Cursor", root: path.join(cursorHome, "skills", SKILL_NAME) },
   ];
   const seenRoots = new Set<string>();
   const uniqueTargets = targets.filter((target) => {
@@ -206,17 +211,10 @@ export async function runInstallSkill(rawArgs: string[]): Promise<void> {
     return true;
   });
 
+  // 只从 ~/.yapi/config.toml 读取已有配置
   let existingConfig: Record<string, string> = {};
   if (fs.existsSync(globalConfigPath)) {
     existingConfig = parseSimpleToml(fs.readFileSync(globalConfigPath, "utf8"));
-  } else {
-    for (const target of uniqueTargets) {
-      const configPath = path.join(target.root, "config.toml");
-      if (fs.existsSync(configPath)) {
-        existingConfig = parseSimpleToml(fs.readFileSync(configPath, "utf8"));
-        break;
-      }
-    }
   }
 
   const merged = { ...existingConfig };
@@ -275,12 +273,11 @@ export async function runInstallSkill(rawArgs: string[]): Promise<void> {
   const skillTemplate = fs.readFileSync(templatePath, "utf8");
 
   const installedRoots: string[] = [];
-  const configPaths: string[] = [];
 
+  // 只在 ~/.yapi/config.toml 保存配置（包含账号密码），skill 目录下不保存敏感信息
   fs.mkdirSync(yapiHome, { recursive: true });
   fs.writeFileSync(globalConfigPath, formatToml(merged), "utf8");
   ensurePrivate(globalConfigPath);
-  configPaths.push(globalConfigPath);
 
   for (const target of uniqueTargets) {
     if (fs.existsSync(target.root)) {
@@ -288,21 +285,14 @@ export async function runInstallSkill(rawArgs: string[]): Promise<void> {
     }
     fs.mkdirSync(target.root, { recursive: true });
 
-    const configPath = path.join(target.root, "config.toml");
     const skillPath = path.join(target.root, "SKILL.md");
-
     fs.writeFileSync(skillPath, skillTemplate, "utf8");
 
-    fs.writeFileSync(configPath, formatToml(merged), "utf8");
-    ensurePrivate(configPath);
-
     installedRoots.push(`${target.label}: ${target.root}`);
-    configPaths.push(configPath);
   }
 
   console.log(`Installed skill '${SKILL_NAME}' at:`);
   installedRoots.forEach((entry) => console.log(`- ${entry}`));
-  console.log("Config written to:");
-  configPaths.forEach((entry) => console.log(`- ${entry}`));
-  console.log("Restart Codex/Claude Code to pick up new skills.");
+  console.log(`Config written to: ${globalConfigPath}`);
+  console.log("Restart Codex/Claude Code/Cursor to pick up new skills.");
 }
