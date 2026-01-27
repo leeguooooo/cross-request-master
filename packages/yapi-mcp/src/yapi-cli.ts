@@ -5,7 +5,14 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import readline from "readline";
-import { isMmdcAvailable, isPandocAvailable, renderMarkdownToHtml } from "./docs/markdown";
+import {
+  isD2Available,
+  isGraphvizAvailable,
+  isMmdcAvailable,
+  isPandocAvailable,
+  isPlantUmlAvailable,
+  renderMarkdownToHtml,
+} from "./docs/markdown";
 import { runInstallSkill } from "./skill/install";
 import { YApiAuthService } from "./services/yapi/auth";
 
@@ -48,6 +55,8 @@ type DocsSyncOptions = {
   bindings: string[];
   dryRun?: boolean;
   noMermaid?: boolean;
+  mermaidLook?: "classic" | "handDrawn";
+  mermaidHandDrawnSeed?: number;
   force?: boolean;
   help?: boolean;
 };
@@ -452,6 +461,7 @@ function parseDocsSyncArgs(argv: string[]): DocsSyncOptions {
     bindings: [],
     tokenParam: "token",
     timeout: 30000,
+    mermaidLook: "handDrawn",
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -562,6 +572,31 @@ function parseDocsSyncArgs(argv: string[]): DocsSyncOptions {
     }
     if (arg === "--no-mermaid") {
       options.noMermaid = true;
+      continue;
+    }
+    if (arg === "--mermaid-hand-drawn") {
+      options.mermaidLook = "handDrawn";
+      continue;
+    }
+    if (arg === "--mermaid-classic") {
+      options.mermaidLook = "classic";
+      options.mermaidHandDrawnSeed = undefined;
+      continue;
+    }
+    if (arg === "--mermaid-hand-drawn-seed") {
+      const seed = Number(argv[++i]);
+      if (Number.isFinite(seed)) {
+        options.mermaidHandDrawnSeed = seed;
+      }
+      if (!options.mermaidLook) options.mermaidLook = "handDrawn";
+      continue;
+    }
+    if (arg.startsWith("--mermaid-hand-drawn-seed=")) {
+      const seed = Number(arg.slice(27));
+      if (Number.isFinite(seed)) {
+        options.mermaidHandDrawnSeed = seed;
+      }
+      if (!options.mermaidLook) options.mermaidLook = "handDrawn";
       continue;
     }
     if (arg === "--force") {
@@ -683,6 +718,9 @@ function usage(): string {
     "  --binding <name>       use binding from .yapi/docs-sync.json (repeatable)",
     "  --dry-run              compute but do not update YApi or mapping files",
     "  --no-mermaid           do not render mermaid code blocks",
+    "  --mermaid-hand-drawn   force mermaid hand-drawn look (default)",
+    "  --mermaid-classic      render mermaid with classic look",
+    "  --mermaid-hand-drawn-seed <n>  hand-drawn seed (implies hand-drawn look)",
     "  --force                sync all files even if unchanged",
     "Docs-sync bind actions:",
     "  list, get, add, update, remove",
@@ -711,6 +749,9 @@ function docsSyncUsage(): string {
     "  --binding <name>       use binding from .yapi/docs-sync.json (repeatable)",
     "  --dry-run              compute but do not update YApi or mapping files",
     "  --no-mermaid           do not render mermaid code blocks",
+    "  --mermaid-hand-drawn   force mermaid hand-drawn look (default)",
+    "  --mermaid-classic      render mermaid with classic look",
+    "  --mermaid-hand-drawn-seed <n>  hand-drawn seed (implies hand-drawn look)",
     "  --force                sync all files even if unchanged",
     "  -h, --help             show help",
   ].join("\n");
@@ -1299,6 +1340,14 @@ function saveMapping(mapping: DocsSyncMapping, mappingPath: string): void {
 function buildDocsSyncHash(markdown: string, options: DocsSyncOptions): string {
   const hash = crypto.createHash("sha1");
   hash.update(options.noMermaid ? "no-mermaid\n" : "mermaid\n");
+  if (!options.noMermaid) {
+    if (options.mermaidLook) {
+      hash.update(`mermaid-look:${options.mermaidLook}\n`);
+    }
+    if (Number.isFinite(options.mermaidHandDrawnSeed ?? NaN)) {
+      hash.update(`mermaid-seed:${options.mermaidHandDrawnSeed}\n`);
+    }
+  }
   hash.update(markdown);
   return hash.digest("hex");
 }
@@ -1584,6 +1633,8 @@ async function syncDocsDir(
     const html = renderMarkdownToHtml(markdown, {
       noMermaid: options.noMermaid,
       logMermaid: true,
+      mermaidLook: options.mermaidLook,
+      mermaidHandDrawnSeed: options.mermaidHandDrawnSeed,
       logger: (message) => console.log(`${logPrefix} ${message}`),
       onMermaidError: () => {
         mermaidFailed = true;
@@ -1854,6 +1905,18 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
     if (!options.noMermaid && !isMmdcAvailable()) {
       console.warn("mmdc not found, Mermaid blocks will stay as code.");
       console.warn("Install mermaid-cli: npm i -g @mermaid-js/mermaid-cli");
+    }
+    if (!isPlantUmlAvailable()) {
+      console.warn("plantuml not found, PlantUML blocks will be removed from HTML.");
+      console.warn("Install PlantUML (macOS): brew install plantuml");
+    }
+    if (!isGraphvizAvailable()) {
+      console.warn("graphviz (dot) not found, Graphviz blocks will be removed from HTML.");
+      console.warn("Install Graphviz (macOS): brew install graphviz");
+    }
+    if (!isD2Available()) {
+      console.warn("d2 not found, D2 blocks will be removed from HTML.");
+      console.warn("Install D2 (macOS): brew install d2");
     }
 
     if (options.bindings.length && options.dirs.length) {
