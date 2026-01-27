@@ -1900,7 +1900,8 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
   try {
     if (!isPandocAvailable()) {
       console.warn("pandoc not found, fallback to markdown-it renderer.");
-      console.warn("Install pandoc: https://pandoc.org/installing.html");
+      console.warn("Install pandoc (macOS): brew install pandoc");
+      console.warn("More info: https://pandoc.org/installing.html");
     }
     if (!options.noMermaid && !isMmdcAvailable()) {
       console.warn("mmdc not found, Mermaid blocks will stay as code.");

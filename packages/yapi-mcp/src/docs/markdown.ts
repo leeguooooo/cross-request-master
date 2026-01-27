@@ -439,10 +439,18 @@ export function preprocessMarkdown(markdown: string, options: MarkdownRenderOpti
 
 export function markdownToHtml(markdown: string): string {
   if (isPandocAvailable()) {
-    return execFileSync("pandoc", ["-f", "gfm+hard_line_breaks", "-t", "html"], {
-      input: markdown,
-      encoding: "utf8",
-    });
+    const maxBufferEnv = Number(process.env.YAPI_PANDOC_MAX_BUFFER ?? NaN);
+    const maxBuffer = Number.isFinite(maxBufferEnv) ? maxBufferEnv : 64 * 1024 * 1024;
+    try {
+      return execFileSync("pandoc", ["-f", "gfm+hard_line_breaks", "-t", "html"], {
+        input: markdown,
+        encoding: "utf8",
+        maxBuffer,
+      });
+    } catch (error) {
+      const message = formatRenderError(error);
+      console.warn(`pandoc failed, fallback to markdown-it. reason: ${message}`);
+    }
   }
   if (!cachedMarkdownIt) {
     cachedMarkdownIt = new MarkdownIt({ html: true, linkify: true, breaks: true });
