@@ -116,7 +116,7 @@ yapi --path /api/interface/get --query id=123
 
 全局模式下可先执行 `yapi login` 缓存登录态（`~/.yapi-mcp/auth-*.json`），权限失效会自动重新登录。
 
-Markdown 同步到 YApi（支持 Mermaid 预渲染，需 `pandoc` + `mmdc`）：
+Markdown 同步到 YApi（支持 Mermaid/PlantUML/Graphviz/D2 预渲染，未安装依赖会跳过对应图示）：
 
 ```bash
 yapi docs-sync bind add \
@@ -139,9 +139,14 @@ yapi docs-sync
 - 管理绑定：`yapi docs-sync bind list|get|add|update|remove`
 - 可用 `--dry-run` 只做转换不更新
 - 默认只同步内容变更的文件，如需全量更新使用 `--force`
-- Mermaid 预渲染依赖 `mmdc`（安装时会尝试拉取，失败不影响同步）
+- Mermaid 预渲染依赖 `mmdc`（默认手绘风格；安装时会尝试拉取，失败不影响同步）
+- PlantUML 预渲染依赖 `plantuml`（需要本机 Java 环境）
+- Graphviz 预渲染依赖 `dot`（graphviz）
+- D2 预渲染依赖 `d2`
+- macOS 推荐：`brew install plantuml graphviz d2`
 - `pandoc` 需手动安装（用于完整 Markdown 渲染）
 - 如需跳过 Mermaid 渲染，使用 `--no-mermaid`
+- 如需回到经典风格，使用 `--mermaid-classic`
 
 ### 手动方式：使用 npx（无需安装）
 

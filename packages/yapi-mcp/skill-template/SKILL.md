@@ -94,7 +94,11 @@ yapi --path /api/interface/list_cat --query catid=123
 - Bind local docs to YApi category with `yapi docs-sync bind add --name <binding> --dir <path> --project-id <id> --catid <id>` (stored in `.yapi/docs-sync.json`).
 - Sync with `yapi docs-sync --binding <binding>` or run all bindings with `yapi docs-sync`.
 - Default syncs only changed files; use `--force` to sync everything.
-- Mermaid rendering depends on `mmdc` (auto-installed if possible; failures do not block sync).
+- Mermaid rendering depends on `mmdc` (hand-drawn look by default; auto-installed if possible; failures do not block sync).
+- PlantUML rendering depends on `plantuml` (requires Java).
+- Graphviz rendering depends on `dot` (graphviz).
+- D2 rendering depends on `d2`.
+- macOS: `brew install plantuml graphviz d2`
 - For full Markdown render, install `pandoc` (manual install required).
 - Extra mappings (generated after docs-sync run in binding mode):
   - `.yapi/docs-sync.links.json`: local docs to YApi doc URLs.
