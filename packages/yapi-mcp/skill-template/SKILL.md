@@ -93,6 +93,8 @@ yapi --path /api/interface/list_cat --query catid=123
 ## Docs sync
 - Bind local docs to YApi category with `yapi docs-sync bind add --name <binding> --dir <path> --project-id <id> --catid <id>` (stored in `.yapi/docs-sync.json`).
 - Sync with `yapi docs-sync --binding <binding>` or run all bindings with `yapi docs-sync`.
+- Title defaults to the first Markdown H1 (`# Title` / Setext `===`); falls back to filename stem when missing.
+- Path uses the filename stem: `/${stem}`.
 - Default syncs only changed files; use `--force` to sync everything.
 - Mermaid rendering depends on `mmdc` (hand-drawn look by default; auto-installed if possible; failures do not block sync).
 - PlantUML rendering depends on `plantuml` (requires Java).

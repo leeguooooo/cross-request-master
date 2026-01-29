@@ -132,6 +132,8 @@ yapi docs-sync
 
 说明：
 - 绑定配置保存在 `.yapi/docs-sync.json`（自动维护 `files`：文件名 → API id）
+- **接口标题（title）默认取 Markdown 内第一个 H1（`# 标题` / Setext `===`）**；如果没写 H1，则回退到文件名（不含扩展名）。
+- 接口路径（path）使用文件名（不含扩展名）生成：`/${stem}`。建议文件名用稳定的 slug（如日期/英文），标题用中文写在文档 H1。
 - 绑定模式同步后会写入 `.yapi/docs-sync.links.json`（本地文档 → YApi 文档 URL）
 - 绑定模式同步后会写入 `.yapi/docs-sync.projects.json`（项目元数据/环境缓存）
 - 绑定模式同步后会写入 `.yapi/docs-sync.deployments.json`（本地文档 → 已部署 URL）
@@ -147,6 +149,7 @@ yapi docs-sync
 - `pandoc` 需手动安装（用于完整 Markdown 渲染）
 - 如需跳过 Mermaid 渲染，使用 `--no-mermaid`
 - 如需回到经典风格，使用 `--mermaid-classic`
+- 如需 D2 手绘风格，使用 `--d2-sketch`
 
 ### 手动方式：使用 npx（无需安装）
 

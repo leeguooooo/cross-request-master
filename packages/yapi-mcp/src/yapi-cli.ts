@@ -11,6 +11,7 @@ import {
   isMmdcAvailable,
   isPandocAvailable,
   isPlantUmlAvailable,
+  extractFirstMarkdownH1Title,
   renderMarkdownToHtml,
 } from "./docs/markdown";
 import { runInstallSkill } from "./skill/install";
@@ -57,6 +58,7 @@ type DocsSyncOptions = {
   noMermaid?: boolean;
   mermaidLook?: "classic" | "handDrawn";
   mermaidHandDrawnSeed?: number;
+  d2Sketch?: boolean;
   force?: boolean;
   help?: boolean;
 };
@@ -599,6 +601,10 @@ function parseDocsSyncArgs(argv: string[]): DocsSyncOptions {
       if (!options.mermaidLook) options.mermaidLook = "handDrawn";
       continue;
     }
+    if (arg === "--d2-sketch") {
+      options.d2Sketch = true;
+      continue;
+    }
     if (arg === "--force") {
       options.force = true;
       continue;
@@ -721,6 +727,7 @@ function usage(): string {
     "  --mermaid-hand-drawn   force mermaid hand-drawn look (default)",
     "  --mermaid-classic      render mermaid with classic look",
     "  --mermaid-hand-drawn-seed <n>  hand-drawn seed (implies hand-drawn look)",
+    "  --d2-sketch            render D2 diagrams in sketch style",
     "  --force                sync all files even if unchanged",
     "Docs-sync bind actions:",
     "  list, get, add, update, remove",
@@ -752,6 +759,7 @@ function docsSyncUsage(): string {
     "  --mermaid-hand-drawn   force mermaid hand-drawn look (default)",
     "  --mermaid-classic      render mermaid with classic look",
     "  --mermaid-hand-drawn-seed <n>  hand-drawn seed (implies hand-drawn look)",
+    "  --d2-sketch            render D2 diagrams in sketch style",
     "  --force                sync all files even if unchanged",
     "  -h, --help             show help",
   ].join("\n");
@@ -1348,6 +1356,9 @@ function buildDocsSyncHash(markdown: string, options: DocsSyncOptions): string {
       hash.update(`mermaid-seed:${options.mermaidHandDrawnSeed}\n`);
     }
   }
+  if (options.d2Sketch) {
+    hash.update("d2-sketch\n");
+  }
   hash.update(markdown);
   return hash.digest("hex");
 }
@@ -1550,11 +1561,16 @@ async function addInterface(
 
 async function updateInterface(
   docId: number,
+  title: string | undefined,
   markdown: string,
   html: string,
   request: YapiRequest,
 ): Promise<void> {
-  const resp = await request("/api/interface/up", "POST", {}, { id: docId, markdown, desc: html });
+  const payload: Record<string, unknown> = { id: docId, markdown, desc: html };
+  if (title) {
+    payload.title = title;
+  }
+  const resp = await request("/api/interface/up", "POST", {}, payload);
   if (resp?.errcode !== 0) {
     throw new Error(`interface up failed: ${resp?.errmsg || "unknown error"}`);
   }
@@ -1601,16 +1617,19 @@ async function syncDocsDir(
     const relName = path.basename(mdPath);
     const apiPath = `/${stem}`;
 
+    const markdown = fs.readFileSync(mdPath, "utf8");
+    const desiredTitle = extractFirstMarkdownH1Title(markdown).trim() || stem;
+
     let docId = mapping.files[relName];
     if (!docId) {
-      docId = byPath[apiPath] || byTitle[stem];
+      docId = byPath[apiPath] || byTitle[desiredTitle] || byTitle[stem];
       if (docId) mapping.files[relName] = docId;
     }
 
     if (!docId) {
       created += 1;
       if (!options.dryRun) {
-        docId = await addInterface(stem, apiPath, mapping, request);
+        docId = await addInterface(desiredTitle, apiPath, mapping, request);
         mapping.files[relName] = docId;
       }
     }
@@ -1620,30 +1639,49 @@ async function syncDocsDir(
       fileInfos[relName] = { docId: Number(docId), apiPath: resolvedPath };
     }
 
-    const markdown = fs.readFileSync(mdPath, "utf8");
     const contentHash = buildDocsSyncHash(markdown, options);
     const previousHash = mapping.file_hashes[relName];
-    if (!options.force && docId && previousHash && previousHash === contentHash) {
+
+    const currentTitle = docId ? byId[String(docId)]?.title : "";
+    const titleToUpdate = !docId
+      ? undefined
+      : !currentTitle || currentTitle !== desiredTitle
+        ? desiredTitle
+        : undefined;
+    const shouldSyncTitle = Boolean(titleToUpdate);
+
+    if (
+      !options.force &&
+      docId &&
+      previousHash &&
+      previousHash === contentHash &&
+      !shouldSyncTitle
+    ) {
       skipped += 1;
       continue;
     }
 
     const logPrefix = `[docs-sync:${relName}]`;
     let mermaidFailed = false;
+    let diagramFailed = false;
     const html = renderMarkdownToHtml(markdown, {
       noMermaid: options.noMermaid,
       logMermaid: true,
       mermaidLook: options.mermaidLook,
       mermaidHandDrawnSeed: options.mermaidHandDrawnSeed,
+      d2Sketch: options.d2Sketch,
       logger: (message) => console.log(`${logPrefix} ${message}`),
       onMermaidError: () => {
         mermaidFailed = true;
       },
+      onDiagramError: () => {
+        diagramFailed = true;
+      },
     });
     if (!options.dryRun && docId) {
-      await updateInterface(docId, markdown, html, request);
+      await updateInterface(docId, titleToUpdate, markdown, html, request);
     }
-    if (docId && !mermaidFailed) {
+    if (docId && !mermaidFailed && !diagramFailed) {
       mapping.file_hashes[relName] = contentHash;
     }
     updated += 1;
@@ -2102,6 +2140,39 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
     if (useBindings) {
       const rootDir = path.dirname(docsSyncHome!);
       const configForBindings = docsSyncConfig!;
+
+      const dirToBindings = new Map<string, string[]>();
+      for (const name of bindingNames) {
+        const binding = configForBindings.bindings[name];
+        if (!binding) {
+          throw new Error(`binding not found: ${name}`);
+        }
+        const dirPath = resolveBindingDir(rootDir, binding.dir);
+        const existing = dirToBindings.get(dirPath) || [];
+        existing.push(name);
+        dirToBindings.set(dirPath, existing);
+      }
+      const duplicates = Array.from(dirToBindings.entries()).filter(
+        ([, names]) => names.length > 1,
+      );
+      if (duplicates.length) {
+        const lines: string[] = [];
+        lines.push("invalid docs-sync bindings: multiple bindings share the same dir");
+        duplicates.forEach(([dirPath, names]) => {
+          lines.push(`- dir=${dirPath} bindings=${names.join(", ")}`);
+        });
+        lines.push("");
+        lines.push("Fix: split docs into separate directories (recommended).");
+        lines.push("Example:");
+        lines.push(
+          "  yapi docs-sync bind update --name <bindingA> --dir docs/yapi-sync/<bindingA>",
+        );
+        lines.push(
+          "  yapi docs-sync bind update --name <bindingB> --dir docs/yapi-sync/<bindingB>",
+        );
+        throw new Error(lines.join("\n"));
+      }
+
       const bindingResults: Record<
         string,
         { binding: DocsSyncBinding; files: Record<string, DocsSyncFileInfo> }

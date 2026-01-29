@@ -10,8 +10,10 @@ export type MarkdownRenderOptions = {
   logDiagrams?: boolean;
   mermaidLook?: "classic" | "handDrawn";
   mermaidHandDrawnSeed?: number;
+  d2Sketch?: boolean;
   logger?: (message: string) => void;
   onMermaidError?: (error: unknown) => void;
+  onDiagramError?: (error: unknown) => void;
 };
 
 let cachedPandocAvailable: boolean | null = null;
@@ -23,7 +25,9 @@ let cachedGraphvizAvailable: boolean | null = null;
 let cachedD2Available: boolean | null = null;
 
 function stripAnsi(input: string): string {
-  return input.replace(/\u001b\[[0-9;]*m/g, "");
+  // Some TS parsers/lint setups dislike control characters in regex literals.
+  const pattern = new RegExp("\\x1b\\[[0-9;]*m", "g");
+  return input.replace(pattern, "");
 }
 
 function formatRenderError(error: unknown): string {
@@ -303,14 +307,19 @@ function renderGraphvizToSvg(source: string): string {
   }
 }
 
-function renderD2ToSvg(source: string): string {
+function renderD2ToSvg(source: string, options?: { sketch?: boolean }): string {
   ensureD2();
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "yapi-docs-sync-"));
   const inputPath = path.join(tmpDir, "diagram.d2");
   const outputPath = path.join(tmpDir, "diagram.svg");
   try {
     fs.writeFileSync(inputPath, source, "utf8");
-    execFileSync(resolveLocalBin("d2"), [inputPath, outputPath], { stdio: "pipe" });
+    const args = [];
+    if (options?.sketch) {
+      args.push("--sketch");
+    }
+    args.push(inputPath, outputPath);
+    execFileSync(resolveLocalBin("d2"), args, { stdio: "pipe" });
     const svg = fs.readFileSync(outputPath, "utf8");
     return stripSvgProlog(svg);
   } finally {
@@ -330,12 +339,17 @@ function buildCodeBlockPattern(languages: string[]): RegExp {
 function renderDiagramBlocks(
   markdown: string,
   renderer: DiagramRenderer,
-  options: { shouldLog: boolean; logger: (message: string) => void },
+  options: {
+    shouldLog: boolean;
+    logger: (message: string) => void;
+    onError?: (error: unknown) => void;
+  },
 ): string {
   const pattern = buildCodeBlockPattern(renderer.languages);
   const available = renderer.isAvailable();
   let index = 0;
   let missingLogged = false;
+  let missingReported = false;
   return markdown.replace(pattern, (match, _lang: string, content: string) => {
     index += 1;
     if (!match) return "";
@@ -346,6 +360,10 @@ function renderDiagramBlocks(
       if (options.shouldLog && !missingLogged) {
         options.logger(`${renderer.label} 未安装，相关图示将被跳过。`);
         missingLogged = true;
+      }
+      if (options.onError && !missingReported) {
+        options.onError(new Error(`${renderer.label} renderer not available`));
+        missingReported = true;
       }
       return "";
     }
@@ -363,6 +381,9 @@ function renderDiagramBlocks(
         const message = formatRenderError(error);
         options.logger(`${renderer.label} 块 #${index} 渲染失败，已跳过。原因: ${message}`);
       }
+      if (options.onError) {
+        options.onError(error);
+      }
       return "";
     }
   });
@@ -374,6 +395,10 @@ export function preprocessMarkdown(markdown: string, options: MarkdownRenderOpti
   const shouldLogDiagrams = Boolean(options.logDiagrams ?? options.logMermaid);
   const logger = options.logger || console.log;
   const mermaidConfig = resolveMermaidConfig(options);
+
+  if (!options.noMermaid && !isMmdcAvailable() && options.onMermaidError) {
+    options.onMermaidError(new Error("mmdc not available"));
+  }
 
   if (!options.noMermaid && isMmdcAvailable()) {
     const pattern = /```mermaid\s*\r?\n([\s\S]*?)\r?\n```/g;
@@ -426,12 +451,16 @@ export function preprocessMarkdown(markdown: string, options: MarkdownRenderOpti
       label: "D2",
       languages: ["d2"],
       isAvailable: isD2Available,
-      render: renderD2ToSvg,
+      render: (source: string) => renderD2ToSvg(source, { sketch: options.d2Sketch }),
     },
   ];
 
   for (const renderer of renderers) {
-    output = renderDiagramBlocks(output, renderer, { shouldLog: shouldLogDiagrams, logger });
+    output = renderDiagramBlocks(output, renderer, {
+      shouldLog: shouldLogDiagrams,
+      logger,
+      onError: options.onDiagramError,
+    });
   }
 
   return output;
@@ -463,4 +492,65 @@ export function renderMarkdownToHtml(
   options: MarkdownRenderOptions = {},
 ): string {
   return markdownToHtml(preprocessMarkdown(markdown, options));
+}
+
+export function extractFirstMarkdownH1Title(markdown: string): string {
+  const raw = String(markdown || "");
+  if (!raw.trim()) return "";
+
+  const lines = raw.split(/\r?\n/);
+
+  let index = 0;
+  const firstNonEmpty = lines.findIndex((line) => Boolean(String(line || "").trim()));
+  if (firstNonEmpty !== -1 && String(lines[firstNonEmpty]).trim() === "---") {
+    index = firstNonEmpty + 1;
+    while (index < lines.length) {
+      const line = String(lines[index] || "").trim();
+      if (line === "---" || line === "...") {
+        index += 1;
+        break;
+      }
+      index += 1;
+    }
+  }
+
+  let inFence = false;
+  let fenceMarker = "";
+  const fenceStartPattern = /^\s*(```+|~~~+)/;
+
+  for (; index < lines.length; index += 1) {
+    const line = String(lines[index] || "");
+
+    const fenceMatch = line.match(fenceStartPattern);
+    if (fenceMatch) {
+      const marker = fenceMatch[1] || "";
+      if (!inFence) {
+        inFence = true;
+        fenceMarker = marker;
+      } else {
+        const trimmed = line.trimStart();
+        if (trimmed.startsWith(fenceMarker)) {
+          inFence = false;
+          fenceMarker = "";
+        }
+      }
+      continue;
+    }
+    if (inFence) continue;
+
+    const atxMatch = line.match(/^\s*#\s+(.+?)\s*$/);
+    if (atxMatch) {
+      return String(atxMatch[1] || "").trim();
+    }
+
+    const current = line.trim();
+    if (current && index + 1 < lines.length) {
+      const next = String(lines[index + 1] || "");
+      if (/^\s*=+\s*$/.test(next)) {
+        return current;
+      }
+    }
+  }
+
+  return "";
 }
