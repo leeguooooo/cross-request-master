@@ -10,7 +10,6 @@ export type MarkdownRenderOptions = {
   logDiagrams?: boolean;
   mermaidLook?: "classic" | "handDrawn";
   mermaidHandDrawnSeed?: number;
-  d2Sketch?: boolean;
   logger?: (message: string) => void;
   onMermaidError?: (error: unknown) => void;
   onDiagramError?: (error: unknown) => void;
@@ -307,19 +306,14 @@ function renderGraphvizToSvg(source: string): string {
   }
 }
 
-function renderD2ToSvg(source: string, options?: { sketch?: boolean }): string {
+function renderD2ToSvg(source: string): string {
   ensureD2();
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "yapi-docs-sync-"));
   const inputPath = path.join(tmpDir, "diagram.d2");
   const outputPath = path.join(tmpDir, "diagram.svg");
   try {
     fs.writeFileSync(inputPath, source, "utf8");
-    const args = [];
-    if (options?.sketch) {
-      args.push("--sketch");
-    }
-    args.push(inputPath, outputPath);
-    execFileSync(resolveLocalBin("d2"), args, { stdio: "pipe" });
+    execFileSync(resolveLocalBin("d2"), ["--sketch", inputPath, outputPath], { stdio: "pipe" });
     const svg = fs.readFileSync(outputPath, "utf8");
     return stripSvgProlog(svg);
   } finally {
@@ -451,7 +445,7 @@ export function preprocessMarkdown(markdown: string, options: MarkdownRenderOpti
       label: "D2",
       languages: ["d2"],
       isAvailable: isD2Available,
-      render: (source: string) => renderD2ToSvg(source, { sketch: options.d2Sketch }),
+      render: renderD2ToSvg,
     },
   ];
 

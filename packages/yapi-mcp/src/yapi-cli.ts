@@ -58,7 +58,6 @@ type DocsSyncOptions = {
   noMermaid?: boolean;
   mermaidLook?: "classic" | "handDrawn";
   mermaidHandDrawnSeed?: number;
-  d2Sketch?: boolean;
   force?: boolean;
   help?: boolean;
 };
@@ -601,10 +600,6 @@ function parseDocsSyncArgs(argv: string[]): DocsSyncOptions {
       if (!options.mermaidLook) options.mermaidLook = "handDrawn";
       continue;
     }
-    if (arg === "--d2-sketch") {
-      options.d2Sketch = true;
-      continue;
-    }
     if (arg === "--force") {
       options.force = true;
       continue;
@@ -727,7 +722,6 @@ function usage(): string {
     "  --mermaid-hand-drawn   force mermaid hand-drawn look (default)",
     "  --mermaid-classic      render mermaid with classic look",
     "  --mermaid-hand-drawn-seed <n>  hand-drawn seed (implies hand-drawn look)",
-    "  --d2-sketch            render D2 diagrams in sketch style",
     "  --force                sync all files even if unchanged",
     "Docs-sync bind actions:",
     "  list, get, add, update, remove",
@@ -759,7 +753,6 @@ function docsSyncUsage(): string {
     "  --mermaid-hand-drawn   force mermaid hand-drawn look (default)",
     "  --mermaid-classic      render mermaid with classic look",
     "  --mermaid-hand-drawn-seed <n>  hand-drawn seed (implies hand-drawn look)",
-    "  --d2-sketch            render D2 diagrams in sketch style",
     "  --force                sync all files even if unchanged",
     "  -h, --help             show help",
   ].join("\n");
@@ -1356,9 +1349,6 @@ function buildDocsSyncHash(markdown: string, options: DocsSyncOptions): string {
       hash.update(`mermaid-seed:${options.mermaidHandDrawnSeed}\n`);
     }
   }
-  if (options.d2Sketch) {
-    hash.update("d2-sketch\n");
-  }
   hash.update(markdown);
   return hash.digest("hex");
 }
@@ -1602,7 +1592,9 @@ async function syncDocsDir(
   if (!mapping.template_id && envTemplateId) mapping.template_id = Number(envTemplateId);
 
   if (!mapping.project_id || !mapping.catid) {
-    throw new Error("project_id/catid missing; set in binding/.yapi.json or env");
+    throw new Error(
+      "缺少 project_id/catid。请先绑定或配置：yapi docs-sync bind add --name <binding> --dir <path> --project-id <id> --catid <id>，或在目录下添加 .yapi.json，或设置环境变量 YAPI_PROJECT_ID/YAPI_CATID。"
+    );
   }
 
   const { byPath, byTitle, byId } = await listExistingInterfaces(Number(mapping.catid), request);
@@ -1669,7 +1661,6 @@ async function syncDocsDir(
       logMermaid: true,
       mermaidLook: options.mermaidLook,
       mermaidHandDrawnSeed: options.mermaidHandDrawnSeed,
-      d2Sketch: options.d2Sketch,
       logger: (message) => console.log(`${logPrefix} ${message}`),
       onMermaidError: () => {
         mermaidFailed = true;

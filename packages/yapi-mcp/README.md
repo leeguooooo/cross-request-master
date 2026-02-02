@@ -144,12 +144,11 @@ yapi docs-sync
 - Mermaid 预渲染依赖 `mmdc`（默认手绘风格；安装时会尝试拉取，失败不影响同步）
 - PlantUML 预渲染依赖 `plantuml`（需要本机 Java 环境）
 - Graphviz 预渲染依赖 `dot`（graphviz）
-- D2 预渲染依赖 `d2`
+- D2 预渲染依赖 `d2`（默认手绘风格输出）
 - macOS 推荐：`brew install plantuml graphviz d2`
 - `pandoc` 需手动安装（用于完整 Markdown 渲染）
 - 如需跳过 Mermaid 渲染，使用 `--no-mermaid`
 - 如需回到经典风格，使用 `--mermaid-classic`
-- 如需 D2 手绘风格，使用 `--d2-sketch`
 
 ### 手动方式：使用 npx（无需安装）
 
