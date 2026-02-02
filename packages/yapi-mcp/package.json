@@ -1,6 +1,6 @@
 {
   "name": "@leeguoo/yapi-mcp",
-  "version": "0.3.19",
+  "version": "0.3.20",
   "description": "YApi Auto MCP Server - Model Context Protocol server for YApi integration, enables AI tools like Cursor to interact with YApi API documentation",
   "main": "dist/index.js",
   "bin": {
@@ -34,7 +34,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/leeguooooo/Yapi-MCP.git"
+    "url": "git+https://github.com/leeguooooo/cross-request-master.git"
   },
   "keywords": [
     "yapi",
