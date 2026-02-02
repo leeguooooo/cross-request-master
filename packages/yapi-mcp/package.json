@@ -1,6 +1,6 @@
 {
   "name": "@leeguoo/yapi-mcp",
-  "version": "0.3.16",
+  "version": "0.3.17",
   "description": "YApi Auto MCP Server - Model Context Protocol server for YApi integration, enables AI tools like Cursor to interact with YApi API documentation",
   "main": "dist/index.js",
   "bin": {
@@ -24,6 +24,7 @@
     "smoke:global": "pnpm build && tsx scripts/smoke-global.ts",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
+    "test": "node --test --import tsx tests",
     "inspect": "pnpx @modelcontextprotocol/inspector",
     "prepare": "pnpm run build && chmod +x ./dist/cli.js ./dist/yapi-cli.js",
     "pub:release": "pnpm build && npm publish"
