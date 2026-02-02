@@ -400,6 +400,17 @@ const value = response.body === undefined ? '' : response.body;
    - 选择标签，复制 CHANGELOG 内容
    - 发布
 
+### yapi-mcp npm 发布（tag 自动）
+
+1. **更新版本号**：修改 `packages/yapi-mcp/package.json` 的 `version`。
+2. **提交变更**。
+3. **打 tag 并推送**（tag 必须与版本一致）：
+   ```bash
+   git tag -a v0.3.16 -m "release yapi-mcp v0.3.16"
+   git push origin v0.3.16
+   ```
+4. GitHub Actions 会执行 `/.github/workflows/publish-npm.yml`，通过 npm Trusted Publisher 自动发布。
+
 ## 支持与响应
 
 ### Issue 响应时间
