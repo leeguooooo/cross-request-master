@@ -107,8 +107,27 @@ yapi login
 # 检查当前登录用户
 yapi whoami
 
-# 搜索接口
-yapi search --q keyword
+# 搜索接口（可选：按项目过滤）
+yapi search --q keyword --project-id 310
+
+# 分组/项目/接口/日志（快捷命令）
+yapi group list
+yapi group get --id 129
+yapi project list --group-id 129 --page 1 --limit 10
+yapi project get --id 365
+yapi project token --project-id 365
+yapi interface list-menu --project-id 365
+yapi interface list --project-id 365 --page 1 --limit 20
+yapi interface list --project-id 365 --limit all
+yapi interface get --id 31400
+yapi interface cat add --project-id 365 --name "2" --desc ""
+yapi interface cat update --cat-id 3722 --name "公共分类 1" --desc "公共分类"
+yapi interface cat delete --cat-id 4169
+yapi log list --type group --type-id 129 --page 1 --limit 10
+
+# 更新提示（自动检查，可关闭）
+# 设置环境变量 YAPI_NO_UPDATE_CHECK=1
+# 或在命令后加 --no-update
 
 # 获取接口详情
 yapi --path /api/interface/get --query id=123

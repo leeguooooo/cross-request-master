@@ -35,6 +35,16 @@ type Options = {
   data?: string;
   dataFile?: string;
   timeout?: number;
+  id?: string;
+  name?: string;
+  desc?: string;
+  catId?: string;
+  groupId?: string;
+  type?: string;
+  typeId?: string;
+  page?: number;
+  limit?: number | string;
+  noUpdate?: boolean;
   q?: string;
   noPretty?: boolean;
   help?: boolean;
@@ -304,6 +314,10 @@ function parseArgs(argv: string[]): Options {
       options.version = true;
       continue;
     }
+    if (arg === "--no-update" || arg === "--no-update-check") {
+      options.noUpdate = true;
+      continue;
+    }
     if (arg === "--config") {
       options.config = argv[++i];
       continue;
@@ -446,6 +460,84 @@ function parseArgs(argv: string[]): Options {
     }
     if (arg.startsWith("--timeout=")) {
       options.timeout = Number(arg.slice(10));
+      continue;
+    }
+    if (arg === "--name") {
+      options.name = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--name=")) {
+      options.name = arg.slice(7);
+      continue;
+    }
+    if (arg === "--desc") {
+      options.desc = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--desc=")) {
+      options.desc = arg.slice(7);
+      continue;
+    }
+    if (arg === "--cat-id" || arg === "--catid") {
+      options.catId = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--cat-id=")) {
+      options.catId = arg.slice(9);
+      continue;
+    }
+    if (arg.startsWith("--catid=")) {
+      options.catId = arg.slice(8);
+      continue;
+    }
+    if (arg === "--id") {
+      options.id = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--id=")) {
+      options.id = arg.slice(5);
+      continue;
+    }
+    if (arg === "--group-id") {
+      options.groupId = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--group-id=")) {
+      options.groupId = arg.slice(11);
+      continue;
+    }
+    if (arg === "--type") {
+      options.type = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--type=")) {
+      options.type = arg.slice(7);
+      continue;
+    }
+    if (arg === "--type-id") {
+      options.typeId = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--type-id=")) {
+      options.typeId = arg.slice(10);
+      continue;
+    }
+    if (arg === "--page") {
+      options.page = Number(argv[++i]);
+      continue;
+    }
+    if (arg.startsWith("--page=")) {
+      options.page = Number(arg.slice(7));
+      continue;
+    }
+    if (arg === "--limit") {
+      const raw = String(argv[++i] ?? "").trim();
+      options.limit = raw.toLowerCase() === "all" ? "all" : Number(raw);
+      continue;
+    }
+    if (arg.startsWith("--limit=")) {
+      const raw = String(arg.slice(8)).trim();
+      options.limit = raw.toLowerCase() === "all" ? "all" : Number(raw);
       continue;
     }
     if (arg === "--no-pretty") {
@@ -689,6 +781,10 @@ function usage(): string {
   return [
     "Usage:",
     "  yapi --path /api/interface/get --query id=123",
+    "  yapi group [options]",
+    "  yapi project [options]",
+    "  yapi interface [options]",
+    "  yapi log [options]",
     "  yapi docs-sync [options] [dir...]",
     "  yapi docs-sync bind <action> [options]",
     "  yapi login [options]",
@@ -699,7 +795,7 @@ function usage(): string {
     "  --config <path>        config file path (default: ~/.yapi/config.toml)",
     "  --base-url <url>       YApi base URL",
     "  --token <token>        project token (supports projectId:token)",
-    "  --project-id <id>      select token for project",
+    "  --project-id <id>      select token for project (filters search results)",
     "  --auth-mode <mode>     token or global",
     "  --email <email>        login email for global mode",
     "  --password <pwd>       login password for global mode",
@@ -713,6 +809,16 @@ function usage(): string {
     "  --data <payload>       request body (JSON or text)",
     "  --data-file <file>     request body file",
     "  --timeout <ms>         request timeout in ms",
+    "  --id <id>              resource id (for group/project/interface)",
+    "  --name <name>          category name (for interface cat)",
+    "  --desc <desc>          category description (for interface cat)",
+    "  --cat-id <id>          category id (for interface cat)",
+    "  --group-id <id>        group id (for project list)",
+    "  --type <type>          log type (for log list)",
+    "  --type-id <id>         log type id (for log list)",
+    "  --page <n>             page number (for list)",
+    "  --limit <n|all>        page size (for list)",
+    "  --no-update            disable update check",
     "  --no-pretty            print raw response",
     "Docs-sync options:",
     "  --dir <path>           docs directory (repeatable; default: docs/release-notes)",
@@ -833,6 +939,109 @@ function searchUsage(): string {
   ].join("\n");
 }
 
+function groupUsage(): string {
+  return [
+    "Usage:",
+    "  yapi group list",
+    "  yapi group get --id <group_id>",
+    "Options:",
+    "  --config <path>        config file path (default: ~/.yapi/config.toml)",
+    "  --base-url <url>       YApi base URL",
+    "  --token <token>        project token (supports projectId:token)",
+    "  --project-id <id>      select token for project",
+    "  --auth-mode <mode>     token or global",
+    "  --email <email>        login email for global mode",
+    "  --password <pwd>       login password for global mode",
+    "  --cookie <cookie>      cookie for global mode",
+    "  --token-param <name>   token query param name (default: token)",
+    "  --timeout <ms>         request timeout in ms",
+    "  --id <id>              group id (for get)",
+    "  --no-pretty            print raw response",
+    "  -h, --help             show help",
+  ].join("\n");
+}
+
+function projectUsage(): string {
+  return [
+    "Usage:",
+    "  yapi project list --group-id <group_id> [--page <n>] [--limit <n>]",
+    "  yapi project get --id <project_id>",
+    "  yapi project token --project-id <project_id>",
+    "Options:",
+    "  --config <path>        config file path (default: ~/.yapi/config.toml)",
+    "  --base-url <url>       YApi base URL",
+    "  --token <token>        project token (supports projectId:token)",
+    "  --project-id <id>      select token for project",
+    "  --auth-mode <mode>     token or global",
+    "  --email <email>        login email for global mode",
+    "  --password <pwd>       login password for global mode",
+    "  --cookie <cookie>      cookie for global mode",
+    "  --token-param <name>   token query param name (default: token)",
+    "  --timeout <ms>         request timeout in ms",
+    "  --group-id <id>        group id (for list)",
+    "  --id <id>              project id (for get)",
+    "  --page <n>             page number (default: 1)",
+    "  --limit <n>            page size (default: 10)",
+    "  --no-pretty            print raw response",
+    "  -h, --help             show help",
+  ].join("\n");
+}
+
+function interfaceUsage(): string {
+  return [
+    "Usage:",
+    "  yapi interface list --project-id <project_id> [--page <n>] [--limit <n>]",
+    "  yapi interface list-menu --project-id <project_id>",
+    "  yapi interface get --id <api_id>",
+    "  yapi interface cat add --project-id <project_id> --name <name> [--desc <desc>]",
+    "  yapi interface cat update --cat-id <cat_id> --name <name> [--desc <desc>]",
+    "  yapi interface cat delete --cat-id <cat_id>",
+    "Options:",
+    "  --config <path>        config file path (default: ~/.yapi/config.toml)",
+    "  --base-url <url>       YApi base URL",
+    "  --token <token>        project token (supports projectId:token)",
+    "  --project-id <id>      select token for project",
+    "  --auth-mode <mode>     token or global",
+    "  --email <email>        login email for global mode",
+    "  --password <pwd>       login password for global mode",
+    "  --cookie <cookie>      cookie for global mode",
+    "  --token-param <name>   token query param name (default: token)",
+    "  --timeout <ms>         request timeout in ms",
+    "  --id <id>              interface id (for get)",
+    "  --cat-id <id>          category id (for cat update/delete)",
+    "  --name <name>          category name (for cat add/update)",
+    "  --desc <desc>          category description (for cat add/update)",
+    "  --page <n>             page number (default: 1)",
+    "  --limit <n|all>        page size (default: 20)",
+    "  --no-pretty            print raw response",
+    "  -h, --help             show help",
+  ].join("\n");
+}
+
+function logUsage(): string {
+  return [
+    "Usage:",
+    "  yapi log list --type <type> --type-id <id> [--page <n>] [--limit <n>]",
+    "Options:",
+    "  --config <path>        config file path (default: ~/.yapi/config.toml)",
+    "  --base-url <url>       YApi base URL",
+    "  --token <token>        project token (supports projectId:token)",
+    "  --project-id <id>      select token for project",
+    "  --auth-mode <mode>     token or global",
+    "  --email <email>        login email for global mode",
+    "  --password <pwd>       login password for global mode",
+    "  --cookie <cookie>      cookie for global mode",
+    "  --token-param <name>   token query param name (default: token)",
+    "  --timeout <ms>         request timeout in ms",
+    "  --type <type>          log type (e.g., group/project)",
+    "  --type-id <id>         log type id",
+    "  --page <n>             page number (default: 1)",
+    "  --limit <n>            page size (default: 10)",
+    "  --no-pretty            print raw response",
+    "  -h, --help             show help",
+  ].join("\n");
+}
+
 function escapeTomlValue(value: string): string {
   return String(value || "")
     .replace(/\\/g, "\\\\")
@@ -874,8 +1083,12 @@ function promptHidden(question: string): Promise<string> {
     output: process.stdout,
     terminal: true,
   });
+  const output = (rl as unknown as { output?: NodeJS.WritableStream }).output || process.stdout;
   const originalWrite = (rl as unknown as { _writeToOutput?: (value: string) => void })
     ._writeToOutput;
+  if (question) {
+    output.write(question);
+  }
   (rl as unknown as { stdoutMuted?: boolean }).stdoutMuted = true;
   (rl as unknown as { _writeToOutput?: (value: string) => void })._writeToOutput =
     function writeToOutput(value: string) {
@@ -883,12 +1096,15 @@ function promptHidden(question: string): Promise<string> {
       if (typeof originalWrite === "function") {
         originalWrite.call(this, value);
       } else {
-        (rl as unknown as { output: NodeJS.WritableStream }).output.write(value);
+        output.write(value);
       }
     };
   return new Promise((resolve) => {
-    rl.question(question, (answer) => {
+    rl.question("", (answer) => {
       (rl as unknown as { stdoutMuted?: boolean }).stdoutMuted = false;
+      if (question) {
+        output.write("\n");
+      }
       rl.close();
       resolve(answer);
     });
@@ -941,6 +1157,8 @@ function readVersion(): string {
 type SimpleRequestResult = {
   ok: boolean;
   queryItems?: [string, string][];
+  method?: "GET" | "POST";
+  data?: unknown;
 };
 
 type SimpleRequestQueryBuilder = (options: Options) => SimpleRequestResult;
@@ -951,6 +1169,7 @@ async function runSimpleRequest(
   endpoint: string,
   requireBaseUrl: boolean,
   buildQueryItems?: SimpleRequestQueryBuilder,
+  transform?: (payload: unknown, options: Options) => unknown,
 ): Promise<number> {
   const options = parseArgs(rawArgs);
   if (options.help) {
@@ -1028,10 +1247,18 @@ async function runSimpleRequest(
   }
 
   let queryItems: [string, string][] = [];
+  let method: "GET" | "POST" = "GET";
+  let data: unknown = undefined;
   if (buildQueryItems) {
     const result = buildQueryItems(options);
     if (!result.ok) return 2;
     queryItems = result.queryItems || [];
+    if (result.method) {
+      method = result.method;
+    }
+    if (result.data !== undefined) {
+      data = result.data;
+    }
   }
 
   const url = buildUrl(
@@ -1043,11 +1270,18 @@ async function runSimpleRequest(
   );
 
   const sendOnce = async () => {
+    let body: string | undefined;
+    const requestHeaders: Record<string, string> = { ...headers };
+    if (data !== undefined) {
+      body = JSON.stringify(data);
+      requestHeaders["Content-Type"] = "application/json;charset=UTF-8";
+    }
     const response = await fetchWithTimeout(
       url,
       {
-        method: "GET",
-        headers,
+        method,
+        headers: requestHeaders,
+        body,
       },
       options.timeout || 30000,
     );
@@ -1080,7 +1314,8 @@ async function runSimpleRequest(
   }
   try {
     const payload = result.json ?? JSON.parse(text);
-    console.log(JSON.stringify(payload, null, 2));
+    const nextPayload = transform ? transform(payload, options) : payload;
+    console.log(JSON.stringify(nextPayload ?? payload, null, 2));
   } catch {
     console.log(text);
   }
@@ -1165,14 +1400,347 @@ async function runWhoami(rawArgs: string[]): Promise<number> {
 }
 
 async function runSearch(rawArgs: string[]): Promise<number> {
-  return await runSimpleRequest(rawArgs, searchUsage, "/api/project/search", true, (options) => {
-    const keyword = String(options.q || "").trim();
-    if (!keyword) {
-      console.error("missing --q for search");
-      return { ok: false };
+  return await runSimpleRequest(
+    rawArgs,
+    searchUsage,
+    "/api/project/search",
+    true,
+    (options) => {
+      const keyword = String(options.q || "").trim();
+      if (!keyword) {
+        console.error("missing --q for search");
+        return { ok: false };
+      }
+      return { ok: true, queryItems: [["q", keyword]] };
+    },
+    (payload, options) => {
+      const filterProjectId = String(options.projectId || "").trim();
+      if (!filterProjectId) return payload;
+      if (!payload || typeof payload !== "object") return payload;
+      const record = payload as Record<string, any>;
+      const data = record.data;
+      if (!data || typeof data !== "object") return payload;
+
+      const nextData: Record<string, unknown> = { ...data };
+      if (Array.isArray(data.interface)) {
+        nextData.interface = data.interface.filter((item: any) => {
+          const projectId = item?.projectId ?? item?.project_id ?? item?.projectID ?? "";
+          return String(projectId) === filterProjectId;
+        });
+      }
+      if (Array.isArray(data.project)) {
+        nextData.project = data.project.filter((item: any) => {
+          const projectId = item?._id ?? item?.id ?? item?.project_id ?? item?.projectId ?? "";
+          return String(projectId) === filterProjectId;
+        });
+      }
+      return { ...record, data: nextData };
+    },
+  );
+}
+
+async function runGroup(rawArgs: string[]): Promise<number> {
+  const action = (rawArgs[0] || "list").toLowerCase();
+  const options = parseArgs(rawArgs.slice(1));
+  if (options.help) {
+    console.log(groupUsage());
+    return 0;
+  }
+  if (options.version) {
+    console.log(readVersion());
+    return 0;
+  }
+
+  if (action === "list") {
+    return await runSimpleRequest(rawArgs.slice(1), groupUsage, "/api/group/list", true);
+  }
+  if (action === "get") {
+    return await runSimpleRequest(
+      rawArgs.slice(1),
+      groupUsage,
+      "/api/group/get",
+      true,
+      (opts) => {
+        const id = String(opts.id || "").trim();
+        if (!id) {
+          console.error("missing --id for group get");
+          return { ok: false };
+        }
+        return { ok: true, queryItems: [["id", id]] };
+      },
+    );
+  }
+
+  console.error(`unknown group action: ${action}`);
+  console.error(groupUsage());
+  return 2;
+}
+
+async function runProject(rawArgs: string[]): Promise<number> {
+  const action = (rawArgs[0] || "list").toLowerCase();
+  const options = parseArgs(rawArgs.slice(1));
+  if (options.help) {
+    console.log(projectUsage());
+    return 0;
+  }
+  if (options.version) {
+    console.log(readVersion());
+    return 0;
+  }
+
+  if (action === "list") {
+    return await runSimpleRequest(
+      rawArgs.slice(1),
+      projectUsage,
+      "/api/project/list",
+      true,
+      (opts) => {
+        const groupId = String(opts.groupId || "").trim();
+        if (!groupId) {
+          console.error("missing --group-id for project list");
+          return { ok: false };
+        }
+        const page = Number.isFinite(opts.page ?? NaN) ? String(opts.page) : "1";
+        const limit = resolveLimit(opts.limit, "10");
+        return {
+          ok: true,
+          queryItems: [
+            ["group_id", groupId],
+            ["page", page],
+            ["limit", limit],
+          ],
+        };
+      },
+    );
+  }
+  if (action === "get") {
+    return await runSimpleRequest(
+      rawArgs.slice(1),
+      projectUsage,
+      "/api/project/get",
+      true,
+      (opts) => {
+        const id = String(opts.id || "").trim();
+        if (!id) {
+          console.error("missing --id for project get");
+          return { ok: false };
+        }
+        return { ok: true, queryItems: [["id", id]] };
+      },
+    );
+  }
+  if (action === "token") {
+    return await runSimpleRequest(
+      rawArgs.slice(1),
+      projectUsage,
+      "/api/project/token",
+      true,
+      (opts) => {
+        const projectId = String(opts.projectId || opts.id || "").trim();
+        if (!projectId) {
+          console.error("missing --project-id for project token");
+          return { ok: false };
+        }
+        return { ok: true, queryItems: [["project_id", projectId]] };
+      },
+    );
+  }
+
+  console.error(`unknown project action: ${action}`);
+  console.error(projectUsage());
+  return 2;
+}
+
+async function runInterface(rawArgs: string[]): Promise<number> {
+  const action = (rawArgs[0] || "").toLowerCase();
+  const options = parseArgs(rawArgs.slice(1));
+  if (options.help) {
+    console.log(interfaceUsage());
+    return 0;
+  }
+  if (options.version) {
+    console.log(readVersion());
+    return 0;
+  }
+
+  if (action === "list") {
+    return await runSimpleRequest(
+      rawArgs.slice(1),
+      interfaceUsage,
+      "/api/interface/list",
+      true,
+      (opts) => {
+        const projectId = String(opts.projectId || "").trim();
+        if (!projectId) {
+          console.error("missing --project-id for interface list");
+          return { ok: false };
+        }
+        const page = Number.isFinite(opts.page ?? NaN) ? String(opts.page) : "1";
+        const limit = resolveLimit(opts.limit, "20");
+        return {
+          ok: true,
+          queryItems: [
+            ["project_id", projectId],
+            ["page", page],
+            ["limit", limit],
+          ],
+        };
+      },
+    );
+  }
+  if (action === "list-menu" || action === "menu" || action === "list_menu") {
+    return await runSimpleRequest(
+      rawArgs.slice(1),
+      interfaceUsage,
+      "/api/interface/list_menu",
+      true,
+      (opts) => {
+        const projectId = String(opts.projectId || "").trim();
+        if (!projectId) {
+          console.error("missing --project-id for interface list-menu");
+          return { ok: false };
+        }
+        return { ok: true, queryItems: [["project_id", projectId]] };
+      },
+    );
+  }
+  if (action === "get") {
+    return await runSimpleRequest(
+      rawArgs.slice(1),
+      interfaceUsage,
+      "/api/interface/get",
+      true,
+      (opts) => {
+        const id = String(opts.id || "").trim();
+        if (!id) {
+          console.error("missing --id for interface get");
+          return { ok: false };
+        }
+        return { ok: true, queryItems: [["id", id]] };
+      },
+    );
+  }
+  if (action === "cat" || action === "category") {
+    const subAction = (rawArgs[1] || "").toLowerCase();
+    const subArgs = rawArgs.slice(2);
+    if (subAction === "add") {
+      return await runSimpleRequest(
+        subArgs,
+        interfaceUsage,
+        "/api/interface/add_cat",
+        true,
+        (opts) => {
+          const projectId = String(opts.projectId || "").trim();
+          const name = String(opts.name || "").trim();
+          if (!projectId || !name) {
+            console.error("missing --project-id/--name for interface cat add");
+            return { ok: false };
+          }
+          const payload: Record<string, unknown> = {
+            project_id: projectId,
+            name,
+          };
+          if (opts.desc !== undefined) {
+            payload.desc = opts.desc;
+          }
+          return { ok: true, method: "POST", data: payload };
+        },
+      );
     }
-    return { ok: true, queryItems: [["q", keyword]] };
-  });
+    if (subAction === "update" || subAction === "up") {
+      return await runSimpleRequest(
+        subArgs,
+        interfaceUsage,
+        "/api/interface/up_cat",
+        true,
+        (opts) => {
+          const catId = String(opts.catId || "").trim();
+          const name = String(opts.name || "").trim();
+          if (!catId || !name) {
+            console.error("missing --cat-id/--name for interface cat update");
+            return { ok: false };
+          }
+          const payload: Record<string, unknown> = {
+            catid: catId,
+            name,
+          };
+          if (opts.desc !== undefined) {
+            payload.desc = opts.desc;
+          }
+          return { ok: true, method: "POST", data: payload };
+        },
+      );
+    }
+    if (subAction === "delete" || subAction === "del" || subAction === "remove") {
+      return await runSimpleRequest(
+        subArgs,
+        interfaceUsage,
+        "/api/interface/del_cat",
+        true,
+        (opts) => {
+          const catId = String(opts.catId || "").trim();
+          if (!catId) {
+            console.error("missing --cat-id for interface cat delete");
+            return { ok: false };
+          }
+          return { ok: true, method: "POST", data: { catid: catId } };
+        },
+      );
+    }
+
+    console.error(`unknown interface cat action: ${subAction || "(missing)"}`);
+    console.error(interfaceUsage());
+    return 2;
+  }
+
+  console.error(`unknown interface action: ${action || "(missing)"}`);
+  console.error(interfaceUsage());
+  return 2;
+}
+
+async function runLog(rawArgs: string[]): Promise<number> {
+  const action = (rawArgs[0] || "list").toLowerCase();
+  const options = parseArgs(rawArgs.slice(1));
+  if (options.help) {
+    console.log(logUsage());
+    return 0;
+  }
+  if (options.version) {
+    console.log(readVersion());
+    return 0;
+  }
+
+  if (action === "list") {
+    return await runSimpleRequest(
+      rawArgs.slice(1),
+      logUsage,
+      "/api/log/list",
+      true,
+      (opts) => {
+        const type = String(opts.type || "").trim();
+        const typeId = String(opts.typeId || "").trim();
+        if (!type || !typeId) {
+          console.error("missing --type/--type-id for log list");
+          return { ok: false };
+        }
+        const page = Number.isFinite(opts.page ?? NaN) ? String(opts.page) : "1";
+        const limit = resolveLimit(opts.limit, "10");
+        return {
+          ok: true,
+          queryItems: [
+            ["type", type],
+            ["typeid", typeId],
+            ["page", page],
+            ["limit", limit],
+          ],
+        };
+      },
+    );
+  }
+
+  console.error(`unknown log action: ${action}`);
+  console.error(logUsage());
+  return 2;
 }
 
 function findDocsSyncHome(startDir: string): string | null {
@@ -1324,6 +1892,18 @@ function normalizeBindingDir(rootDir: string, bindingDir: string): string {
   return relative;
 }
 
+function suggestDocsSyncDir(startDir: string): string | null {
+  const candidates = ["docs", "doc", "documentation", "release-notes"];
+  for (const candidate of candidates) {
+    const candidatePath = path.resolve(startDir, candidate);
+    if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isDirectory()) {
+      const relative = path.relative(startDir, candidatePath);
+      return relative && relative !== "." ? relative : candidate;
+    }
+  }
+  return null;
+}
+
 function loadMapping(dirPath: string): { mapping: DocsSyncMapping; mappingPath: string } {
   const mappingPath = path.join(dirPath, ".yapi.json");
   if (!fs.existsSync(mappingPath)) {
@@ -1424,6 +2004,130 @@ function normalizeProjectEnvs(raw: unknown): DocsSyncProjectEnv[] {
     result.push({ name: name || domain, domain });
   });
   return result;
+}
+
+function resolveLimit(value: number | string | undefined, fallback: string): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  if (Number.isFinite(value ?? NaN)) {
+    return String(value);
+  }
+  return fallback;
+}
+
+type UpdateCache = {
+  lastChecked?: number;
+  latest?: string;
+  lastNotified?: string;
+  lastNotifiedAt?: number;
+};
+
+const UPDATE_CHECK_TTL_MS = 12 * 60 * 60 * 1000;
+
+function updateCachePath(): string {
+  const yapiHome = process.env.YAPI_HOME || path.join(os.homedir(), ".yapi");
+  return path.join(yapiHome, "update.json");
+}
+
+function readUpdateCache(): UpdateCache {
+  try {
+    const cachePath = updateCachePath();
+    if (!fs.existsSync(cachePath)) return {};
+    const raw = fs.readFileSync(cachePath, "utf8");
+    const parsed = JSON.parse(raw) as UpdateCache;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeUpdateCache(cache: UpdateCache): void {
+  try {
+    const cachePath = updateCachePath();
+    fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+    fs.writeFileSync(cachePath, `${JSON.stringify(cache, null, 2)}\n`, "utf8");
+  } catch {
+    // ignore cache failures
+  }
+}
+
+function compareSemver(a: string, b: string): number {
+  const toParts = (value: string) =>
+    String(value || "")
+      .trim()
+      .split(".")
+      .map((part) => Number(part.replace(/\D/g, "")) || 0);
+  const aParts = toParts(a);
+  const bParts = toParts(b);
+  const len = Math.max(aParts.length, bParts.length);
+  for (let i = 0; i < len; i += 1) {
+    const diff = (aParts[i] || 0) - (bParts[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+function isNewerVersion(latest: string, current: string): boolean {
+  return compareSemver(latest, current) > 0;
+}
+
+async function fetchLatestVersion(timeoutMs: number): Promise<string | null> {
+  try {
+    const encoded = encodeURIComponent("@leeguoo/yapi-mcp");
+    const url = `https://registry.npmjs.org/${encoded}/latest`;
+    const response = await fetchWithTimeout(url, { method: "GET" }, timeoutMs);
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { version?: string };
+    return typeof payload?.version === "string" ? payload.version : null;
+  } catch {
+    return null;
+  }
+}
+
+async function checkForUpdates(options: {
+  noUpdate?: boolean;
+  skip?: boolean;
+}): Promise<void> {
+  if (options.skip || options.noUpdate) return;
+  if (process.env.YAPI_NO_UPDATE_CHECK === "1") return;
+  if (process.env.CI === "1") return;
+
+  const currentVersion = readVersion();
+  if (!currentVersion || currentVersion === "unknown") return;
+
+  const cache = readUpdateCache();
+  const now = Date.now();
+  let latest = cache.latest;
+  const shouldCheck =
+    !cache.lastChecked || now - cache.lastChecked > UPDATE_CHECK_TTL_MS || !latest;
+
+  if (shouldCheck) {
+    const fetched = await fetchLatestVersion(2000);
+    if (fetched) {
+      latest = fetched;
+      cache.latest = fetched;
+    }
+    cache.lastChecked = now;
+  }
+
+  if (!latest || !isNewerVersion(latest, currentVersion)) {
+    writeUpdateCache(cache);
+    return;
+  }
+
+  const shouldNotify =
+    cache.lastNotified !== latest || !cache.lastNotifiedAt || now - cache.lastNotifiedAt > UPDATE_CHECK_TTL_MS;
+  if (shouldNotify) {
+    console.warn(
+      `update available: ${currentVersion} -> ${latest}. Run: npm install -g @leeguoo/yapi-mcp@latest`,
+    );
+    console.warn("or: pnpm add -g @leeguoo/yapi-mcp@latest");
+    cache.lastNotified = latest;
+    cache.lastNotifiedAt = now;
+  }
+  writeUpdateCache(cache);
 }
 
 type YapiRequest = (
@@ -1977,7 +2681,28 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
       return 2;
     }
 
+    const usingDefaultDir = !useBindings && !options.dirs.length;
     const dirs = useBindings ? [] : options.dirs.length ? options.dirs : ["docs/release-notes"];
+    if (!useBindings) {
+      const missingDirs = dirs.filter((dir) => {
+        const dirPath = path.resolve(dir);
+        return !fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory();
+      });
+      if (missingDirs.length) {
+        const firstMissing = path.resolve(missingDirs[0]);
+        console.error(`dir not found: ${firstMissing}`);
+        if (usingDefaultDir) {
+          const suggestion = suggestDocsSyncDir(process.cwd());
+          if (suggestion) {
+            console.error(`hint: pass --dir ${suggestion}`);
+          }
+          console.error("hint: or bind a directory with yapi docs-sync bind add");
+        } else {
+          console.error("hint: pass --dir <existing_dir> or bind a directory");
+        }
+        return 2;
+      }
+    }
 
     let config: Record<string, string> = {};
     let configPath = options.config || "";
@@ -2218,6 +2943,14 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
 
 async function main(): Promise<number> {
   const rawArgs = process.argv.slice(2);
+  const parsedForUpdate = parseArgs(rawArgs);
+  const skipUpdateCheck =
+    parsedForUpdate.version ||
+    parsedForUpdate.help ||
+    parsedForUpdate.noUpdate ||
+    rawArgs.includes("-h") ||
+    rawArgs.includes("--help");
+  await checkForUpdates({ noUpdate: parsedForUpdate.noUpdate, skip: skipUpdateCheck });
   if (rawArgs[0] === "install-skill") {
     await runInstallSkill(rawArgs.slice(1));
     return 0;
@@ -2230,6 +2963,18 @@ async function main(): Promise<number> {
   }
   if (rawArgs[0] === "search") {
     return await runSearch(rawArgs.slice(1));
+  }
+  if (rawArgs[0] === "group") {
+    return await runGroup(rawArgs.slice(1));
+  }
+  if (rawArgs[0] === "project") {
+    return await runProject(rawArgs.slice(1));
+  }
+  if (rawArgs[0] === "interface") {
+    return await runInterface(rawArgs.slice(1));
+  }
+  if (rawArgs[0] === "log") {
+    return await runLog(rawArgs.slice(1));
   }
   if (rawArgs[0] === "docs-sync") {
     return await runDocsSync(rawArgs.slice(1));
