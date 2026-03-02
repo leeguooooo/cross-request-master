@@ -1534,8 +1534,8 @@ yapi install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-ema
               </div>
 	          </div>
             <div class="crm-tabs" role="tablist">
-              <button class="crm-tab" type="button" data-tab="mcp">MCP 配置</button>
               <button class="crm-tab" type="button" data-tab="skill">Skill 一键安装</button>
+              <button class="crm-tab" type="button" data-tab="mcp">MCP（兼容）</button>
               <button class="crm-tab" type="button" data-tab="cli">CLI 使用</button>
             </div>
 	          <div class="crm-body">
@@ -1637,8 +1637,8 @@ yapi install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-ema
 
     const renderMcpPanel = async (container, origin) => {
       const { container: header } = renderSectionHeader(
-        'MCP 配置（所有项目）',
-        '全局模式：邮箱会尽量自动填入；只需填写密码。启动后先在对话里调用一次 yapi_update_token 自动缓存所有项目 token。',
+        'MCP 配置（兼容）',
+        '兼容旧工作流：邮箱会尽量自动填入；只需填写密码。全局模式默认自动懒登录，如需预热缓存可手动调用 yapi_update_token。',
       );
       container.appendChild(header);
 
@@ -1674,7 +1674,7 @@ yapi install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-ema
       container.appendChild(renderCodeBlock('Skill 一键安装', command + '\n'));
     };
 
-    let activeTab = 'mcp';
+    let activeTab = 'skill';
     let renderToken = 0;
 
     const setActiveTab = async (modal, tab) => {

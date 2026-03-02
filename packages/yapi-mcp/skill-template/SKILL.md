@@ -5,108 +5,77 @@ description: Query and sync YApi interface documentation. Use when user mentions
 
 # YApi interface docs
 
-## URL Detection
+## Command policy
 
-When user provides a URL, check if it matches the configured YApi instance:
+Prefer `yapi` command. If missing, fallback to one-shot npx without forcing global install:
 
-1. Read config to get base_url:
 ```bash
-cat ~/.yapi/config.toml | grep base_url
+yapi -h
+# fallback:
+npx -y @leeguoo/yapi-mcp -h
 ```
 
-2. If the URL's origin matches `base_url`, use yapi CLI to operate:
-   - Extract `project_id` from URL path (e.g., `/project/123/...` → project_id=123)
-   - Extract `api_id` from URL path (e.g., `.../api/456` → api_id=456)
-   - Use `yapi --path /api/interface/get --query id=<api_id>` to fetch details
+In command examples below, `yapi` can be replaced by `npx -y @leeguoo/yapi-mcp`.
 
-3. Example URL patterns:
-   - `https://yapi.example.com/project/123/interface/api/456` → project=123, api=456
-   - `https://yapi.example.com/project/123/interface/api/cat_789` → project=123, category=789
+## Quick workflow
+1. If user gives a YApi URL, verify it belongs to configured `base_url`.
+2. Confirm auth (`yapi whoami`), then run `yapi login` only when needed.
+3. Resolve target by `api_id` / keyword / category.
+4. Fetch raw JSON first, then summarize: method, path, headers, params, body, response schema/examples.
+5. For docs sync tasks, do `--dry-run` first, then real sync.
 
-## Prerequisites
+## URL detection
 
-### Check if yapi CLI is installed
+1. Read configured `base_url` from `~/.yapi/config.toml`.
 ```bash
+rg -n "^base_url\\s*=" ~/.yapi/config.toml
+```
+2. If URL origin matches `base_url`, extract IDs from path:
+   - `/project/123/...` -> `project_id=123`
+   - `.../api/456` -> `api_id=456`
+   - `.../api/cat_789` -> `catid=789`
+3. Prefer direct lookup when `api_id` exists:
+```bash
+yapi --path /api/interface/get --query id=<api_id>
+```
+
+## Common commands
+
+```bash
+# version/help
 yapi --version
-```
-
-### If not installed, ask user to install globally
-```bash
-npm install -g @leeguoo/yapi-mcp
-# or
-pnpm add -g @leeguoo/yapi-mcp
-```
-
-### Check login status
-```bash
-yapi whoami
-```
-
-### If not logged in, login interactively
-```bash
-yapi login
-```
-This will prompt for:
-- YApi base URL (e.g., https://yapi.example.com)
-- Email
-- Password
-
-Config is saved to `~/.yapi/config.toml`.
-
-## Workflow
-1. If user provides a YApi URL, check if it matches configured `base_url` in `~/.yapi/config.toml`.
-2. Ensure yapi CLI is installed (prompt user to install globally if missing).
-3. Check login status with `yapi whoami`; if not logged in, run `yapi login`.
-4. Load config from `~/.yapi/config.toml` (base_url, auth_mode, email/password or token, optional project_id).
-5. Identify the target interface by id, URL, or keyword; ask for project/category ids if needed.
-6. Call YApi endpoints with the CLI (see examples below) to fetch raw JSON.
-7. Summarize method, path, headers, query/body schema, response schema, and examples.
-
-## CLI Usage
-- Config location: `~/.yapi/config.toml`
-- Auth cache: `~/.yapi-mcp/auth-*.json`
-
-### Common commands
-```bash
-# Check version
-yapi --version
-
-# Show help
 yapi -h
 
-# Check current user
+# auth
 yapi whoami
-
-# Login (interactive)
 yapi login
 
-# Search interfaces
-yapi search --q keyword
-
-# Get interface by ID
+# search / fetch
+yapi search --q keyword --project-id 310
 yapi --path /api/interface/get --query id=123
-
-# List interfaces in category
 yapi --path /api/interface/list_cat --query catid=123
 ```
 
-## Docs sync
-- Bind local docs to YApi category with `yapi docs-sync bind add --name <binding> --dir <path> --project-id <id> --catid <id>` (stored in `.yapi/docs-sync.json`).
-- Sync with `yapi docs-sync --binding <binding>` or run all bindings with `yapi docs-sync`.
-- Title defaults to the first Markdown H1 (`# Title` / Setext `===`); falls back to filename stem when missing.
-- Path uses the filename stem: `/${stem}`.
-- Default syncs only changed files; use `--force` to sync everything.
-- Mermaid rendering depends on `mmdc` (hand-drawn look by default; auto-installed if possible; failures do not block sync).
-- PlantUML rendering depends on `plantuml` (requires Java).
-- Graphviz rendering depends on `dot` (graphviz).
-- D2 rendering depends on `d2`.
-- macOS: `brew install plantuml graphviz d2`
-- For full Markdown render, install `pandoc` (manual install required).
-- Extra mappings (generated after docs-sync run in binding mode):
-  - `.yapi/docs-sync.links.json`: local docs to YApi doc URLs.
-  - `.yapi/docs-sync.projects.json`: cached project metadata/envs.
-  - `.yapi/docs-sync.deployments.json`: local docs to deployed URLs.
+Config cache locations:
+- Config: `~/.yapi/config.toml`
+- Auth cache: `~/.yapi-mcp/auth-*.json`
 
-## Interface creation tips
-- When adding interfaces, always set `req_body_type` (use `json` if unsure) and provide `res_body` (prefer JSON Schema). Empty values can make `/api/interface/add` fail.
-- Keep request/response structures in `req_*` / `res_body` instead of stuffing them into `desc` or `markdown`.
+## Docs sync
+
+Binding mode (recommended):
+```bash
+yapi docs-sync bind add --name projectA --dir docs/release-notes --project-id 267 --catid 3667
+yapi docs-sync --binding projectA --dry-run
+yapi docs-sync --binding projectA
+```
+
+Notes:
+- Binding file: `.yapi/docs-sync.json`
+- Mapping outputs: `.yapi/docs-sync.links.json`, `.yapi/docs-sync.projects.json`, `.yapi/docs-sync.deployments.json`
+- Default behavior syncs changed files only; use `--force` for full sync.
+- Compatible with directory `.yapi.json` config as fallback (without binding).
+- Mermaid/PlantUML/Graphviz/D2 rendering depends on local tool availability; missing tools do not block basic sync.
+
+## Interface creation guardrails
+- Always set `req_body_type` (use `json` if unsure) and provide `res_body` (prefer JSON Schema) when creating/updating interfaces.
+- Put structured request/response fields in `req_*` / `res_body`, not only in free-text `desc`/`markdown`.

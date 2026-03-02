@@ -24,7 +24,7 @@
     "smoke:global": "pnpm build && tsx scripts/smoke-global.ts",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "test": "node --test --import tsx tests",
+    "test": "node --test --import tsx \"tests/**/*.test.ts\"",
     "inspect": "pnpx @modelcontextprotocol/inspector",
     "prepare": "pnpm run build && chmod +x ./dist/cli.js ./dist/yapi-cli.js",
     "pub:release": "pnpm build && npm publish"

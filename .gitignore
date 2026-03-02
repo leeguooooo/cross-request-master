@@ -34,14 +34,13 @@ temp/
 tmp_store/
 tmp_store_gen/
 tmp-yapi.png
+.clawhub/
 
 # Chrome Extension Security
 *.pem
 *.crx
+*.zip
 key.pem
-extension.zip
-cross-request-store*.zip
-cross-request-master-v*.zip
 
 # Extracted extension files (temporary)
 extracted/

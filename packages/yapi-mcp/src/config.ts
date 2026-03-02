@@ -6,6 +6,7 @@ interface ServerConfig {
   yapiBaseUrl: string;
   yapiToken: string;
   yapiAuthMode: "token" | "global";
+  yapiAutoLogin: boolean;
   yapiEmail: string;
   yapiPassword: string;
   yapiToolset: "basic" | "full";
@@ -17,6 +18,7 @@ interface ServerConfig {
     yapiBaseUrl: "cli" | "env" | "default";
     yapiToken: "cli" | "env" | "default";
     yapiAuthMode: "cli" | "env" | "default";
+    yapiAutoLogin: "cli" | "env" | "default";
     yapiEmail: "cli" | "env" | "default";
     yapiPassword: "cli" | "env" | "default";
     yapiToolset: "cli" | "env" | "default";
@@ -50,6 +52,7 @@ interface CliArgs {
   "yapi-base-url"?: string;
   "yapi-token"?: string;
   "yapi-auth-mode"?: "token" | "global";
+  "yapi-auto-login"?: boolean;
   "yapi-email"?: string;
   "yapi-password"?: string;
   "yapi-toolset"?: "basic" | "full";
@@ -75,6 +78,10 @@ export function getServerConfig(): ServerConfig {
         type: "string",
         description: "鉴权模式：token=项目 token；global=用户名/密码登录（Cookie 登录态）",
         choices: ["token", "global"],
+      },
+      "yapi-auto-login": {
+        type: "boolean",
+        description: "全局模式下是否自动懒登录并在鉴权失败时重试一次（默认 true）",
       },
       "yapi-email": {
         type: "string",
@@ -114,6 +121,7 @@ export function getServerConfig(): ServerConfig {
     yapiBaseUrl: "http://localhost:3000",
     yapiToken: "",
     yapiAuthMode: "token",
+    yapiAutoLogin: true,
     yapiEmail: "",
     yapiPassword: "",
     yapiToolset: "basic",
@@ -125,6 +133,7 @@ export function getServerConfig(): ServerConfig {
       yapiBaseUrl: "default",
       yapiToken: "default",
       yapiAuthMode: "default",
+      yapiAutoLogin: "default",
       yapiEmail: "default",
       yapiPassword: "default",
       yapiToolset: "default",
@@ -184,6 +193,21 @@ export function getServerConfig(): ServerConfig {
   } else {
     // default: token 优先；未配置 token 且提供了账号密码则自动切到 global
     config.yapiAuthMode = config.yapiToken ? "token" : config.yapiEmail && config.yapiPassword ? "global" : "token";
+  }
+
+  // Handle YAPI_AUTO_LOGIN
+  if (argv["yapi-auto-login"] !== undefined) {
+    config.yapiAutoLogin = Boolean(argv["yapi-auto-login"]);
+    config.configSources.yapiAutoLogin = "cli";
+  } else if (process.env.YAPI_AUTO_LOGIN !== undefined) {
+    const raw = String(process.env.YAPI_AUTO_LOGIN).trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(raw)) {
+      config.yapiAutoLogin = true;
+      config.configSources.yapiAutoLogin = "env";
+    } else if (["0", "false", "no", "off"].includes(raw)) {
+      config.yapiAutoLogin = false;
+      config.configSources.yapiAutoLogin = "env";
+    }
   }
 
   // Handle YAPI_TOOLSET
@@ -256,6 +280,7 @@ export function getServerConfig(): ServerConfig {
     `- YAPI_TOKEN: ${config.yapiToken ? maskApiKey(config.yapiToken) : "未配置"} (source: ${config.configSources.yapiToken})`,
   );
   logger.info(`- YAPI_AUTH_MODE: ${config.yapiAuthMode} (source: ${config.configSources.yapiAuthMode})`);
+  logger.info(`- YAPI_AUTO_LOGIN: ${config.yapiAutoLogin ? "true" : "false"} (source: ${config.configSources.yapiAutoLogin})`);
   logger.info(
     `- YAPI_EMAIL: ${config.yapiEmail ? maskEmail(config.yapiEmail) : "未配置"} (source: ${config.configSources.yapiEmail})`,
   );

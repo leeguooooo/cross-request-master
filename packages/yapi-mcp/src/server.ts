@@ -85,12 +85,15 @@ export class YapiMcpServer {
     yapiToken: string,
     yapiLogLevel: string = "info",
     yapiCacheTTL: number = 10,
-    auth?: { mode?: "token" | "global"; email?: string; password?: string },
+    auth?: { mode?: "token" | "global"; email?: string; password?: string; autoLoginEnabled?: boolean },
     http?: { timeoutMs?: number },
     tools?: { toolset?: "basic" | "full" },
   ) {
     this.logger = new Logger("YapiMCP", yapiLogLevel);
-    this.yapiService = new YApiService(yapiBaseUrl, yapiToken, yapiLogLevel, { timeoutMs: http?.timeoutMs });
+    this.yapiService = new YApiService(yapiBaseUrl, yapiToken, yapiLogLevel, {
+      timeoutMs: http?.timeoutMs,
+      autoLoginEnabled: auth?.autoLoginEnabled,
+    });
     this.projectInfoCache = new ProjectInfoCache(yapiBaseUrl, yapiCacheTTL, yapiLogLevel);
     this.authMode = auth?.mode ?? (auth?.email && auth?.password ? "global" : "token");
     this.authService =
@@ -100,6 +103,9 @@ export class YapiMcpServer {
     this.toolset = tools?.toolset ?? "full";
 
     if (this.authService) {
+      this.yapiService.setCookieLoginProvider(async ({ forceLogin } = {}) =>
+        this.authService!.getCookieHeaderWithLogin({ forceLogin }),
+      );
       const cachedCookie = this.authService.getCachedCookieHeader();
       if (cachedCookie) {
         this.yapiService.setCookieHeader(cachedCookie);

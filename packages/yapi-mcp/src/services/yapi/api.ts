@@ -13,6 +13,35 @@ import type {
   SaveApiResponse
 } from "./types";
 
+type CookieLoginProvider = (options?: { forceLogin?: boolean }) => Promise<string>;
+
+function isAuthRelatedMessage(message: string): boolean {
+  return /登录|login|权限|unauthori|forbidden|not\s*login|no\s*permission|token\s*(无效|失效|invalid|expired)/i.test(message);
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof AxiosError) {
+    const data = error.response?.data;
+    if (data && typeof data === "object") {
+      const msg = (data as Record<string, unknown>).errmsg;
+      if (typeof msg === "string" && msg.trim()) return msg.trim();
+    }
+    if (typeof error.message === "string" && error.message.trim()) return error.message.trim();
+    return "未知错误";
+  }
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function isAuthFailurePayload(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const data = payload as Record<string, unknown>;
+  const errcode = data.errcode;
+  if (errcode === 0 || errcode === "0") return false;
+  const errmsg = typeof data.errmsg === "string" ? data.errmsg : typeof data.message === "string" ? data.message : "";
+  return isAuthRelatedMessage(errmsg);
+}
+
 export class YApiService {
   private readonly baseUrl: string;
   private readonly tokenMap: Map<string, string>;
@@ -24,12 +53,15 @@ export class YApiService {
   private readonly httpTimeoutMs: number;
   private readonly httpMaxContentLength: number;
   private readonly httpMaxBodyLength: number;
+  private readonly autoLoginEnabled: boolean;
+  private cookieLoginProvider: CookieLoginProvider | null = null;
+  private cookieRefreshPromise: Promise<string> | null = null;
 
   constructor(
     baseUrl: string,
     token: string,
     logLevel: string = "info",
-    options: { timeoutMs?: number; maxContentLength?: number; maxBodyLength?: number } = {},
+    options: { timeoutMs?: number; maxContentLength?: number; maxBodyLength?: number; autoLoginEnabled?: boolean } = {},
   ) {
     this.baseUrl = baseUrl;
     this.tokenMap = new Map();
@@ -38,6 +70,7 @@ export class YApiService {
     this.httpTimeoutMs = Number.isFinite(options.timeoutMs) ? Number(options.timeoutMs) : 15_000;
     this.httpMaxContentLength = Number.isFinite(options.maxContentLength) ? Number(options.maxContentLength) : 10 * 1024 * 1024;
     this.httpMaxBodyLength = Number.isFinite(options.maxBodyLength) ? Number(options.maxBodyLength) : 10 * 1024 * 1024;
+    this.autoLoginEnabled = options.autoLoginEnabled !== false;
     
     // 解析 token 字符串：
     // - 默认 token: "token"
@@ -89,8 +122,16 @@ export class YApiService {
     this.cookieHeader = cookieHeader ? String(cookieHeader).trim() : null;
   }
 
+  setCookieLoginProvider(provider: CookieLoginProvider | null): void {
+    this.cookieLoginProvider = provider;
+  }
+
   hasCookieAuth(): boolean {
     return Boolean(this.cookieHeader);
+  }
+
+  isAutoLoginEnabled(): boolean {
+    return this.autoLoginEnabled;
   }
 
   /**
@@ -185,78 +226,143 @@ export class YApiService {
   ): Promise<T> {
     try {
       this.logger.debug(`调用 ${this.baseUrl}${endpoint} 方法: ${method}`);
-      
+
       // 使用项目ID获取对应的 token；未提供 projectId 时尽量从任意已配置 token 中挑一个（兼容多项目 token 但未配置默认 token 的场景）
       const token = projectId ? this.getToken(projectId) : this.getAnyToken();
-      const cookieHeader = this.cookieHeader;
-      
+      let cookieHeader = this.cookieHeader;
+      if (!cookieHeader) {
+        cookieHeader = await this.ensureCookieHeader({ forceLogin: false, reason: "首次请求缺少 Cookie" });
+      }
+
       if (!token && !cookieHeader) {
         const pid = projectId ? `projectId=${projectId}` : "projectId=未提供";
         throw new Error(
           `未配置鉴权信息（${pid}）。` +
             `请通过 --yapi-token / YAPI_TOKEN 配置项目 token；` +
-            `或在全局模式下配置账号密码并调用 yapi_update_token 刷新登录态 Cookie。`,
+            `或在全局模式下配置账号密码（可自动懒登录，也可调用 yapi_update_token 手动刷新登录态 Cookie）。`,
         );
       }
-      
-      let response;
-      const headers: Record<string, string> | undefined = cookieHeader ? { Cookie: cookieHeader } : undefined;
-      
-      if (method === 'GET') {
-        response = await axios.get(`${this.baseUrl}${endpoint}`, {
-          params: {
-            ...params,
-            ...(token ? { token } : {})
-          },
-          headers,
+
+      const call = async (cookie: string | null): Promise<T> =>
+        this.callApi<T>({ endpoint, params, method, options, token, cookieHeader: cookie });
+
+      const firstResponse = await call(cookieHeader);
+      if (isAuthFailurePayload(firstResponse) && this.canAutoLogin()) {
+        this.logger.warn(`检测到登录态失效（${endpoint}），准备强制刷新 Cookie 后重试一次`);
+        const refreshedCookie = await this.ensureCookieHeader({ forceLogin: true, reason: "接口返回未登录" });
+        return await call(refreshedCookie);
+      }
+
+      return firstResponse;
+    } catch (error) {
+      if (this.shouldRetryAfterAuthError(error)) {
+        try {
+          const refreshedCookie = await this.ensureCookieHeader({ forceLogin: true, reason: "请求鉴权失败" });
+          return await this.callApi<T>({ endpoint, params, method, options, token: projectId ? this.getToken(projectId) : this.getAnyToken(), cookieHeader: refreshedCookie });
+        } catch (retryError) {
+          throw new Error(extractErrorMessage(retryError));
+        }
+      }
+      throw new Error(extractErrorMessage(error));
+    }
+  }
+
+  private canAutoLogin(): boolean {
+    return this.autoLoginEnabled && this.cookieLoginProvider !== null;
+  }
+
+  private shouldRetryAfterAuthError(error: unknown): boolean {
+    if (!this.canAutoLogin()) return false;
+    if (error instanceof AxiosError) {
+      const status = Number(error.response?.status ?? 0);
+      if (status === 401 || status === 403) return true;
+      return isAuthRelatedMessage(extractErrorMessage(error));
+    }
+    if (error instanceof Error) return isAuthRelatedMessage(error.message);
+    return false;
+  }
+
+  private async ensureCookieHeader(options: { forceLogin: boolean; reason: string }): Promise<string | null> {
+    if (!this.canAutoLogin()) return this.cookieHeader;
+    if (!options.forceLogin && this.cookieHeader) return this.cookieHeader;
+
+    if (this.cookieRefreshPromise) {
+      return await this.cookieRefreshPromise;
+    }
+
+    const task = (async (): Promise<string> => {
+      const provider = this.cookieLoginProvider;
+      if (!provider) throw new Error("未配置 Cookie 登录提供器");
+      this.logger.info(`${options.reason}，自动刷新登录态 Cookie（forceLogin=${options.forceLogin ? "true" : "false"}）`);
+      const refreshed = await provider({ forceLogin: options.forceLogin });
+      const normalized = String(refreshed || "").trim();
+      if (!normalized) throw new Error("自动刷新登录态失败：未获取到有效 Cookie");
+      this.cookieHeader = normalized;
+      return normalized;
+    })();
+
+    this.cookieRefreshPromise = task;
+    try {
+      return await task;
+    } finally {
+      if (this.cookieRefreshPromise === task) this.cookieRefreshPromise = null;
+    }
+  }
+
+  private async callApi<T>(input: {
+    endpoint: string;
+    params: Record<string, any>;
+    method: "GET" | "POST";
+    options: { contentType?: "json" | "form" };
+    token: string;
+    cookieHeader: string | null;
+  }): Promise<T> {
+    const { endpoint, params, method, options, token, cookieHeader } = input;
+    let response;
+    const headers: Record<string, string> | undefined = cookieHeader ? { Cookie: cookieHeader } : undefined;
+
+    if (method === "GET") {
+      response = await axios.get(`${this.baseUrl}${endpoint}`, {
+        params: {
+          ...params,
+          ...(token ? { token } : {})
+        },
+        headers,
+        timeout: this.httpTimeoutMs,
+        maxContentLength: this.httpMaxContentLength,
+        maxBodyLength: this.httpMaxBodyLength,
+      });
+    } else {
+      const contentType = options.contentType || "json";
+      const body = {
+        ...params,
+        ...(token ? { token } : {}),
+      };
+      if (contentType === "form") {
+        const form = new URLSearchParams();
+        for (const [key, value] of Object.entries(body)) {
+          if (value === undefined || value === null) continue;
+          if (typeof value === "string") form.set(key, value);
+          else if (typeof value === "number" || typeof value === "boolean") form.set(key, String(value));
+          else form.set(key, JSON.stringify(value));
+        }
+        response = await axios.post(`${this.baseUrl}${endpoint}`, form, {
+          headers: { "Content-Type": "application/x-www-form-urlencoded", ...(headers ?? {}) },
           timeout: this.httpTimeoutMs,
           maxContentLength: this.httpMaxContentLength,
           maxBodyLength: this.httpMaxBodyLength,
         });
       } else {
-        const contentType = options.contentType || "json";
-        const body = {
-          ...params,
-          ...(token ? { token } : {}),
-        };
-        if (contentType === "form") {
-          const form = new URLSearchParams();
-          for (const [key, value] of Object.entries(body)) {
-            if (value === undefined || value === null) continue;
-            if (typeof value === "string") form.set(key, value);
-            else if (typeof value === "number" || typeof value === "boolean") form.set(key, String(value));
-            else form.set(key, JSON.stringify(value));
-          }
-          response = await axios.post(`${this.baseUrl}${endpoint}`, form, {
-            headers: { "Content-Type": "application/x-www-form-urlencoded", ...(headers ?? {}) },
-            timeout: this.httpTimeoutMs,
-            maxContentLength: this.httpMaxContentLength,
-            maxBodyLength: this.httpMaxBodyLength,
-          });
-        } else {
-          response = await axios.post(`${this.baseUrl}${endpoint}`, body, {
-            headers,
-            timeout: this.httpTimeoutMs,
-            maxContentLength: this.httpMaxContentLength,
-            maxBodyLength: this.httpMaxBodyLength,
-          });
-        }
+        response = await axios.post(`${this.baseUrl}${endpoint}`, body, {
+          headers,
+          timeout: this.httpTimeoutMs,
+          maxContentLength: this.httpMaxContentLength,
+          maxBodyLength: this.httpMaxBodyLength,
+        });
       }
-
-      return response.data;
-    } catch (error) {
-      if (error instanceof AxiosError && error.response) {
-        const errmsg =
-          (typeof error.response.data === "object" && error.response.data
-            ? (error.response.data as any).errmsg
-            : undefined) ||
-          error.message ||
-          "未知错误";
-        throw new Error(errmsg);
-      }
-      if (error instanceof Error) throw error;
-      throw new Error(`与YApi服务器通信失败: ${String(error)}`);
     }
+
+    return response.data as T;
   }
 
   private getAnyToken(): string {

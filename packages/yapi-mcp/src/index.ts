@@ -23,6 +23,7 @@ export async function startServer(): Promise<void> {
     config.yapiCacheTTL,
     {
       mode: config.yapiAuthMode,
+      autoLoginEnabled: config.yapiAutoLogin,
       email: config.yapiEmail,
       password: config.yapiPassword,
     },

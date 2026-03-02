@@ -52,12 +52,12 @@ Yapi Auto MCP Server 是一个基于 [Model Context Protocol](https://modelconte
 
 ## 快速开始
 
-### 推荐方式：用 Cross Request Master 一键生成 MCP 配置（免手动找 Token）
+### 推荐方式：用 Cross Request Master 一键安装 Skill（免手动找 Token）
 
-如果你日常就在浏览器里使用 YApi，推荐安装 Chrome 扩展 [cross-request-master](https://github.com/leeguooooo/cross-request-master)。它会在 YApi 接口详情页（基本信息区域右上角）提供 **「YApi 工具箱」** 按钮，包含 MCP 配置/Skill 一键安装/CLI docs-sync 说明；另外保留 **「复制给 AI」** 一键复制接口 Markdown：
+如果你日常就在浏览器里使用 YApi，推荐安装 Chrome 扩展 [cross-request-master](https://github.com/leeguooooo/cross-request-master)。它会在 YApi 接口详情页（基本信息区域右上角）提供 **「YApi 工具箱」** 按钮，包含 Skill 一键安装（推荐）/MCP 配置（兼容）/CLI docs-sync 说明；另外保留 **「复制给 AI」** 一键复制接口 Markdown：
 
-- MCP 配置（所有项目）：使用 `--yapi-auth-mode=global`（账号密码），启动后调用一次 `yapi_update_token` 刷新登录态 Cookie（并可选刷新项目缓存）
-- Skill 一键安装：生成 Codex/Claude Skill，并写入全局配置 `~/.yapi/config.toml`
+- Skill 一键安装（推荐）：生成 Codex/Claude Skill，并写入全局配置 `~/.yapi/config.toml`
+- MCP 配置（兼容）：使用 `--yapi-auth-mode=global`（账号密码），默认会自动懒登录；也可手动调用一次 `yapi_update_token` 预热缓存
 - CLI 使用与 docs-sync：提供本地 CLI 安装命令和文档同步示例
 
 ### Skill 一键安装与 CLI
@@ -169,7 +169,7 @@ yapi docs-sync
 - 如需跳过 Mermaid 渲染，使用 `--no-mermaid`
 - 如需回到经典风格，使用 `--mermaid-classic`
 
-### 手动方式：使用 npx（无需安装）
+### 兼容方式：使用 npx（MCP）
 
 你可以选择两种模式：
 
@@ -214,13 +214,13 @@ yapi docs-sync
 }
 ```
 
-启动后先在对话里调用一次 `yapi_update_token`，会把登录态 Cookie 缓存到本地 `~/.yapi-mcp/auth-*.json`，并把项目信息缓存到 `~/.yapi-mcp/project-info-*.json`（已尽量使用 `0600` 权限落盘），请不要提交到仓库或分享给他人。
+全局模式下会自动懒登录并把登录态 Cookie 缓存到本地 `~/.yapi-mcp/auth-*.json`。如需主动预热项目/分类缓存，可在对话里手动调用一次 `yapi_update_token`。相关缓存（含 `~/.yapi-mcp/project-info-*.json`）已尽量使用 `0600` 权限落盘，请不要提交到仓库或分享给他人。
 
-提示：stdio 模式下为了加快 MCP 启动（避免超时），本项目不会在启动阶段做任何“全量缓存预热请求”。如需更快的工具响应，建议先调用一次 `yapi_update_token`。如 MCP 客户端仍提示启动超时，可在客户端配置中提高 `startup_timeout_sec`。
+提示：stdio 模式下为了加快 MCP 启动（避免超时），本项目不会在启动阶段做任何“全量缓存预热请求”。首次请求时会自动懒登录；如需更快的后续工具响应，建议先调用一次 `yapi_update_token` 做缓存预热。如 MCP 客户端仍提示启动超时，可在客户端配置中提高 `startup_timeout_sec`。
 
 ## 安装配置
 
-### 方式一：npx 直接使用（推荐）
+### 方式一：npx 直接使用（MCP 兼容）
 
 无需本地安装，通过 npx 直接运行：
 
@@ -349,13 +349,13 @@ node dist/cli.js --stdio
 
 ### 获取 YApi Token
 
-如果你使用的是 **全局模式**（`--yapi-auth-mode=global` / `YAPI_AUTH_MODE=global`），可以不手动找项目 token：启动后在对话里调用一次 `yapi_update_token`，会自动登录并刷新登录态 Cookie（后续请求会走页面同款接口）。
+如果你使用的是 **全局模式**（`--yapi-auth-mode=global` / `YAPI_AUTH_MODE=global`），可以不手动找项目 token：工具请求会自动懒登录并刷新登录态 Cookie（后续请求会走页面同款接口）。如需主动预热缓存，再调用 `yapi_update_token`。
 
 1. 登录你的 YApi 平台
 2. 进入项目设置页面
 3. 在 Token 配置中生成或查看 Token
 
-不想手动找 Token 的话，可以用 [cross-request-master](https://github.com/leeguooooo/cross-request-master) 在接口详情页一键生成 **MCP 配置（所有项目）** 或 **Skill 一键安装**。
+不想手动找 Token 的话，可以用 [cross-request-master](https://github.com/leeguooooo/cross-request-master) 在接口详情页一键生成 **Skill 一键安装（推荐）** 或 **MCP 配置（兼容）**。
 
 ![Token 获取示例](./images/token.png)
 
@@ -396,6 +396,7 @@ Token 格式说明：
 | `--yapi-base-url`  | YApi 服务器基础 URL           | `--yapi-base-url=https://yapi.example.com` | -      |
 | `--yapi-token`     | YApi 项目 Token（支持多项目） | `--yapi-token=1026:token1,1027:token2`     | -      |
 | `--yapi-auth-mode` | 鉴权模式：`token` 或 `global` | `--yapi-auth-mode=global`                  | token  |
+| `--yapi-auto-login` | 全局模式自动懒登录与失败重试  | `--yapi-auto-login=true`                   | true   |
 | `--yapi-email`     | 全局模式登录邮箱              | `--yapi-email=a@b.com`                     | -      |
 | `--yapi-password`  | 全局模式登录密码              | `--yapi-password=******`                   | -      |
 | `--yapi-toolset`   | 工具集：`basic` 或 `full`      | `--yapi-toolset=basic`                     | basic  |
@@ -416,8 +417,9 @@ YAPI_BASE_URL=https://your-yapi-domain.com
 YAPI_AUTH_MODE=token
 YAPI_TOKEN=projectId:your_token_here
 
-# 模式二：全局模式（只配置一次账号密码，启动后调用 yapi_update_token 刷新登录态 Cookie）
+# 模式二：全局模式（只配置一次账号密码；默认自动懒登录，仍可手动调用 yapi_update_token 预热）
 # YAPI_AUTH_MODE=global
+# YAPI_AUTO_LOGIN=true
 # YAPI_EMAIL=your_email@example.com
 # YAPI_PASSWORD=your_password
 # YAPI_TOOLSET=basic
@@ -440,7 +442,7 @@ YAPI_LOG_LEVEL=info         # 日志级别：debug, info, warn, error, none
 
 | 使用场景 | 推荐方式              | 优势               |
 | -------- | --------------------- | ------------------ |
-| 日常使用 | npx + 命令行参数      | 无需安装，配置简单 |
+| 日常使用 | Skill 一键安装        | 免手动配置，开箱即用 |
 | 团队共享 | npx + 环境变量        | 配置统一，易于管理 |
 | 开发调试 | 本地安装 + SSE 模式   | 便于调试和修改代码 |
 | 企业部署 | 本地安装 + stdio 模式 | 性能更好，更稳定   |

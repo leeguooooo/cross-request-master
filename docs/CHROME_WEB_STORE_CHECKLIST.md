@@ -1,5 +1,7 @@
 # Chrome Web Store 发布清单
 
+> 本清单用于快速核对，流程与说明以 `STORE_SUBMISSION_GUIDE.md` 为准。
+
 ## 必需项
 
 ### 1. 隐私政策
@@ -42,7 +44,7 @@ Cross Request Master 是面向 API 开发/测试的 Chrome 扩展：绕过 CORS 
 • 内嵌 cURL 面板 - 在 YApi「运行」页 URL 下方展示并一键复制
 • 路径参数引导 - URL 含 `{param}` 时提示填写，避免请求失败
 • 固定 Header - 为跨域请求自动追加自定义 Header
-• AI/MCP 导出 - 一键生成 MCP 配置/复制接口信息给 AI
+• AI/Skill 导出 - Skill 一键安装（推荐）+ MCP 配置（兼容）+ 复制接口信息给 AI
 • jQuery/Fetch 兼容 - 支持多种请求方式与脚本能力
 
 重要提示：
