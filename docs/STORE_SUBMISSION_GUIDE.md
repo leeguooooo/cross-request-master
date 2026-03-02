@@ -59,7 +59,7 @@
 ```bash
 cd /Users/leo/Downloads/cross-request-master
 
-# 推荐：使用仓库脚本打包（会生成 build/ 和 cross-request-master-v*.zip）
+# 推荐：使用仓库脚本打包（会生成 build/ 和 .artifacts/releases/cross-request-master-v*.zip）
 ./build-extension.sh
 
 # 方式 1：只包含必要文件

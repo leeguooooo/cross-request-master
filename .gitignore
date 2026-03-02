@@ -35,6 +35,7 @@ tmp_store/
 tmp_store_gen/
 tmp-yapi.png
 .clawhub/
+.artifacts/
 
 # Chrome Extension Security
 *.pem

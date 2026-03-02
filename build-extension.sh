@@ -11,11 +11,13 @@ echo "🚀 开始打包 Cross Request Master 扩展..."
 EXTENSION_NAME="cross-request-master"
 VERSION=$(node -p "require('./package.json').version")
 BUILD_DIR="build"
+ARTIFACT_DIR=".artifacts/releases"
 ZIP_NAME="${EXTENSION_NAME}-v${VERSION}.zip"
+ZIP_PATH="${ARTIFACT_DIR}/${ZIP_NAME}"
 
 echo "📦 版本: ${VERSION}"
 echo "📁 构建目录: ${BUILD_DIR}"
-echo "📄 输出文件: ${ZIP_NAME}"
+echo "📄 输出文件: ${ZIP_PATH}"
 
 # 清理旧的构建目录
 if [ -d "$BUILD_DIR" ]; then
@@ -26,6 +28,7 @@ fi
 # 创建构建目录
 echo "📁 创建构建目录..."
 mkdir -p "$BUILD_DIR"
+mkdir -p "$ARTIFACT_DIR"
 
 # 复制必要的文件
 echo "📋 复制扩展文件..."
@@ -64,17 +67,17 @@ EOF
 # 创建 ZIP 文件
 echo "📦 创建 ZIP 文件..."
 cd "$BUILD_DIR"
-zip -r "../${ZIP_NAME}" . -x "*.DS_Store" "*.git*"
+zip -r "../${ZIP_PATH}" . -x "*.DS_Store" "*.git*"
 cd ..
 
 # 显示结果
 echo "✅ 打包完成!"
-echo "📄 输出文件: ${ZIP_NAME}"
-echo "📊 文件大小: $(du -h "${ZIP_NAME}" | cut -f1)"
+echo "📄 输出文件: ${ZIP_PATH}"
+echo "📊 文件大小: $(du -h "${ZIP_PATH}" | cut -f1)"
 
 # 验证 ZIP 文件
 echo "🔍 验证 ZIP 文件内容..."
-unzip -l "${ZIP_NAME}" | head -20
+unzip -l "${ZIP_PATH}" | head -20
 
 echo ""
 echo "🎉 扩展打包成功!"

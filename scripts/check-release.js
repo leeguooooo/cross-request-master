@@ -74,10 +74,14 @@ if (mismatches.length) {
 }
 
 const expectedZip = `cross-request-master-v${packageJson.version}.zip`;
-const zipPath = path.join(rootDir, expectedZip);
+const zipCandidates = [
+  path.join(rootDir, '.artifacts', 'releases', expectedZip),
+  path.join(rootDir, expectedZip)
+];
+const zipPath = zipCandidates.find((candidate) => fs.existsSync(candidate));
 
-if (!fs.existsSync(zipPath)) {
-  fail(`未找到 ${expectedZip}，请运行 ./build-extension.sh 生成最新压缩包。`);
+if (!zipPath) {
+  fail(`未找到 ${expectedZip}，请运行 ./build-extension.sh 生成最新压缩包。`, zipCandidates);
 }
 
 try {
