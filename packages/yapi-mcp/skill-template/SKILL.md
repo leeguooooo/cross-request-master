@@ -19,7 +19,7 @@ In command examples below, `yapi` can be replaced by `npx -y @leeguoo/yapi-mcp`.
 
 ## Quick workflow
 1. If user gives a YApi URL, verify it belongs to configured `base_url`.
-2. Confirm auth (`yapi whoami`), then run `yapi login` only when needed.
+2. Confirm auth (`yapi whoami`), then run `yapi login --browser` when needed (open base URL, finish login in browser, then press Enter to sync cookie).
 3. Resolve target by `api_id` / keyword / category.
 4. Fetch raw JSON first, then summarize: method, path, headers, params, body, response schema/examples.
 5. For docs sync tasks, do `--dry-run` first, then real sync.
@@ -48,7 +48,9 @@ yapi -h
 
 # auth
 yapi whoami
-yapi login
+yapi login --browser
+yapi login --login-url https://your-yapi-domain.com/
+yapi logout
 
 # search / fetch
 yapi search --q keyword --project-id 310
@@ -59,6 +61,13 @@ yapi --path /api/interface/list_cat --query catid=123
 Config cache locations:
 - Config: `~/.yapi/config.toml`
 - Auth cache: `~/.yapi-mcp/auth-*.json`
+
+Browser login dependency:
+```bash
+agent-browser-stealth -V
+# install once if missing browser runtime
+agent-browser-stealth install
+```
 
 ## Docs sync
 

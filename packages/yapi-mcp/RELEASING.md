@@ -14,8 +14,8 @@ This repo is a maintained fork for publishing to npm so users can run it via `np
 3. Create a matching tag and push it:
 
 ```bash
-git tag -a v0.3.22 -m "release yapi-mcp v0.3.22"
-git push origin v0.3.22
+git tag -a v0.3.23 -m "release yapi-mcp v0.3.23"
+git push origin v0.3.23
 ```
 
 The GitHub Actions workflow will build and publish when the tag matches the package version.

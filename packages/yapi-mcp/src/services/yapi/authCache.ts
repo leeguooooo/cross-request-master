@@ -131,6 +131,13 @@ export class YApiAuthCache {
     this.save(data);
   }
 
+  clearSession(): void {
+    const data = this.load();
+    if (!data.session) return;
+    delete data.session;
+    this.save(data);
+  }
+
   loadProjectTokens(): Map<string, string> {
     const data = this.load();
     const map = new Map<string, string>();

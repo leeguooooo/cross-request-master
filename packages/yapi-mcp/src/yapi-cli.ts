@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import crypto from "crypto";
+import { execFileSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -16,13 +17,16 @@ import {
 } from "./docs/markdown";
 import { runInstallSkill } from "./skill/install";
 import { YApiAuthService } from "./services/yapi/auth";
+import { YApiAuthCache } from "./services/yapi/authCache";
 
 type Options = {
   config?: string;
   baseUrl?: string;
+  loginUrl?: string;
   token?: string;
   projectId?: string;
   authMode?: string;
+  browser?: boolean;
   email?: string;
   password?: string;
   cookie?: string;
@@ -263,6 +267,182 @@ function resolveToken(tokenValue: string, projectId: string): string {
   return tokenValue;
 }
 
+type AgentBrowserCookie = {
+  name?: string;
+  value?: string;
+  expires?: number | string;
+  expiresAt?: number | string;
+};
+
+function resolveLocalBin(binName: string): string {
+  const baseName = process.platform === "win32" ? `${binName}.cmd` : binName;
+  const localBin = path.resolve(__dirname, "..", "node_modules", ".bin", baseName);
+  if (fs.existsSync(localBin)) return localBin;
+  return binName;
+}
+
+function parseJsonLoose(text: string): unknown | null {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  const direct = parseJsonMaybe(raw);
+  if (direct !== null) return direct;
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const parsed = parseJsonMaybe(lines[i]);
+    if (parsed !== null) return parsed;
+  }
+
+  const firstBrace = raw.indexOf("{");
+  const firstBracket = raw.indexOf("[");
+  const starts = [firstBrace, firstBracket].filter((n) => n >= 0);
+  if (!starts.length) return null;
+  const start = Math.min(...starts);
+  const lastBrace = raw.lastIndexOf("}");
+  const lastBracket = raw.lastIndexOf("]");
+  const end = Math.max(lastBrace, lastBracket);
+  if (end <= start) return null;
+
+  const sliced = raw.slice(start, end + 1);
+  return parseJsonMaybe(sliced);
+}
+
+function extractCookiesFromPayload(payload: unknown): AgentBrowserCookie[] {
+  const queue: unknown[] = [payload];
+  const visited = new Set<unknown>();
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (current === null || current === undefined) continue;
+    if (visited.has(current)) continue;
+    visited.add(current);
+
+    if (Array.isArray(current)) {
+      if (current.every((item) => item && typeof item === "object")) {
+        return current as AgentBrowserCookie[];
+      }
+      continue;
+    }
+    if (typeof current !== "object") continue;
+
+    const obj = current as Record<string, unknown>;
+    if (Array.isArray(obj.cookies)) return obj.cookies as AgentBrowserCookie[];
+    if (Array.isArray(obj.data)) return obj.data as AgentBrowserCookie[];
+    if (obj.data && typeof obj.data === "object") queue.push(obj.data);
+    if (obj.result && typeof obj.result === "object") queue.push(obj.result);
+    if (obj.payload && typeof obj.payload === "object") queue.push(obj.payload);
+  }
+
+  return [];
+}
+
+function normalizeCookieExpiresMs(raw: unknown): number | undefined {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return n > 1_000_000_000_000 ? n : n * 1000;
+}
+
+function runAgentBrowser(
+  args: string[],
+  options: { captureOutput?: boolean; ignoreError?: boolean } = {},
+): string {
+  const bins = [
+    resolveLocalBin("agent-browser-stealth"),
+    resolveLocalBin("agent-browser"),
+    "agent-browser-stealth",
+    "agent-browser",
+  ];
+  const uniq = Array.from(new Set(bins));
+  let lastError: unknown = null;
+
+  for (const bin of uniq) {
+    try {
+      if (options.captureOutput) {
+        const output = execFileSync(bin, args, {
+          encoding: "utf8",
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+        return String(output || "");
+      }
+      execFileSync(bin, args, { stdio: "inherit" });
+      return "";
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === "ENOENT") {
+        lastError = error;
+        continue;
+      }
+      if (options.ignoreError) return "";
+      throw error;
+    }
+  }
+
+  if ((lastError as { code?: string } | null)?.code === "ENOENT") {
+    throw new Error(
+      "未找到 agent-browser-stealth。请先执行: pnpm -C packages/yapi-mcp add agent-browser-stealth && pnpm -C packages/yapi-mcp exec agent-browser-stealth install",
+    );
+  }
+  throw new Error("启动 agent-browser-stealth 失败");
+}
+
+async function loginByBrowserAndReadCookie(
+  baseUrl: string,
+  loginUrlOption: string | undefined,
+): Promise<{ yapiToken: string; yapiUid?: string; expiresAt?: number }> {
+  const normalizedBase = String(baseUrl || "").replace(/\/+$/, "");
+  const defaultLoginUrl = normalizedBase;
+
+  let loginUrl = String(loginUrlOption || "").trim();
+  if (!loginUrl) {
+    const answer = await promptText(`YApi page URL [${defaultLoginUrl}]: `);
+    loginUrl = answer.trim() || defaultLoginUrl;
+  }
+  try {
+    const parsed = new URL(loginUrl);
+    loginUrl = parsed.toString();
+  } catch {
+    throw new Error(`invalid login url: ${loginUrl}`);
+  }
+
+  const sessionName = `yapi-login-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  console.log(`opening browser for login: ${loginUrl}`);
+  console.log(`browser session name: ${sessionName}`);
+  runAgentBrowser(["open", loginUrl, "--headed", "--session-name", sessionName]);
+
+  await promptText("请在浏览器完成登录，然后按回车继续...");
+
+  let cookies: AgentBrowserCookie[] = [];
+  try {
+    const output = runAgentBrowser(["cookies", "--json", "--session-name", sessionName], {
+      captureOutput: true,
+    });
+    const payload = parseJsonLoose(output);
+    cookies = extractCookiesFromPayload(payload);
+  } finally {
+    runAgentBrowser(["close", "--session-name", sessionName], { ignoreError: true });
+  }
+  if (!cookies.length) {
+    throw new Error(
+      `未读取到浏览器 cookie。请确认登录完成后再回车；如果仍失败，请先自检:\nagent-browser-stealth cookies --json --session-name ${sessionName}`,
+    );
+  }
+
+  const tokenCookie = cookies.find((item) => String(item?.name || "") === "_yapi_token");
+  const uidCookie = cookies.find((item) => String(item?.name || "") === "_yapi_uid");
+  const yapiToken = String(tokenCookie?.value || "").trim();
+  if (!yapiToken) {
+    throw new Error("未找到 _yapi_token，请确认登录站点是目标 YApi 域名");
+  }
+
+  const yapiUid = String(uidCookie?.value || "").trim() || undefined;
+  const expiresAt =
+    normalizeCookieExpiresMs(tokenCookie?.expiresAt) ?? normalizeCookieExpiresMs(tokenCookie?.expires);
+  return { yapiToken, yapiUid, expiresAt };
+}
+
 async function fetchWithTimeout(
   url: string,
   options: RequestInit,
@@ -334,6 +514,14 @@ function parseArgs(argv: string[]): Options {
       options.baseUrl = arg.slice(11);
       continue;
     }
+    if (arg === "--login-url") {
+      options.loginUrl = argv[++i];
+      continue;
+    }
+    if (arg.startsWith("--login-url=")) {
+      options.loginUrl = arg.slice(12);
+      continue;
+    }
     if (arg === "--token") {
       options.token = argv[++i];
       continue;
@@ -356,6 +544,10 @@ function parseArgs(argv: string[]): Options {
     }
     if (arg.startsWith("--auth-mode=")) {
       options.authMode = arg.slice(12);
+      continue;
+    }
+    if (arg === "--browser") {
+      options.browser = true;
       continue;
     }
     if (arg === "--email") {
@@ -788,6 +980,7 @@ function usage(): string {
     "  yapi docs-sync [options] [dir...]",
     "  yapi docs-sync bind <action> [options]",
     "  yapi login [options]",
+    "  yapi logout [options]",
     "  yapi whoami [options]",
     "  yapi search [options]",
     "  yapi install-skill [options]",
@@ -891,9 +1084,22 @@ function loginUsage(): string {
     "Options:",
     "  --config <path>        config file path (default: ~/.yapi/config.toml)",
     "  --base-url <url>       YApi base URL",
+    "  --login-url <url>      page URL for browser login (default: <base-url>)",
+    "  --browser              force browser login and cookie sync",
     "  --email <email>        login email for global mode",
     "  --password <pwd>       login password for global mode",
     "  --timeout <ms>         request timeout in ms",
+    "  -h, --help             show help",
+  ].join("\n");
+}
+
+function logoutUsage(): string {
+  return [
+    "Usage:",
+    "  yapi logout [options]",
+    "Options:",
+    "  --config <path>        config file path (default: ~/.yapi/config.toml)",
+    "  --base-url <url>       YApi base URL",
     "  -h, --help             show help",
   ].join("\n");
 }
@@ -1341,6 +1547,8 @@ async function runLogin(rawArgs: string[]): Promise<number> {
   let baseUrl = options.baseUrl || config.base_url || "";
   let email = options.email || config.email || "";
   let password = options.password || config.password || "";
+  const projectId = options.projectId || config.project_id || "";
+  const token = options.token || config.token || "";
   let updated = false;
 
   if (!baseUrl) {
@@ -1351,34 +1559,43 @@ async function runLogin(rawArgs: string[]): Promise<number> {
     baseUrl = await promptRequired("YApi base URL: ", false);
     updated = true;
   }
-  if (!email) {
-    if (!process.stdin.isTTY || !process.stdout.isTTY) {
-      console.error("missing --email or config email");
-      return 2;
-    }
-    email = await promptRequired("YApi email: ", false);
-    updated = true;
-  }
-  if (!password) {
-    if (!process.stdin.isTTY || !process.stdout.isTTY) {
-      console.error("missing --password or config password");
-      return 2;
-    }
-    password = await promptRequired("YApi password: ", true);
-    updated = true;
-  }
 
-  const shouldWriteConfig = updated || !fs.existsSync(configPath) || config.auth_mode !== "global";
-  if (shouldWriteConfig) {
-    const mergedConfig: Record<string, string> = {
-      base_url: baseUrl,
-      auth_mode: "global",
-      email,
-      password,
-      token: options.token || config.token || "",
-      project_id: options.projectId || config.project_id || "",
-    };
-    writeConfig(configPath, mergedConfig);
+  const useBrowserLogin = Boolean(options.browser) || !email || !password;
+  if (useBrowserLogin) {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      console.error("browser login requires interactive terminal");
+      return 2;
+    }
+
+    try {
+      const session = await loginByBrowserAndReadCookie(baseUrl, options.loginUrl);
+      const cache = new YApiAuthCache(baseUrl, "warn");
+      cache.saveSession({
+        yapiToken: session.yapiToken,
+        yapiUid: session.yapiUid,
+        expiresAt: session.expiresAt,
+        updatedAt: Date.now(),
+      });
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      return 2;
+    }
+
+    const shouldWriteConfig = updated || !fs.existsSync(configPath) || config.auth_mode !== "global";
+    if (shouldWriteConfig) {
+      const mergedConfig: Record<string, string> = {
+        base_url: baseUrl,
+        auth_mode: "global",
+        email,
+        password,
+        token,
+        project_id: projectId,
+      };
+      writeConfig(configPath, mergedConfig);
+    }
+
+    console.log("login success (cookie synced from browser to ~/.yapi-mcp/auth-*.json)");
+    return 0;
   }
 
   try {
@@ -1391,7 +1608,48 @@ async function runLogin(rawArgs: string[]): Promise<number> {
     return 2;
   }
 
+  const shouldWriteConfig = updated || !fs.existsSync(configPath) || config.auth_mode !== "global";
+  if (shouldWriteConfig) {
+    const mergedConfig: Record<string, string> = {
+      base_url: baseUrl,
+      auth_mode: "global",
+      email,
+      password,
+      token,
+      project_id: projectId,
+    };
+    writeConfig(configPath, mergedConfig);
+  }
+
   console.log("login success (cookie cached in ~/.yapi-mcp/auth-*.json)");
+  return 0;
+}
+
+async function runLogout(rawArgs: string[]): Promise<number> {
+  const options = parseArgs(rawArgs);
+  if (options.help) {
+    console.log(logoutUsage());
+    return 0;
+  }
+  if (options.version) {
+    console.log(readVersion());
+    return 0;
+  }
+
+  const configPath = options.config || globalConfigPath();
+  const config = fs.existsSync(configPath)
+    ? parseSimpleToml(fs.readFileSync(configPath, "utf8"))
+    : {};
+
+  const baseUrl = options.baseUrl || config.base_url || "";
+  if (!baseUrl) {
+    console.error("missing --base-url or config base_url");
+    return 2;
+  }
+
+  const cache = new YApiAuthCache(baseUrl, "warn");
+  cache.clearSession();
+  console.log("logout success (session cleared from ~/.yapi-mcp/auth-*.json)");
   return 0;
 }
 
@@ -2957,6 +3215,9 @@ async function main(): Promise<number> {
   }
   if (rawArgs[0] === "login") {
     return await runLogin(rawArgs.slice(1));
+  }
+  if (rawArgs[0] === "logout") {
+    return await runLogout(rawArgs.slice(1));
   }
   if (rawArgs[0] === "whoami") {
     return await runWhoami(rawArgs.slice(1));

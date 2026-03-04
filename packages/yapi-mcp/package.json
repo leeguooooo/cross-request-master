@@ -1,6 +1,6 @@
 {
   "name": "@leeguoo/yapi-mcp",
-  "version": "0.3.22",
+  "version": "0.3.23",
   "description": "YApi Auto MCP Server - Model Context Protocol server for YApi integration, enables AI tools like Cursor to interact with YApi API documentation",
   "main": "dist/index.js",
   "bin": {
@@ -59,6 +59,7 @@
     "access": "public"
   },
   "dependencies": {
+    "agent-browser-stealth": "^0.16.1-fork.4",
     "@modelcontextprotocol/sdk": "^1.6.0",
     "@types/yargs": "^17.0.33",
     "axios": "^1.7.9",

@@ -101,8 +101,17 @@ yapi --version
 # 查看帮助
 yapi -h
 
-# 登录（交互式，会提示输入 base_url/email/password）
+# 首次使用浏览器登录前，安装浏览器运行时
+pnpm -C packages/yapi-mcp exec agent-browser-stealth install
+
+# 登录（优先走浏览器登录，登录后自动同步 cookie）
 yapi login
+# 指定打开页面 URL（可选；默认打开 base-url 首页）
+yapi login --login-url https://your-yapi-domain.com/
+# 强制浏览器登录（可选）
+yapi login --browser
+# 退出登录（清理全局 cookie 会话缓存）
+yapi logout
 
 # 检查当前登录用户
 yapi whoami
@@ -133,7 +142,7 @@ yapi log list --type group --type-id 129 --page 1 --limit 10
 yapi --path /api/interface/get --query id=123
 ```
 
-全局模式下可先执行 `yapi login` 缓存登录态（`~/.yapi-mcp/auth-*.json`），权限失效会自动重新登录。
+全局模式下可执行 `yapi login` 打开页面登录并同步登录态 Cookie 到 `~/.yapi-mcp/auth-*.json`；如果配置了账号密码，权限失效也会自动重新登录。
 
 Markdown 同步到 YApi（支持 Mermaid/PlantUML/Graphviz/D2 预渲染，未安装依赖会跳过对应图示）：
 
