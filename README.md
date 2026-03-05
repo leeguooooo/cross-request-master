@@ -7,6 +7,7 @@
 面向 API 开发/测试的 Chrome 扩展：绕过 CORS 发请求、自动生成 cURL，并对 YApi「运行」页做增强（内嵌 cURL、路径参数 `{param}` 引导填写）。
 
 本仓库包含生态内的 CLI/Skill 子项目：`packages/yapi-mcp`（发布包名保持为 `@leeguoo/yapi-mcp`，MCP 配置作为兼容方案保留，不影响扩展打包）。
+`yapi-mcp` 已支持浏览器登录同步 Cookie（`yapi login --browser`），可用于仅支持 SSO/无法账号密码登录的 YApi 场景。
 
 
 <p align="center">
