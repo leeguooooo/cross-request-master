@@ -34,7 +34,7 @@
 - 固定 Header：为跨域请求自动追加自定义 Header
 - YApi 工具箱：Skill 一键安装（推荐）/ MCP 配置（兼容）/ CLI 使用与 docs-sync
 - 复制给 AI：把当前接口信息整理为 Markdown 一键复制
-- jQuery/Fetch 支持：兼容 `$.ajax` / `fetch` / 脚本能力
+- 现代请求支持：优先 `fetch` / Promise 工作流，兼容历史 `$.ajax`
 - Manifest V3：兼容最新 Chrome 扩展标准
 
 ## 安装
@@ -108,8 +108,9 @@ const resp = await window.crossRequest({ url: '/api/ping' });
 console.log(resp.status, resp.data);
 ```
 
-### jQuery 集成
+### 兼容模式：jQuery（Legacy）
 
+大多数场景建议直接使用 `fetch + window.crossRequest`。以下仅用于历史页面仍依赖 `$.ajax` 时：
 - **YApi/目标站点**：默认拦截所有 `$.ajax`。如需关闭：`crossRequest: false`
 - **其他站点**：默认不拦截。需显式开启：`crossRequest: true`
 
