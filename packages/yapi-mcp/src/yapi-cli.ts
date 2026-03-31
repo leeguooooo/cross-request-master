@@ -7,6 +7,7 @@ import os from "os";
 import path from "path";
 import readline from "readline";
 import {
+  type DiagramRenderMetric,
   isD2Available,
   isGraphvizAvailable,
   isMmdcAvailable,
@@ -91,6 +92,19 @@ type DocsSyncFileInfo = {
   apiPath: string;
 };
 
+type DocsSyncPreviewAction = "create" | "update" | "skip" | "preview-only";
+
+type DocsSyncPreviewItem = {
+  fileName: string;
+  action: DocsSyncPreviewAction;
+  markdownBytes: number;
+  htmlBytes: number;
+  payloadBytes: number;
+  apiPath: string;
+  docId?: number;
+  largestMermaid?: DiagramRenderMetric;
+};
+
 type DocsSyncBinding = DocsSyncMapping & {
   dir: string;
 };
@@ -165,10 +179,35 @@ type DocsSyncBindArgs = {
 
 type ConfigInitOptions = Pick<Options, "baseUrl" | "email" | "password" | "token" | "projectId">;
 
+class HttpStatusError extends Error {
+  status: number;
+  statusText: string;
+  body: string;
+  endpoint: string;
+
+  constructor(endpoint: string, status: number, statusText: string, body: string) {
+    super(`request failed: ${status} ${statusText} ${body}`);
+    this.name = "HttpStatusError";
+    this.status = status;
+    this.statusText = statusText;
+    this.body = body;
+    this.endpoint = endpoint;
+  }
+}
+
 function parseKeyValue(raw: string): [string, string] {
   if (!raw || !raw.includes("=")) throw new Error("expected key=value");
   const idx = raw.indexOf("=");
   return [raw.slice(0, idx), raw.slice(idx + 1)];
+}
+
+function parseQueryArg(raw: string): [string, string][] {
+  const trimmed = String(raw || "").trim().replace(/^\?/, "");
+  if (!trimmed) throw new Error("expected key=value");
+  if (!trimmed.includes("&")) return [parseKeyValue(trimmed)];
+  const items = Array.from(new URLSearchParams(trimmed).entries()).filter(([key]) => Boolean(key));
+  if (items.length) return items;
+  return [parseKeyValue(trimmed)];
 }
 
 function parseHeader(raw: string): [string, string] {
@@ -182,6 +221,57 @@ function parseJsonMaybe(text: string): unknown | null {
     return JSON.parse(text);
   } catch {
     return null;
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KiB", "MiB", "GiB"];
+  let value = bytes;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(2)} ${units[index]}`;
+}
+
+function parseByteSize(raw: string): number | null {
+  const text = String(raw || "");
+  const bytesMatch = text.match(/(\d+)\s*bytes?/i);
+  if (bytesMatch) return Number(bytesMatch[1]);
+  const unitMatch = text.match(/(\d+(?:\.\d+)?)\s*(kib|kb|mib|mb|gib|gb)\b/i);
+  if (!unitMatch) return null;
+  const value = Number(unitMatch[1]);
+  if (!Number.isFinite(value)) return null;
+  const unit = unitMatch[2].toLowerCase();
+  const factors: Record<string, number> = {
+    kb: 1000,
+    kib: 1024,
+    mb: 1000 * 1000,
+    mib: 1024 * 1024,
+    gb: 1000 * 1000 * 1000,
+    gib: 1024 * 1024 * 1024,
+  };
+  return Math.round(value * (factors[unit] || 1));
+}
+
+function parsePayloadLimit(text: string): number | null {
+  const match = String(text || "").match(
+    /(?:limit|max(?:imum)?(?:\s+body)?(?:\s+size)?)[^0-9]{0,12}(\d+(?:\.\d+)?\s*(?:bytes?|kib|kb|mib|mb|gib|gb))/i,
+  );
+  if (match) return parseByteSize(match[1]);
+  return parseByteSize(text);
+}
+
+function findGitRoot(startDir: string): string | null {
+  let current = path.resolve(startDir);
+  while (true) {
+    const candidate = path.join(current, ".git");
+    if (fs.existsSync(candidate)) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
   }
 }
 
@@ -2024,6 +2114,22 @@ function resolveDocsSyncHome(startDir: string, ensure: boolean): string | null {
   return home;
 }
 
+function globalYapiHomeDir(): string {
+  return path.resolve(process.env.YAPI_HOME || path.join(os.homedir(), ".yapi"));
+}
+
+function normalizeComparablePath(targetPath: string): string {
+  try {
+    return fs.realpathSync.native(targetPath);
+  } catch {
+    return path.resolve(targetPath);
+  }
+}
+
+function isGlobalDocsSyncHome(homeDir: string): boolean {
+  return normalizeComparablePath(homeDir) === normalizeComparablePath(globalYapiHomeDir());
+}
+
 function docsSyncConfigPath(homeDir: string): string {
   return path.join(homeDir, "docs-sync.json");
 }
@@ -2148,6 +2254,54 @@ function normalizeBindingDir(rootDir: string, bindingDir: string): string {
   if (!relative || relative === ".") return ".";
   if (relative.startsWith("..") || path.isAbsolute(relative)) return resolved;
   return relative;
+}
+
+function getBindingBaseDir(homeDir: string, rootDir: string, cwd: string): {
+  baseDir: string;
+  gitRoot: string | null;
+  usedGitRoot: boolean;
+} {
+  if (!isGlobalDocsSyncHome(homeDir)) {
+    return { baseDir: rootDir, gitRoot: findGitRoot(cwd), usedGitRoot: false };
+  }
+  const gitRoot = findGitRoot(cwd);
+  if (gitRoot) {
+    return { baseDir: gitRoot, gitRoot, usedGitRoot: true };
+  }
+  return { baseDir: path.resolve(cwd), gitRoot: null, usedGitRoot: false };
+}
+
+function normalizeBindingDirForContext(
+  homeDir: string,
+  rootDir: string,
+  cwd: string,
+  bindingDir: string,
+): string {
+  const context = getBindingBaseDir(homeDir, rootDir, cwd);
+  const resolved = path.isAbsolute(bindingDir)
+    ? bindingDir
+    : path.resolve(context.baseDir, bindingDir);
+  const relative = path.relative(rootDir, resolved);
+  if (!relative || relative === ".") return ".";
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return resolved;
+  return relative;
+}
+
+function resolveBindingDirForContext(
+  homeDir: string,
+  rootDir: string,
+  cwd: string,
+  bindingDir: string,
+): string {
+  if (!bindingDir) return rootDir;
+  if (path.isAbsolute(bindingDir)) return bindingDir;
+  const direct = path.resolve(rootDir, bindingDir);
+  if (!isGlobalDocsSyncHome(homeDir)) return direct;
+  if (fs.existsSync(direct)) return direct;
+  const { baseDir } = getBindingBaseDir(homeDir, rootDir, cwd);
+  const contextual = path.resolve(baseDir, bindingDir);
+  if (fs.existsSync(contextual)) return contextual;
+  return direct;
 }
 
 function suggestDocsSyncDir(startDir: string): string | null {
@@ -2480,6 +2634,75 @@ function buildAddPayload(
   };
 }
 
+function buildUpdatePayload(
+  docId: number,
+  title: string | undefined,
+  markdown: string,
+  html: string,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = { id: docId, markdown, desc: html };
+  if (title) {
+    payload.title = title;
+  }
+  return payload;
+}
+
+function pickLargestMermaid(metrics: DiagramRenderMetric[]): DiagramRenderMetric | undefined {
+  return metrics
+    .filter((item) => item.renderer === "mermaid")
+    .sort((a, b) => b.renderedBytes - a.renderedBytes)[0];
+}
+
+function buildDocsSyncPreviewLine(item: DocsSyncPreviewItem): string {
+  const parts = [
+    `file=${item.fileName}`,
+    `action=${item.action}`,
+    `markdown=${formatBytes(item.markdownBytes)}`,
+    `html=${formatBytes(item.htmlBytes)}`,
+    `payload=${formatBytes(item.payloadBytes)}`,
+    `path=${item.apiPath}`,
+  ];
+  if (item.docId) {
+    parts.push(`doc_id=${item.docId}`);
+  }
+  if (item.largestMermaid) {
+    parts.push(
+      `largest_mermaid=#${item.largestMermaid.index}`,
+      `largest_mermaid_svg=${formatBytes(item.largestMermaid.renderedBytes)}`,
+    );
+  }
+  return `preview ${parts.join(" ")}`;
+}
+
+function buildDocsSyncPayloadTooLargeMessage(
+  fileName: string,
+  preview: DocsSyncPreviewItem,
+  error: HttpStatusError,
+): string {
+  const lines = [
+    `413 Payload Too Large while syncing ${fileName}`,
+    `- request payload: ${formatBytes(preview.payloadBytes)}`,
+    `- markdown size: ${formatBytes(preview.markdownBytes)}`,
+    `- rendered html size: ${formatBytes(preview.htmlBytes)}`,
+  ];
+  const limitBytes = parsePayloadLimit(error.body || error.message);
+  if (limitBytes) {
+    lines.push(`- server limit: ${formatBytes(limitBytes)}`);
+  } else {
+    lines.push("- server limit: unknown (response did not expose an exact value)");
+  }
+  if (preview.largestMermaid) {
+    lines.push(
+      `- largest Mermaid block: #${preview.largestMermaid.index} -> ${formatBytes(preview.largestMermaid.renderedBytes)}`,
+    );
+  } else {
+    lines.push("- largest Mermaid block: none");
+  }
+  lines.push("- suggestion: run `yapi docs-sync --dry-run ...` to preview all files before upload");
+  lines.push("- suggestion: split oversized Mermaid diagrams or move them into separate docs");
+  return lines.join("\n");
+}
+
 async function addInterface(
   title: string,
   apiPath: string,
@@ -2518,10 +2741,7 @@ async function updateInterface(
   html: string,
   request: YapiRequest,
 ): Promise<void> {
-  const payload: Record<string, unknown> = { id: docId, markdown, desc: html };
-  if (title) {
-    payload.title = title;
-  }
+  const payload = buildUpdatePayload(docId, title, markdown, html);
   const resp = await request("/api/interface/up", "POST", {}, payload);
   if (resp?.errcode !== 0) {
     throw new Error(`interface up failed: ${resp?.errmsg || "unknown error"}`);
@@ -2537,7 +2757,9 @@ async function syncDocsDir(
   updated: number;
   created: number;
   skipped: number;
+  previewOnly: number;
   files: Record<string, DocsSyncFileInfo>;
+  previews: DocsSyncPreviewItem[];
 }> {
   if (!mapping.files || typeof mapping.files !== "object") {
     mapping.files = {};
@@ -2553,18 +2775,23 @@ async function syncDocsDir(
   if (!mapping.catid && envCatId) mapping.catid = Number(envCatId);
   if (!mapping.template_id && envTemplateId) mapping.template_id = Number(envTemplateId);
 
-  if (!mapping.project_id || !mapping.catid) {
+  const hasTarget = Boolean(mapping.project_id && mapping.catid);
+  if (!hasTarget && !options.dryRun) {
     throw new Error(
       "缺少 project_id/catid。请先绑定或配置：yapi docs-sync bind add --name <binding> --dir <path> --project-id <id> --catid <id>，或在目录下添加 .yapi.json，或设置环境变量 YAPI_PROJECT_ID/YAPI_CATID。"
     );
   }
 
-  const { byPath, byTitle, byId } = await listExistingInterfaces(Number(mapping.catid), request);
+  const { byPath, byTitle, byId } = hasTarget
+    ? await listExistingInterfaces(Number(mapping.catid), request)
+    : { byPath: {}, byTitle: {}, byId: {} };
 
   let updated = 0;
   let created = 0;
   let skipped = 0;
+  let previewOnly = 0;
   const fileInfos: Record<string, DocsSyncFileInfo> = {};
+  const previews: DocsSyncPreviewItem[] = [];
   const files = resolveSourceFiles(dirPath, mapping);
   for (const mdPath of files) {
     const stem = path.parse(mdPath).name;
@@ -2580,12 +2807,17 @@ async function syncDocsDir(
       if (docId) mapping.files[relName] = docId;
     }
 
-    if (!docId) {
+    let action: DocsSyncPreviewAction = docId ? "update" : hasTarget ? "create" : "preview-only";
+
+    if (!docId && hasTarget) {
       created += 1;
       if (!options.dryRun) {
         docId = await addInterface(desiredTitle, apiPath, mapping, request);
         mapping.files[relName] = docId;
       }
+    }
+    if (!docId && !hasTarget) {
+      previewOnly += 1;
     }
 
     if (docId) {
@@ -2593,6 +2825,26 @@ async function syncDocsDir(
       fileInfos[relName] = { docId: Number(docId), apiPath: resolvedPath };
     }
 
+    const logPrefix = `[docs-sync:${relName}]`;
+    let mermaidFailed = false;
+    let diagramFailed = false;
+    const diagramMetrics: DiagramRenderMetric[] = [];
+    const html = renderMarkdownToHtml(markdown, {
+      noMermaid: options.noMermaid,
+      logMermaid: true,
+      mermaidLook: options.mermaidLook,
+      mermaidHandDrawnSeed: options.mermaidHandDrawnSeed,
+      logger: (message) => console.log(`${logPrefix} ${message}`),
+      onDiagramRendered: (metric) => {
+        diagramMetrics.push(metric);
+      },
+      onMermaidError: () => {
+        mermaidFailed = true;
+      },
+      onDiagramError: () => {
+        diagramFailed = true;
+      },
+    });
     const contentHash = buildDocsSyncHash(markdown, options);
     const previousHash = mapping.file_hashes[relName];
 
@@ -2611,36 +2863,45 @@ async function syncDocsDir(
       previousHash === contentHash &&
       !shouldSyncTitle
     ) {
+      action = "skip";
       skipped += 1;
-      continue;
     }
 
-    const logPrefix = `[docs-sync:${relName}]`;
-    let mermaidFailed = false;
-    let diagramFailed = false;
-    const html = renderMarkdownToHtml(markdown, {
-      noMermaid: options.noMermaid,
-      logMermaid: true,
-      mermaidLook: options.mermaidLook,
-      mermaidHandDrawnSeed: options.mermaidHandDrawnSeed,
-      logger: (message) => console.log(`${logPrefix} ${message}`),
-      onMermaidError: () => {
-        mermaidFailed = true;
-      },
-      onDiagramError: () => {
-        diagramFailed = true;
-      },
-    });
-    if (!options.dryRun && docId) {
-      await updateInterface(docId, titleToUpdate, markdown, html, request);
+    const payloadObject =
+      docId && action !== "create"
+        ? buildUpdatePayload(docId, titleToUpdate, markdown, html)
+        : buildAddPayload({}, desiredTitle, apiPath, Number(mapping.catid || 0), Number(mapping.project_id || 0));
+    const preview: DocsSyncPreviewItem = {
+      fileName: relName,
+      action,
+      markdownBytes: Buffer.byteLength(markdown, "utf8"),
+      htmlBytes: Buffer.byteLength(html, "utf8"),
+      payloadBytes: Buffer.byteLength(JSON.stringify(payloadObject), "utf8"),
+      apiPath: docId ? fileInfos[relName]?.apiPath || apiPath : apiPath,
+      docId: docId ? Number(docId) : undefined,
+      largestMermaid: pickLargestMermaid(diagramMetrics),
+    };
+    previews.push(preview);
+
+    if (!options.dryRun && docId && action !== "skip") {
+      try {
+        await updateInterface(docId, titleToUpdate, markdown, html, request);
+      } catch (error) {
+        if (error instanceof HttpStatusError && error.status === 413) {
+          throw new Error(buildDocsSyncPayloadTooLargeMessage(relName, preview, error));
+        }
+        throw error;
+      }
     }
     if (docId && !mermaidFailed && !diagramFailed) {
       mapping.file_hashes[relName] = contentHash;
     }
-    updated += 1;
+    if (action !== "skip") {
+      updated += 1;
+    }
   }
 
-  return { updated, created, skipped, files: fileInfos };
+  return { updated, created, skipped, previewOnly, files: fileInfos, previews };
 }
 
 function buildEnvUrls(
@@ -2849,7 +3110,7 @@ async function runDocsSyncBindings(rawArgs: string[]): Promise<number> {
   };
 
   if (options.dir) {
-    next.dir = normalizeBindingDir(rootDir, options.dir);
+    next.dir = normalizeBindingDirForContext(homeDir, rootDir, process.cwd(), options.dir);
   }
   if (options.projectId !== undefined && Number.isFinite(options.projectId)) {
     next.project_id = Number(options.projectId);
@@ -2873,7 +3134,16 @@ async function runDocsSyncBindings(rawArgs: string[]): Promise<number> {
 
   config.bindings[options.name] = next;
   saveDocsSyncConfig(homeDir, config);
+  const resolvedDir = resolveBindingDirForContext(homeDir, rootDir, process.cwd(), next.dir);
   console.log(`${action === "add" ? "binding added" : "binding updated"}: ${options.name}`);
+  console.log(`stored_dir=${next.dir}`);
+  console.log(`resolved_dir=${resolvedDir}`);
+  const gitRoot = findGitRoot(process.cwd());
+  if (gitRoot) {
+    console.log(`git_root=${gitRoot}`);
+  } else if (isGlobalDocsSyncHome(homeDir)) {
+    console.warn("warning: no git root detected, relative --dir was resolved from current working directory");
+  }
   return 0;
 }
 
@@ -3101,8 +3371,11 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
       }
 
       if (!result.response.ok) {
-        throw new Error(
-          `request failed: ${result.response.status} ${result.response.statusText} ${result.text}`,
+        throw new HttpStatusError(
+          endpoint,
+          result.response.status,
+          result.response.statusText,
+          result.text,
         );
       }
       if (!result.json) {
@@ -3121,7 +3394,12 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
         if (!binding) {
           throw new Error(`binding not found: ${name}`);
         }
-        const dirPath = resolveBindingDir(rootDir, binding.dir);
+        const dirPath = resolveBindingDirForContext(
+          docsSyncHome!,
+          rootDir,
+          process.cwd(),
+          binding.dir,
+        );
         const existing = dirToBindings.get(dirPath) || [];
         existing.push(name);
         dirToBindings.set(dirPath, existing);
@@ -3156,14 +3434,23 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
         if (!binding) {
           throw new Error(`binding not found: ${name}`);
         }
-        const dirPath = resolveBindingDir(rootDir, binding.dir);
+        const dirPath = resolveBindingDirForContext(
+          docsSyncHome!,
+          rootDir,
+          process.cwd(),
+          binding.dir,
+        );
         if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
           throw new Error(`dir not found for binding ${name}: ${dirPath}`);
         }
 
         const result = await syncDocsDir(dirPath, binding, options, request);
+        if (options.dryRun) {
+          console.log(`dry-run preview binding=${name}`);
+          result.previews.forEach((item) => console.log(buildDocsSyncPreviewLine(item)));
+        }
         console.log(
-          `synced=${result.updated} created=${result.created} skipped=${result.skipped} binding=${name} dir=${dirPath}`,
+          `synced=${result.updated} created=${result.created} skipped=${result.skipped} preview_only=${result.previewOnly} binding=${name} dir=${dirPath}`,
         );
         bindingResults[name] = { binding, files: result.files };
       }
@@ -3181,13 +3468,17 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
 
         const { mapping, mappingPath } = loadMapping(dirPath);
         const result = await syncDocsDir(dirPath, mapping, options, request);
+        if (options.dryRun) {
+          console.log(`dry-run preview dir=${dirPath}`);
+          result.previews.forEach((item) => console.log(buildDocsSyncPreviewLine(item)));
+        }
 
         if (!options.dryRun) {
           saveMapping(mapping, mappingPath);
         }
 
         console.log(
-          `synced=${result.updated} created=${result.created} skipped=${result.skipped} dir=${dirPath}`,
+          `synced=${result.updated} created=${result.created} skipped=${result.skipped} preview_only=${result.previewOnly} dir=${dirPath}`,
         );
       }
     }
@@ -3365,7 +3656,7 @@ async function main(): Promise<number> {
 
   const queryItems: [string, string][] = [];
   for (const query of options.query || []) {
-    queryItems.push(parseKeyValue(query));
+    queryItems.push(...parseQueryArg(query));
   }
   const url = buildUrl(
     baseUrl,

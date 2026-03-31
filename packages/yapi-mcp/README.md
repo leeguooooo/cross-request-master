@@ -77,7 +77,7 @@ yapi install-skill \
 也可以用 npx 临时运行（不全局安装）：
 
 ```bash
-npx -y @leeguoo/yapi-mcp install-skill \
+npx -y -p @leeguoo/yapi-mcp yapi install-skill \
   --yapi-base-url=https://your-yapi-domain.com \
   --yapi-email=your_email@example.com \
   --yapi-password=your_password
@@ -147,6 +147,7 @@ yapi log list --type group --type-id 129 --page 1 --limit 10
 
 # 获取接口详情
 yapi --path /api/interface/get --query id=123
+yapi --path /api/interface/list_cat --query "catid=4631&limit=50&page=1"
 ```
 
 全局模式下可执行 `yapi login` 打开页面登录并同步登录态 Cookie 到 `~/.yapi-mcp/auth-*.json`；如果配置了账号密码，权限失效也会自动重新登录。
@@ -167,6 +168,7 @@ yapi docs-sync
 
 说明：
 - 绑定配置保存在 `.yapi/docs-sync.json`（自动维护 `files`：文件名 → API id）
+- 当绑定保存在全局 `~/.yapi/docs-sync.json` 时，`docs-sync bind add --dir docs/yapi` 会自动按“当前 git 项目根目录”解析并存成相对 `$HOME` 的路径，例如 `tk.com/ai-girls/docs/yapi`
 - **接口标题（title）默认取 Markdown 内第一个 H1（`# 标题` / Setext `===`）**；如果没写 H1，则回退到文件名（不含扩展名）。
 - 接口路径（path）使用文件名（不含扩展名）生成：`/${stem}`。建议文件名用稳定的 slug（如日期/英文），标题用中文写在文档 H1。
 - 绑定模式同步后会写入 `.yapi/docs-sync.links.json`（本地文档 → YApi 文档 URL）
@@ -174,8 +176,10 @@ yapi docs-sync
 - 绑定模式同步后会写入 `.yapi/docs-sync.deployments.json`（本地文档 → 已部署 URL）
 - 兼容旧方式：`--dir` 读取目录内 `.yapi.json` 的 `project_id/catid` 与 `source_files`
 - 管理绑定：`yapi docs-sync bind list|get|add|update|remove`
-- 可用 `--dry-run` 只做转换不更新
+- `--query` 支持像 curl 一样写成单个字符串：`--query "catid=4631&limit=50&page=1"`
+- 可用 `--dry-run` 只做预览不更新；现在会输出每个文件的 Markdown/HTML/请求体大小，并提前暴露超大文档风险
 - 默认只同步内容变更的文件，如需全量更新使用 `--force`
+- 如果上传返回 `413 Payload Too Large`，CLI 会显示当前请求大小、解析出的服务端限制值（如果响应里有）、以及最大的 Mermaid 块大小，并建议先拆分文档
 - Mermaid 预渲染依赖 `mmdc`（默认手绘风格；安装时会尝试拉取，失败不影响同步）
 - PlantUML 预渲染依赖 `plantuml`（需要本机 Java 环境）
 - Graphviz 预渲染依赖 `dot`（graphviz）
@@ -198,7 +202,9 @@ yapi docs-sync
       "command": "npx",
       "args": [
         "-y",
+        "-p",
         "@leeguoo/yapi-mcp",
+        "yapi-mcp",
         "--stdio",
         "--yapi-base-url=https://your-yapi-domain.com",
         "--yapi-token=projectId:your_token_here"
@@ -217,7 +223,9 @@ yapi docs-sync
       "command": "npx",
       "args": [
         "-y",
+        "-p",
         "@leeguoo/yapi-mcp",
+        "yapi-mcp",
         "--stdio",
         "--yapi-base-url=https://your-yapi-domain.com",
         "--yapi-auth-mode=global",
@@ -247,7 +255,9 @@ yapi docs-sync
       "command": "npx",
       "args": [
         "-y",
+        "-p",
         "@leeguoo/yapi-mcp",
+        "yapi-mcp",
         "--stdio",
         "--yapi-base-url=https://yapi.example.com",
         "--yapi-token=projectId:token1,projectId2:token2",
@@ -270,7 +280,9 @@ yapi docs-sync
       "command": "npx",
       "args": [
         "-y",
+        "-p",
         "@leeguoo/yapi-mcp",
+        "yapi-mcp",
         "--stdio"
       ],
       "env": {
@@ -293,7 +305,7 @@ yapi docs-sync
   "mcpServers": {
     "yapi-auto-mcp": {
       "command": "npx",
-      "args": ["-y", "@leeguoo/yapi-mcp", "--stdio"],
+      "args": ["-y", "-p", "@leeguoo/yapi-mcp", "yapi-mcp", "--stdio"],
       "env": {
         "YAPI_BASE_URL": "https://yapi.example.com",
         "YAPI_AUTH_MODE": "global",

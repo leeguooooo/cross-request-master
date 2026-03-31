@@ -13,6 +13,16 @@ export type MarkdownRenderOptions = {
   logger?: (message: string) => void;
   onMermaidError?: (error: unknown) => void;
   onDiagramError?: (error: unknown) => void;
+  onDiagramRendered?: (metric: DiagramRenderMetric) => void;
+};
+
+export type DiagramRenderMetric = {
+  renderer: string;
+  label: string;
+  index: number;
+  sourceBytes: number;
+  renderedBytes: number;
+  normalized?: boolean;
 };
 
 let cachedPandocAvailable: boolean | null = null;
@@ -337,6 +347,7 @@ function renderDiagramBlocks(
     shouldLog: boolean;
     logger: (message: string) => void;
     onError?: (error: unknown) => void;
+    onRendered?: (metric: DiagramRenderMetric) => void;
   },
 ): string {
   const pattern = buildCodeBlockPattern(renderer.languages);
@@ -366,6 +377,13 @@ function renderDiagramBlocks(
     }
     try {
       const svg = renderer.render(text);
+      options.onRendered?.({
+        renderer: renderer.name,
+        label: renderer.label,
+        index,
+        sourceBytes: Buffer.byteLength(text, "utf8"),
+        renderedBytes: Buffer.byteLength(svg, "utf8"),
+      });
       if (options.shouldLog) {
         options.logger(`${renderer.label} 块 #${index} 渲染成功。`);
       }
@@ -411,6 +429,14 @@ export function preprocessMarkdown(markdown: string, options: MarkdownRenderOpti
             logger(`Mermaid 块 #${index} 渲染成功。`);
           }
         }
+        options.onDiagramRendered?.({
+          renderer: "mermaid",
+          label: "Mermaid",
+          index,
+          sourceBytes: Buffer.byteLength(String(content || "").trim(), "utf8"),
+          renderedBytes: Buffer.byteLength(result.svg, "utf8"),
+          normalized: result.normalized,
+        });
         return `<div class="mermaid-diagram">\n${result.svg}\n</div>`;
       } catch (error) {
         if (shouldLogMermaid) {
@@ -454,6 +480,7 @@ export function preprocessMarkdown(markdown: string, options: MarkdownRenderOpti
       shouldLog: shouldLogDiagrams,
       logger,
       onError: options.onDiagramError,
+      onRendered: options.onDiagramRendered,
     });
   }
 

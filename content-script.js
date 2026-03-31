@@ -1059,7 +1059,9 @@ const CrossRequest = {
 
       const stdioArgs = [
         '-y',
+        '-p',
         mcpPkg,
+        'yapi-mcp',
         '--stdio',
         `--yapi-base-url=${baseUrl}`,
         '--yapi-auth-mode=global',

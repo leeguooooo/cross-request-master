@@ -12,10 +12,10 @@ Prefer `yapi` command. If missing, fallback to one-shot npx without forcing glob
 ```bash
 yapi -h
 # fallback:
-npx -y @leeguoo/yapi-mcp -h
+npx -y -p @leeguoo/yapi-mcp yapi -h
 ```
 
-In command examples below, `yapi` can be replaced by `npx -y @leeguoo/yapi-mcp`.
+In command examples below, `yapi` can be replaced by `npx -y -p @leeguoo/yapi-mcp yapi`.
 
 ## Quick workflow
 1. If user gives a YApi URL, verify it belongs to configured `base_url`.
@@ -56,6 +56,7 @@ yapi logout
 yapi search --q keyword --project-id 310
 yapi --path /api/interface/get --query id=123
 yapi --path /api/interface/list_cat --query catid=123
+yapi --path /api/interface/list_cat --query "catid=4631&limit=50&page=1"
 ```
 
 Config cache locations:
@@ -81,8 +82,11 @@ yapi docs-sync --binding projectA
 Notes:
 - Binding file: `.yapi/docs-sync.json`
 - Mapping outputs: `.yapi/docs-sync.links.json`, `.yapi/docs-sync.projects.json`, `.yapi/docs-sync.deployments.json`
+- When bindings live under the global `~/.yapi/docs-sync.json`, relative `--dir` values are resolved from the current git project root and stored as `$HOME`-relative paths.
 - Default behavior syncs changed files only; use `--force` for full sync.
 - Compatible with directory `.yapi.json` config as fallback (without binding).
+- `--dry-run` prints per-file preview lines with Markdown/HTML/payload sizes before upload.
+- If upload hits `413 Payload Too Large`, the CLI now reports payload size, parsed server limit (when available), and the largest Mermaid block.
 - Mermaid/PlantUML/Graphviz/D2 rendering depends on local tool availability; missing tools do not block basic sync.
 
 ## Interface creation guardrails

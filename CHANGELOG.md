@@ -27,7 +27,7 @@
 
 ### 新增
 
-- **Skill 一键安装** - 生成 `npx -y @leeguoo/yapi-mcp install-skill` 命令并写入 `~/.yapi/config.toml`
+- **Skill 一键安装** - 生成 `npx -y -p @leeguoo/yapi-mcp yapi install-skill` 命令并写入 `~/.yapi/config.toml`
 
 ### 变更
 
