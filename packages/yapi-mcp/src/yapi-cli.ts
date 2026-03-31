@@ -17,6 +17,7 @@ import {
   renderMarkdownToHtml,
 } from "./docs/markdown";
 import { runInstallSkill } from "./skill/install";
+import { findOutdatedSkillInstalls } from "./skill/metadata";
 import { YApiAuthService } from "./services/yapi/auth";
 import { YApiAuthCache } from "./services/yapi/authCache";
 
@@ -1074,6 +1075,7 @@ function usage(): string {
     "  yapi whoami [options]",
     "  yapi search [options]",
     "  yapi install-skill [options]",
+    "  yapi self-update",
     "Options:",
     "  --config <path>        config file path (default: ~/.yapi/config.toml)",
     "  --base-url <url>       YApi base URL",
@@ -1117,6 +1119,12 @@ function usage(): string {
     "  -V, --version          print version",
     "  -h, --help             show help",
   ].join("\n");
+}
+
+function selfUpdateUsage(): string {
+  return ["Usage:", "  yapi self-update", "", "Install the latest @leeguoo/yapi-mcp globally with npm."].join(
+    "\n",
+  );
 }
 
 function docsSyncUsage(): string {
@@ -2542,6 +2550,38 @@ async function checkForUpdates(options: {
   writeUpdateCache(cache);
 }
 
+function warnIfInstalledSkillsOutdated(options: { skip?: boolean }): void {
+  if (options.skip) return;
+  const currentVersion = readVersion();
+  if (!currentVersion || currentVersion === "unknown") return;
+  const outdated = findOutdatedSkillInstalls(currentVersion);
+  if (!outdated.length) return;
+
+  const summary = outdated
+    .map((item) => `${item.label}@${item.installedVersion || "unknown"}`)
+    .join(", ");
+  console.warn(
+    `skill update available: installed ${summary}, current ${currentVersion}. Run: yapi install-skill --force`,
+  );
+}
+
+function runSelfUpdate(rawArgs: string[]): number {
+  if (rawArgs.includes("-h") || rawArgs.includes("--help")) {
+    console.log(selfUpdateUsage());
+    return 0;
+  }
+  try {
+    execFileSync(resolveLocalBin("npm"), ["install", "-g", "@leeguoo/yapi-mcp@latest"], {
+      stdio: "inherit",
+    });
+    console.log("Updated yapi CLI to latest.");
+    return 0;
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    return 2;
+  }
+}
+
 type YapiRequest = (
   endpoint: string,
   method: "GET" | "POST",
@@ -3493,6 +3533,7 @@ async function runDocsSync(rawArgs: string[]): Promise<number> {
 async function main(): Promise<number> {
   const rawArgs = process.argv.slice(2);
   const parsedForUpdate = parseArgs(rawArgs);
+  const subcommand = rawArgs[0] || "";
   const skipUpdateCheck =
     parsedForUpdate.version ||
     parsedForUpdate.help ||
@@ -3500,6 +3541,15 @@ async function main(): Promise<number> {
     rawArgs.includes("-h") ||
     rawArgs.includes("--help");
   await checkForUpdates({ noUpdate: parsedForUpdate.noUpdate, skip: skipUpdateCheck });
+  const skipSkillWarning =
+    skipUpdateCheck ||
+    subcommand === "install-skill" ||
+    subcommand === "self-update" ||
+    process.env.YAPI_NO_SKILL_UPDATE_CHECK === "1";
+  warnIfInstalledSkillsOutdated({ skip: skipSkillWarning });
+  if (subcommand === "self-update") {
+    return runSelfUpdate(rawArgs.slice(1));
+  }
   if (rawArgs[0] === "install-skill") {
     await runInstallSkill(rawArgs.slice(1));
     return 0;

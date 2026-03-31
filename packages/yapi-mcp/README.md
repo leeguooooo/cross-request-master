@@ -89,21 +89,37 @@ Skill 安装目录：
 - Cursor: `~/.cursor/skills/yapi/`
 
 Skill 模板来源：`packages/yapi-mcp/skill-template/SKILL.md`（发布后从包内复制到技能目录）。
+后续当 CLI 升级而本地 Skill 仍是旧版本时，`yapi` 会自动提示：
+
+```bash
+skill update available: installed Codex@0.3.24, current 0.3.25. Run: yapi install-skill --force
+```
+
+也可以手动重装 Skill：
+
+```bash
+yapi install-skill --force
+```
 
 ### CLI 使用
 
 推荐全局安装后直接使用 `yapi` 命令（走同一份 `~/.yapi/config.toml`）：
 
-`v0.3.23` 新能力（登录相关）：
+当前 CLI 能力补充：
 - 支持 `yapi login --browser`：通过 `agent-browser-stealth` 打开页面，登录后自动同步 `_yapi_token/_yapi_uid` 到本地缓存
 - 默认打开 `base-url` 首页（不强制 `/login`），适配“已登录可直接拿 Cookie”的场景
 - 支持 `yapi login --login-url <url>` 指定登录页
 - 支持 `yapi logout` 清理当前 `base_url` 对应的全局会话缓存
 - 适用于 SSO/额外验证体系：无法使用账号密码时可只走浏览器登录
+- 支持 `yapi self-update` 升级全局 CLI
+- 当已安装的 Skill 版本落后于当前 CLI 时，会自动提示重新执行 `yapi install-skill --force`
 
 ```bash
 # 检查版本
 yapi --version
+
+# 升级 CLI 到最新版本
+yapi self-update
 
 # 查看帮助
 yapi -h
@@ -144,6 +160,8 @@ yapi log list --type group --type-id 129 --page 1 --limit 10
 # 更新提示（自动检查，可关闭）
 # 设置环境变量 YAPI_NO_UPDATE_CHECK=1
 # 或在命令后加 --no-update
+#
+# Skill 版本提示默认开启，可用 YAPI_NO_SKILL_UPDATE_CHECK=1 关闭
 
 # 获取接口详情
 yapi --path /api/interface/get --query id=123

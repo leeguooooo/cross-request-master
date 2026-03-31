@@ -138,6 +138,81 @@ afterEach(() => {
 });
 
 describe("yapi cli docs-sync regression coverage", () => {
+  test("self-update delegates to npm install -g latest package", async () => {
+    const homeDir = createTempHome();
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-self-update-"));
+    const binDir = path.join(homeDir, "bin");
+    const logPath = path.join(homeDir, "npm.log");
+    mkdirSync(binDir, { recursive: true });
+    const npmPath = path.join(binDir, "npm");
+    writeFileSync(
+      npmPath,
+      `#!/bin/sh
+echo "$@" > ${JSON.stringify(logPath)}
+exit 0
+`,
+      "utf8",
+    );
+    chmodSync(npmPath, 0o755);
+
+    const result = await runCli(["self-update"], {
+      cwd: repoDir,
+      homeDir,
+      env: {
+        PATH: `${binDir}:${process.env.PATH || ""}`,
+      },
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(readFileSync(logPath, "utf8"), /install -g @leeguoo\/yapi-mcp@latest/);
+    assert.match(result.stdout, /updated yapi cli/i);
+  });
+
+  test("warns when installed skill metadata is older than current package version", async () => {
+    const homeDir = createTempHome();
+    ensureYapiHome(homeDir);
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-skillwarn-"));
+    const codexHome = path.join(homeDir, ".codex");
+    const skillRoot = path.join(codexHome, "skills", "yapi");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(path.join(skillRoot, "SKILL.md"), "# yapi\n", "utf8");
+    writeFileSync(
+      path.join(skillRoot, ".yapi-skill.json"),
+      JSON.stringify(
+        {
+          skillName: "yapi",
+          packageName: "@leeguoo/yapi-mcp",
+          packageVersion: "0.3.20",
+          installedAt: "2026-03-01T00:00:00.000Z",
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const server = await withServer((req, res) => {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true }));
+    });
+
+    try {
+      const result = await runCli(["--url", `${server.url}/health`], {
+        cwd: repoDir,
+        homeDir,
+        env: {
+          CODEX_HOME: codexHome,
+        },
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stderr, /skill update available/i);
+      assert.match(result.stderr, /yapi install-skill --force/);
+    } finally {
+      await server.close();
+    }
+  });
+
   test("bind add stores repo-relative-to-home dir when using global ~/.yapi", async () => {
     const homeDir = createTempHome();
     const yapiHome = ensureYapiHome(homeDir);

@@ -16,6 +16,11 @@ npx -y -p @leeguoo/yapi-mcp yapi -h
 ```
 
 In command examples below, `yapi` can be replaced by `npx -y -p @leeguoo/yapi-mcp yapi`.
+When CLI version is newer than the installed skill snapshot, `yapi` warns and asks to rerun:
+
+```bash
+yapi install-skill --force
+```
 
 ## Quick workflow
 1. If user gives a YApi URL, verify it belongs to configured `base_url`.
@@ -44,6 +49,7 @@ yapi --path /api/interface/get --query id=<api_id>
 ```bash
 # version/help
 yapi --version
+yapi self-update
 yapi -h
 
 # auth

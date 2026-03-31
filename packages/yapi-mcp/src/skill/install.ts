@@ -3,8 +3,12 @@ import os from "os";
 import path from "path";
 import readline from "readline";
 import yargs from "yargs";
-
-const SKILL_NAME = "yapi";
+import {
+  readPackageVersion,
+  resolveSkillTargets,
+  SKILL_NAME,
+  writeSkillMetadata,
+} from "./metadata";
 const PLACEHOLDER_EMAIL = "YOUR_EMAIL";
 const PLACEHOLDER_PASSWORD = "YOUR_PASSWORD";
 
@@ -192,23 +196,11 @@ export async function runInstallSkill(rawArgs: string[]): Promise<void> {
     .parseSync() as InstallArgs;
 
   const yapiHome = argv["yapi-home"] || process.env.YAPI_HOME || path.join(os.homedir(), ".yapi");
-  const codexHome =
-    argv["codex-home"] || process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
-  const claudeHome =
-    argv["claude-home"] || process.env.CLAUDE_HOME || path.join(os.homedir(), ".claude");
-  const cursorHome =
-    argv["cursor-home"] || process.env.CURSOR_HOME || path.join(os.homedir(), ".cursor");
   const globalConfigPath = path.join(yapiHome, "config.toml");
-  const targets = [
-    { label: "Codex", root: path.join(codexHome, "skills", SKILL_NAME) },
-    { label: "Claude", root: path.join(claudeHome, "skills", SKILL_NAME) },
-    { label: "Cursor", root: path.join(cursorHome, "skills", SKILL_NAME) },
-  ];
-  const seenRoots = new Set<string>();
-  const uniqueTargets = targets.filter((target) => {
-    if (seenRoots.has(target.root)) return false;
-    seenRoots.add(target.root);
-    return true;
+  const uniqueTargets = resolveSkillTargets({
+    codexHome: argv["codex-home"],
+    claudeHome: argv["claude-home"],
+    cursorHome: argv["cursor-home"],
   });
 
   // 只从 ~/.yapi/config.toml 读取已有配置
@@ -271,6 +263,7 @@ export async function runInstallSkill(rawArgs: string[]): Promise<void> {
     );
   }
   const skillTemplate = fs.readFileSync(templatePath, "utf8");
+  const packageVersion = readPackageVersion(packageRoot);
 
   const installedRoots: string[] = [];
 
@@ -287,6 +280,7 @@ export async function runInstallSkill(rawArgs: string[]): Promise<void> {
 
     const skillPath = path.join(target.root, "SKILL.md");
     fs.writeFileSync(skillPath, skillTemplate, "utf8");
+    writeSkillMetadata(target.root, packageVersion);
 
     installedRoots.push(`${target.label}: ${target.root}`);
   }
