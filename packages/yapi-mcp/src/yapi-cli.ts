@@ -2865,6 +2865,27 @@ async function syncDocsDir(
       fileInfos[relName] = { docId: Number(docId), apiPath: resolvedPath };
     }
 
+    const contentHash = buildDocsSyncHash(markdown, options);
+    const previousHash = mapping.file_hashes[relName];
+    const currentTitle = docId ? byId[String(docId)]?.title : "";
+    const titleToUpdate = !docId
+      ? undefined
+      : !currentTitle || currentTitle !== desiredTitle
+        ? desiredTitle
+        : undefined;
+    const shouldSyncTitle = Boolean(titleToUpdate);
+    const shouldSkipUnchanged =
+      !options.force &&
+      docId &&
+      previousHash &&
+      previousHash === contentHash &&
+      !shouldSyncTitle;
+
+    if (shouldSkipUnchanged && !options.dryRun) {
+      skipped += 1;
+      continue;
+    }
+
     const logPrefix = `[docs-sync:${relName}]`;
     let mermaidFailed = false;
     let diagramFailed = false;
@@ -2885,24 +2906,8 @@ async function syncDocsDir(
         diagramFailed = true;
       },
     });
-    const contentHash = buildDocsSyncHash(markdown, options);
-    const previousHash = mapping.file_hashes[relName];
 
-    const currentTitle = docId ? byId[String(docId)]?.title : "";
-    const titleToUpdate = !docId
-      ? undefined
-      : !currentTitle || currentTitle !== desiredTitle
-        ? desiredTitle
-        : undefined;
-    const shouldSyncTitle = Boolean(titleToUpdate);
-
-    if (
-      !options.force &&
-      docId &&
-      previousHash &&
-      previousHash === contentHash &&
-      !shouldSyncTitle
-    ) {
+    if (shouldSkipUnchanged) {
       action = "skip";
       skipped += 1;
     }

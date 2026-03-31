@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, chmodSync, existsSync } from "node:fs";
 import http from "node:http";
@@ -293,6 +294,86 @@ exit 0
       assert.equal(result.status, 0, result.stderr);
       assert.match(result.stdout, /binding=broken/);
       assert.match(result.stdout, /docs\/yapi/);
+    } finally {
+      await server.close();
+    }
+  });
+
+  test("docs-sync skips unchanged files before Mermaid rendering on normal sync", async () => {
+    const homeDir = createTempHome();
+    ensureYapiHome(homeDir);
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-skip-render-"));
+    const docsDir = path.join(repoDir, "docs", "release-notes");
+    const binDir = path.join(homeDir, "bin");
+    installFakeMmdc(binDir);
+    mkdirSync(docsDir, { recursive: true });
+
+    const markdown = `# demo
+
+\`\`\`mermaid
+graph TD
+  A[Start] --> B[Done]
+\`\`\`
+`;
+    writeFileSync(path.join(docsDir, "demo.md"), markdown, "utf8");
+    writeFileSync(
+      path.join(docsDir, ".yapi.json"),
+      JSON.stringify(
+        {
+          project_id: 267,
+          catid: 3667,
+          files: { "demo.md": 123 },
+          file_hashes: {
+            "demo.md": crypto
+              .createHash("sha1")
+              .update("mermaid\n")
+              .update("mermaid-look:handDrawn\n")
+              .update(markdown)
+              .digest("hex"),
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const server = await withServer((req, res) => {
+      const url = new URL(req.url || "/", "http://127.0.0.1");
+      if (url.pathname === "/api/interface/list_cat") {
+        res.setHeader("content-type", "application/json");
+        res.end(
+          JSON.stringify({
+            errcode: 0,
+            data: {
+              list: [{ _id: 123, path: "/demo", title: "demo" }],
+            },
+          }),
+        );
+        return;
+      }
+      if (url.pathname === "/api/interface/up") {
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ errcode: 0, data: {} }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end("not found");
+    });
+
+    try {
+      writeFileSync(path.join(homeDir, ".yapi", "config.toml"), `base_url = "${server.url}"\n`, "utf8");
+      const result = await runCli(["docs-sync", docsDir], {
+        cwd: repoDir,
+        homeDir,
+        env: {
+          PATH: `${binDir}:${process.env.PATH || ""}`,
+        },
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /skipped=1/);
+      assert.doesNotMatch(result.stdout, /Mermaid 块 #1/);
     } finally {
       await server.close();
     }

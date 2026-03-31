@@ -197,6 +197,7 @@ yapi docs-sync
 - `--query` 支持像 curl 一样写成单个字符串：`--query "catid=4631&limit=50&page=1"`
 - 可用 `--dry-run` 只做预览不更新；现在会输出每个文件的 Markdown/HTML/请求体大小，并提前暴露超大文档风险
 - 默认只同步内容变更的文件，如需全量更新使用 `--force`
+- 普通同步命中相同 `file_hashes` 时会在渲染前直接跳过，不再重复渲染 Mermaid / PlantUML / Graphviz / D2；`--dry-run` 仍会保留预览渲染
 - 如果上传返回 `413 Payload Too Large`，CLI 会显示当前请求大小、解析出的服务端限制值（如果响应里有）、以及最大的 Mermaid 块大小，并建议先拆分文档
 - Mermaid 预渲染依赖 `mmdc`（默认手绘风格；安装时会尝试拉取，失败不影响同步）
 - PlantUML 预渲染依赖 `plantuml`（需要本机 Java 环境）
