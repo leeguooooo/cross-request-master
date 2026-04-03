@@ -1,0 +1,30 @@
+{
+  "name": "@leeguoo/yapi-cli",
+  "version": "0.4.0",
+  "description": "YApi CLI - Command-line tool for YApi API documentation management, search, and docs sync (wrapper for @leeguoo/yapi-mcp)",
+  "bin": {
+    "yapi": "bin/yapi.js",
+    "yapi-cli": "bin/yapi.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "dependencies": {
+    "@leeguoo/yapi-mcp": ">=0.4.0"
+  },
+  "keywords": [
+    "yapi",
+    "cli",
+    "api-documentation",
+    "api-management"
+  ],
+  "author": "liangzhensheng <372959130@qq.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leeguooooo/cross-request-master.git"
+  }
+}

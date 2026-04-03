@@ -1,12 +1,11 @@
 {
   "name": "@leeguoo/yapi-mcp",
-  "version": "0.3.26",
-  "description": "YApi Auto MCP Server - Model Context Protocol server for YApi integration, enables AI tools like Cursor to interact with YApi API documentation",
-  "main": "dist/index.js",
+  "version": "0.4.0",
+  "description": "YApi CLI - Command-line tool for YApi API documentation management, search, and docs sync",
+  "main": "dist/yapi-cli.js",
   "bin": {
-    "yapi-auto-mcp": "dist/cli.js",
-    "yapi-mcp": "dist/cli.js",
-    "yapi": "dist/yapi-cli.js"
+    "yapi": "dist/yapi-cli.js",
+    "yapi-cli": "dist/yapi-cli.js"
   },
   "files": [
     "dist",
@@ -16,17 +15,13 @@
   "scripts": {
     "build": "tsc && tsc-alias",
     "type-check": "tsc --noEmit",
-    "start": "node dist/index.js",
-    "start:cli": "cross-env NODE_ENV=cli node dist/index.js",
-    "start:http": "node dist/index.js",
-    "dev": "cross-env NODE_ENV=development tsx watch src/index.ts",
-    "dev:cli": "cross-env NODE_ENV=development tsx watch src/index.ts --stdio",
+    "start": "node dist/yapi-cli.js",
+    "dev": "cross-env NODE_ENV=development tsx watch src/yapi-cli.ts",
     "smoke:global": "pnpm build && tsx scripts/smoke-global.ts",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "test": "node --test --import tsx \"tests/**/*.test.ts\"",
-    "inspect": "pnpx @modelcontextprotocol/inspector",
-    "prepare": "pnpm run build && chmod +x ./dist/cli.js ./dist/yapi-cli.js",
+    "prepare": "pnpm run build && chmod +x ./dist/yapi-cli.js",
     "pub:release": "pnpm build && npm publish"
   },
   "engines": {
@@ -38,20 +33,16 @@
   },
   "keywords": [
     "yapi",
-    "mcp",
+    "cli",
     "typescript",
-    "model-context-protocol",
     "api-documentation",
-    "cursor",
     "ai-tools",
     "api-management",
     "yapi-integration",
-    "claude",
-    "anthropic",
-    "ai-assistant",
     "interface-management",
     "api-design",
-    "documentation-tool"
+    "documentation-tool",
+    "docs-sync"
   ],
   "author": "liangzhensheng <372959130@qq.com>",
   "license": "MIT",
@@ -60,21 +51,17 @@
   },
   "dependencies": {
     "agent-browser-stealth": "^0.16.1-fork.4",
-    "@modelcontextprotocol/sdk": "^1.6.0",
     "@types/yargs": "^17.0.33",
     "axios": "^1.7.9",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2",
     "markdown-it": "^14.1.0",
     "remeda": "^2.20.1",
-    "yargs": "^17.7.2",
-    "zod": "^3.24.2"
+    "yargs": "^17.7.2"
   },
   "optionalDependencies": {
     "@mermaid-js/mermaid-cli": "^11.12.0"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^20.17.32",
     "@typescript-eslint/eslint-plugin": "^8.24.0",
