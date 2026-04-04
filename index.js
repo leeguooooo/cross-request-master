@@ -145,8 +145,8 @@
       win.location && win.location.host
         ? win.location.host
         : win.location && win.location.hostname
-        ? win.location.hostname
-        : 'unknown';
+          ? win.location.hostname
+          : 'unknown';
     return `__crm_fixed_headers_${host}`;
   };
 
