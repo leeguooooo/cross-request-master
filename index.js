@@ -351,7 +351,11 @@
       let data = options.data || options.body;
       if (helpers.buildMultipartBodyFromLegacyFiles && (options.files || options.file)) {
         try {
-          const multipart = helpers.buildMultipartBodyFromLegacyFiles(data, options.files, options.file);
+          const multipart = helpers.buildMultipartBodyFromLegacyFiles(
+            data,
+            options.files,
+            options.file
+          );
           if (multipart) {
             data = multipart;
           }
@@ -691,8 +695,7 @@
       }
 
       // 添加常见的请求头
-      const hasAccept =
-        !!requestData.headers['Accept'] || !!requestData.headers['accept'];
+      const hasAccept = !!requestData.headers['Accept'] || !!requestData.headers['accept'];
       if (!hasAccept) {
         requestData.headers['Accept'] = 'application/json, text/plain, */*';
       }
@@ -1448,8 +1451,7 @@
       }
 
       // 添加常见的请求头
-      const hasAccept =
-        !!requestData.headers['Accept'] || !!requestData.headers['accept'];
+      const hasAccept = !!requestData.headers['Accept'] || !!requestData.headers['accept'];
       if (!hasAccept) {
         requestData.headers['Accept'] = 'application/json, text/plain, */*';
       }

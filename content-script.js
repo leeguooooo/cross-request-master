@@ -1599,7 +1599,7 @@ yapi install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-ema
     const renderCliPanel = (container) => {
       const { container: header, hintEl } = renderSectionHeader(
         'CLI 安装与文档同步',
-        '一键复制命令安装本地 CLI，并按绑定同步文档到 YApi。',
+        '一键复制命令安装本地 CLI，并按绑定同步文档到 YApi。'
       );
       const link = document.createElement('a');
       link.href = 'https://github.com/leeguooooo/cross-request-master';
@@ -1613,16 +1613,10 @@ yapi install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-ema
       container.appendChild(header);
 
       container.appendChild(
-        renderCodeBlock(
-          '一键安装 CLI（本地）',
-          'npm i -g @leeguoo/yapi-mcp\n',
-        ),
+        renderCodeBlock('一键安装 CLI（本地）', 'npm i -g @leeguoo/yapi-mcp\n')
       );
       container.appendChild(
-        renderCodeBlock(
-          '基础使用',
-          'yapi login\nyapi --path /api/interface/get --query id=123\n',
-        ),
+        renderCodeBlock('基础使用', 'yapi login\nyapi --path /api/interface/get --query id=123\n')
       );
       container.appendChild(
         renderCodeBlock(
@@ -1631,35 +1625,35 @@ yapi install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-ema
             'yapi docs-sync bind add --name projectA --dir docs/release-notes --project-id 267 --catid 3667',
             'yapi docs-sync --binding projectA',
             '# 或同步 .yapi/docs-sync.json 内全部绑定',
-            'yapi docs-sync',
-          ].join('\n') + '\n',
-        ),
+            'yapi docs-sync'
+          ].join('\n') + '\n'
+        )
       );
     };
 
     const renderMcpPanel = async (container, origin) => {
       const { container: header } = renderSectionHeader(
         'MCP 配置（兼容）',
-        '兼容旧工作流：邮箱会尽量自动填入；只需填写密码。全局模式默认自动懒登录，如需预热缓存可手动调用 yapi_update_token。',
+        '兼容旧工作流：邮箱会尽量自动填入；只需填写密码。全局模式默认自动懒登录，如需预热缓存可手动调用 yapi_update_token。'
       );
       container.appendChild(header);
 
       const email = await resolveCurrentUserEmail(origin);
       const blocks = buildGlobalMcpConfigBlocks({ origin, email });
       container.appendChild(
-        renderCodeBlock(`Cursor（mcpServers: ${blocks.serverName}）`, blocks.cursor),
+        renderCodeBlock(`Cursor（mcpServers: ${blocks.serverName}）`, blocks.cursor)
       );
       container.appendChild(
-        renderCodeBlock(`Codex（mcp_servers: ${blocks.serverName}）`, blocks.codex),
+        renderCodeBlock(`Codex（mcp_servers: ${blocks.serverName}）`, blocks.codex)
       );
       container.appendChild(
-        renderCodeBlock(`Gemini CLI（mcpServers: ${blocks.serverName}）`, blocks.gemini),
+        renderCodeBlock(`Gemini CLI（mcpServers: ${blocks.serverName}）`, blocks.gemini)
       );
       container.appendChild(
-        renderCodeBlock(`Claude Code（命令行: ${blocks.serverName}）`, blocks.claudeCode + '\n'),
+        renderCodeBlock(`Claude Code（命令行: ${blocks.serverName}）`, blocks.claudeCode + '\n')
       );
       container.appendChild(
-        renderCodeBlock(`Gemini CLI（命令行: ${blocks.serverName}）`, blocks.geminiCli + '\n'),
+        renderCodeBlock(`Gemini CLI（命令行: ${blocks.serverName}）`, blocks.geminiCli + '\n')
       );
       container.appendChild(renderCodeBlock('通用（直接运行）', blocks.rawCommand + '\n'));
     };
@@ -1667,7 +1661,7 @@ yapi install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-ema
     const renderSkillPanel = async (container, origin) => {
       const { container: header } = renderSectionHeader(
         'Skill 一键安装（Codex/Claude/Cursor）',
-        '执行后会安装到 ~/.codex/skills/yapi、~/.claude/skills/yapi、~/.cursor/skills/yapi，并写入 ~/.yapi/config.toml。',
+        '执行后会安装到 ~/.codex/skills/yapi、~/.claude/skills/yapi、~/.cursor/skills/yapi，并写入 ~/.yapi/config.toml。'
       );
       container.appendChild(header);
 
@@ -1710,8 +1704,7 @@ yapi install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-ema
         content.appendChild(nextContent);
       } catch (e) {
         if (currentToken !== renderToken) return;
-        content.textContent =
-          '配置生成失败：' + (e && e.message ? e.message : String(e || ''));
+        content.textContent = '配置生成失败：' + (e && e.message ? e.message : String(e || ''));
       }
     };
 
