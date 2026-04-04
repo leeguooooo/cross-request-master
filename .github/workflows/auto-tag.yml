@@ -26,7 +26,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Get version from input
         id: version
         run: |
@@ -34,7 +34,7 @@ jobs:
           echo "current_version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag_name=v$VERSION" >> $GITHUB_OUTPUT
           echo "当前版本: $VERSION"
-      
+
       - name: Check if tag exists
         id: check_tag
         run: |
@@ -45,7 +45,7 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
             echo "标签 ${{ steps.version.outputs.tag_name }} 不存在，将创建新标签"
           fi
-      
+
       - name: Get previous version from git history
         id: prev_version
         if: steps.check_tag.outputs.exists == 'false'
@@ -54,53 +54,53 @@ jobs:
           PREV_VERSION=$(git show HEAD~1:manifest.json 2>/dev/null | jq -r '.version' 2>/dev/null || echo "unknown")
           echo "previous_version=$PREV_VERSION" >> $GITHUB_OUTPUT
           echo "上一个版本: $PREV_VERSION"
-      
+
       - name: Create tag and release notes
         if: steps.check_tag.outputs.exists == 'false'
         run: |
           # 配置 git 用户信息
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-	          # 从 CHANGELOG.md 提取版本更新日志
-	          VERSION="${{ steps.version.outputs.current_version }}"
-	          
-	          # 尝试从 CHANGELOG.md 提取对应版本的更新日志
-	          CHANGELOG=$(awk -v version="$VERSION" '
-	            BEGIN { found=0; content="" }
-	            /^## \\[/ {
-	              if (found) exit;
-	              if ($0 ~ "\\[" version "\\]") {
-	                found=1;
-	                next;
-	              }
-	            }
-	            found { content = content $0 "\n" }
-	            END {
-	              gsub(/\n+$/, "", content);
-	              if (content == "") {
-	                print "版本更新";
-	              } else {
-	                print content;
-	              }
-	            }
-	          ' CHANGELOG.md)
-          
+
+          # 从 CHANGELOG.md 提取版本更新日志
+          VERSION="${{ steps.version.outputs.current_version }}"
+
+          # 尝试从 CHANGELOG.md 提取对应版本的更新日志
+          CHANGELOG=$(awk -v version="$VERSION" '
+            BEGIN { found=0; content="" }
+            /^## \\[/ {
+              if (found) exit;
+              if ($0 ~ "\\[" version "\\]") {
+                found=1;
+                next;
+              }
+            }
+            found { content = content $0 "\n" }
+            END {
+              gsub(/\n+$/, "", content);
+              if (content == "") {
+                print "版本更新";
+              } else {
+                print content;
+              }
+            }
+          ' CHANGELOG.md)
+
           echo "提取到的更新日志:"
           echo "$CHANGELOG"
-          
+
           # 创建带注释的标签
           git tag -a "${{ steps.version.outputs.tag_name }}" -m "Cross Request Master v$VERSION
-          
+
           $CHANGELOG
-          
+
           自动发布于 $(date +'%Y-%m-%d %H:%M:%S')"
-          
+
           # 推送标签到远程仓库
           git push origin "${{ steps.version.outputs.tag_name }}"
-          
+
           echo "✅ 成功创建并推送标签: ${{ steps.version.outputs.tag_name }}"
-      
+
       - name: Summary
         run: |
           if [ "${{ steps.check_tag.outputs.exists }}" = "true" ]; then

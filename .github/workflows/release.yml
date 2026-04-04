@@ -19,76 +19,76 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Create Release ZIP
-      run: |
-        zip -r cross-request-${{ github.ref_name }}.zip . \
-          -x "*.git*" \
-          -x ".github/*" \
-          -x ".DS_Store" \
-          -x "CHROME_STORE_GUIDE.md" \
-          -x "RELEASE_NOTES.md" \
-          -x "*.zip"
-    
-    - name: Extract release notes
-      id: extract_notes
-      run: |
-        # 尝试从 git tag annotation 获取发布说明
-        TAG_MESSAGE=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
-        
-        # 如果 tag 有 annotation，使用它
-        if [ ! -z "$TAG_MESSAGE" ]; then
-          echo "使用 git tag annotation 作为发布说明"
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
-          echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-        else
-	          # 否则从 CHANGELOG.md 提取对应版本的更新日志
-	          echo "从 CHANGELOG.md 提取更新日志"
-	          VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
-	          
-	          # 提取版本对应的更新内容
-	          RELEASE_NOTES=$(awk -v version="$VERSION" '
-	            BEGIN { found=0 }
-	            /^## \\[/ {
-	              if (found) exit;
-	              if ($0 ~ "\\[" version "\\]") {
-	                found=1;
-	                next;
-	              }
-	            }
-	            found { print }
-	          ' CHANGELOG.md)
-          
+      - uses: actions/checkout@v4
+
+      - name: Create Release ZIP
+        run: |
+          zip -r cross-request-${{ github.ref_name }}.zip . \
+            -x "*.git*" \
+            -x ".github/*" \
+            -x ".DS_Store" \
+            -x "CHROME_STORE_GUIDE.md" \
+            -x "RELEASE_NOTES.md" \
+            -x "*.zip"
+
+      - name: Extract release notes
+        id: extract_notes
+        run: |
+          # 尝试从 git tag annotation 获取发布说明
+          TAG_MESSAGE=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
+
+          # 如果 tag 有 annotation，使用它
+          if [ ! -z "$TAG_MESSAGE" ]; then
+            echo "使用 git tag annotation 作为发布说明"
+            echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+            echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            # 否则从 CHANGELOG.md 提取对应版本的更新日志
+            echo "从 CHANGELOG.md 提取更新日志"
+            VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
+
+            # 提取版本对应的更新内容
+            RELEASE_NOTES=$(awk -v version="$VERSION" '
+              BEGIN { found=0 }
+              /^## \\[/ {
+                if (found) exit;
+                if ($0 ~ "\\[" version "\\]") {
+                  found=1;
+                  next;
+                }
+              }
+              found { print }
+            ' CHANGELOG.md)
+
           echo "提取到的更新日志内容："
           echo "---"
           echo "$RELEASE_NOTES"
           echo "---"
-          
+
           # 如果找不到对应版本，使用默认内容
           if [ -z "$RELEASE_NOTES" ] || [ "${RELEASE_NOTES// /}" = "" ]; then
             echo "未找到版本 $VERSION 的更新日志，使用默认内容"
             RELEASE_NOTES=$(printf "### %s\n\n此版本的更新内容请查看 [提交历史](https://github.com/%s/commits/%s)。\n\n#### 📦 安装方法\n1. 下载下方的 \`cross-request-%s.zip\` 文件\n2. 解压到本地文件夹\n3. 打开 Chrome 浏览器，进入 \`chrome://extensions/\`\n4. 开启\"开发者模式\"（右上角开关）\n5. 点击\"加载已解压的扩展程序\"，选择解压后的文件夹\n\n#### 🔧 主要功能\n- 跨域请求支持，绕过 CORS 限制\n- 自动生成 cURL 命令\n- 页面内实时显示结果\n- 专为 YApi 接口测试优化" "${{ github.ref_name }}" "${{ github.repository }}" "${{ github.ref_name }}" "${{ github.ref_name }}")
           fi
-          
+
           echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
           echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-        fi
-        
-        echo "最终发布说明："
-        echo "==============="
-        echo "$RELEASE_NOTES"
-        echo "==============="
-    
-    - name: Create Release
-      uses: ncipollo/release-action@v1
-      with:
-        artifacts: "cross-request-${{ github.ref_name }}.zip"
-        tag: ${{ github.ref_name }}
-        name: "${{ github.ref_name }} - Cross Request"
-        body: ${{ steps.extract_notes.outputs.RELEASE_NOTES }}
-        draft: false
-        prerelease: false
-        token: ${{ secrets.GITHUB_TOKEN }}
+          fi
+
+          echo "最终发布说明："
+          echo "==============="
+          echo "$RELEASE_NOTES"
+          echo "==============="
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "cross-request-${{ github.ref_name }}.zip"
+          tag: ${{ github.ref_name }}
+          name: "${{ github.ref_name }} - Cross Request"
+          body: ${{ steps.extract_notes.outputs.RELEASE_NOTES }}
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
