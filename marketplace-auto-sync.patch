@@ -1,0 +1,261 @@
+diff --git a/.github/workflows/sync-plugin.yml b/.github/workflows/sync-plugin.yml
+new file mode 100644
+index 0000000..d472070
+--- /dev/null
++++ b/.github/workflows/sync-plugin.yml
+@@ -0,0 +1,75 @@
++name: Sync Plugin
++
++on:
++  repository_dispatch:
++    types:
++      - plugin-updated
++  workflow_dispatch:
++    inputs:
++      source_repo:
++        description: Source plugin repository, for example leeguooooo/yapi-plugin
++        required: true
++        type: string
++      source_ref:
++        description: Branch or tag to sync
++        required: false
++        default: main
++        type: string
++      source_sha:
++        description: Optional exact commit SHA to sync
++        required: false
++        default: ''
++        type: string
++
++permissions:
++  contents: write
++
++concurrency:
++  group: sync-plugin-${{ github.event.client_payload.source_repo || inputs.source_repo || github.run_id }}
++  cancel-in-progress: false
++
++jobs:
++  sync:
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout marketplace
++        uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++
++      - name: Setup Node
++        uses: actions/setup-node@v4
++        with:
++          node-version: 20
++
++      - name: Sync plugin snapshot
++        id: sync
++        env:
++          SOURCE_REPO: ${{ github.event.client_payload.source_repo || inputs.source_repo }}
++          SOURCE_REF: ${{ github.event.client_payload.source_ref || inputs.source_ref || 'main' }}
++          SOURCE_SHA: ${{ github.event.client_payload.source_sha || inputs.source_sha || '' }}
++        run: |
++          node scripts/sync-plugin.mjs \
++            --repo "$SOURCE_REPO" \
++            --ref "$SOURCE_REF" \
++            --sha "$SOURCE_SHA"
++
++      - name: Validate marketplace
++        run: node scripts/validate-template.mjs
++
++      - name: Commit and push synced plugin
++        env:
++          PLUGIN_DIR: ${{ steps.sync.outputs.plugin_dir }}
++          SOURCE_REPO: ${{ steps.sync.outputs.source_repo }}
++          SOURCE_REF: ${{ steps.sync.outputs.source_ref }}
++        run: |
++          if git diff --quiet; then
++            echo "No sync changes detected."
++            exit 0
++          fi
++
++          git config user.name "github-actions[bot]"
++          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
++          git add "."
++          git commit -m "chore(sync): update ${PLUGIN_DIR} from ${SOURCE_REPO}@${SOURCE_REF}"
++          git push origin HEAD:main
+diff --git a/README.md b/README.md
+index 23bd4ec..295a26f 100644
+--- a/README.md
++++ b/README.md
+@@ -7,6 +7,7 @@ Cursor plugin marketplace repository for `port-wind`.
+ - `yapi-plugin`
+ - `zentao-plugin`
+ - `cunzhi-plugin`
++- `curl-crypto-plugin`
+ 
+ ## Structure
+ 
+@@ -23,6 +24,33 @@ Cursor plugin marketplace repository for `port-wind`.
+ node scripts/validate-template.mjs
+ ```
+ 
++## Automatic sync
++
++`port-wind/marketplace` is the publishing mirror for Cursor. Source code should continue to live in the individual plugin repositories:
++
++- `leeguooooo/yapi-plugin`
++- `leeguooooo/zentao-plugin`
++- `leeguooooo/curl-crypto-plugin`
++
++When one of those repositories pushes to `main`, it can trigger the marketplace sync workflow. The workflow:
++
++1. clones the source repository,
++2. syncs it into `plugins/<plugin-name>/`,
++3. excludes generated and private files such as `node_modules`, `dist`, `.astro`, and `vendor/runtime.dat`,
++4. validates the marketplace,
++5. commits and pushes the updated snapshot to `main`.
++
++Manual fallback:
++
++```bash
++node scripts/sync-plugin.mjs --repo leeguooooo/yapi-plugin --ref main
++node scripts/validate-template.mjs
++```
++
++Required secret in each source plugin repository:
++
++- `PORT_WIND_MARKETPLACE_TOKEN`: a token that can call `repository_dispatch` on `port-wind/marketplace`
++
+ ## Claude Code
+ 
+ Add this marketplace in Claude Code with:
+diff --git a/scripts/sync-plugin.mjs b/scripts/sync-plugin.mjs
+new file mode 100644
+index 0000000..42f7f69
+--- /dev/null
++++ b/scripts/sync-plugin.mjs
+@@ -0,0 +1,128 @@
++#!/usr/bin/env node
++
++import { mkdtemp, rm } from 'node:fs/promises';
++import os from 'node:os';
++import path from 'node:path';
++import process from 'node:process';
++import { execFile as execFileCallback } from 'node:child_process';
++import { promisify } from 'node:util';
++
++const execFile = promisify(execFileCallback);
++
++const PLUGIN_REPO_MAP = {
++  'leeguooooo/yapi-plugin': 'yapi-plugin',
++  'leeguooooo/zentao-plugin': 'zentao-plugin',
++  'leeguooooo/curl-crypto-plugin': 'curl-crypto-plugin',
++};
++
++const RSYNC_EXCLUDES = ['.git', 'node_modules', 'dist', '.astro', 'coverage', 'vendor/runtime.dat'];
++
++function parseArgs(argv) {
++  const options = {};
++
++  for (let index = 0; index < argv.length; index += 1) {
++    const token = argv[index];
++    if (!token.startsWith('--')) {
++      continue;
++    }
++
++    const key = token.slice(2);
++    const next = argv[index + 1];
++    if (next && !next.startsWith('--')) {
++      options[key] = next;
++      index += 1;
++    } else {
++      options[key] = 'true';
++    }
++  }
++
++  return options;
++}
++
++function normalizeRef(ref = '') {
++  if (!ref) {
++    return 'main';
++  }
++
++  return ref.replace(/^refs\/heads\//, '').replace(/^refs\/tags\//, '');
++}
++
++async function run(command, args, options = {}) {
++  const result = await execFile(command, args, {
++    encoding: 'utf8',
++    maxBuffer: 10 * 1024 * 1024,
++    ...options,
++  });
++
++  return {
++    stdout: result.stdout?.trim() ?? '',
++    stderr: result.stderr?.trim() ?? '',
++  };
++}
++
++async function main() {
++  const args = parseArgs(process.argv.slice(2));
++  const sourceRepo = args.repo;
++  const pluginDir = args.plugin || PLUGIN_REPO_MAP[sourceRepo];
++  const sourceRef = normalizeRef(args.ref);
++  const sourceSha = args.sha || '';
++
++  if (!sourceRepo) {
++    throw new Error('Missing required --repo argument.');
++  }
++
++  if (!pluginDir) {
++    throw new Error(`No plugin mapping configured for ${sourceRepo}.`);
++  }
++
++  const workspace = process.cwd();
++  const targetDir = path.join(workspace, 'plugins', pluginDir);
++  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'marketplace-sync-'));
++  const cloneDir = path.join(tempRoot, 'source');
++
++  try {
++    await run('git', ['clone', '--depth', '1', '--branch', sourceRef, `https://github.com/${sourceRepo}.git`, cloneDir]);
++
++    if (sourceSha) {
++      const current = await run('git', ['rev-parse', 'HEAD'], { cwd: cloneDir });
++      if (current.stdout !== sourceSha) {
++        await run('git', ['fetch', '--depth', '1', 'origin', sourceSha], { cwd: cloneDir });
++        await run('git', ['checkout', '--detach', 'FETCH_HEAD'], { cwd: cloneDir });
++      }
++    }
++
++    const rsyncArgs = ['-a', '--delete'];
++    for (const exclude of RSYNC_EXCLUDES) {
++      rsyncArgs.push(`--exclude=${exclude}`);
++    }
++    rsyncArgs.push(`${cloneDir}/`, `${targetDir}/`);
++
++    await run('rsync', rsyncArgs);
++
++    const result = {
++      ok: true,
++      sourceRepo,
++      sourceRef,
++      sourceSha,
++      pluginDir,
++      targetDir: path.relative(workspace, targetDir),
++    };
++
++    if (process.env.GITHUB_OUTPUT) {
++      const lines = [
++        `plugin_dir=${pluginDir}`,
++        `source_repo=${sourceRepo}`,
++        `source_ref=${sourceRef}`,
++      ];
++      await import('node:fs/promises').then(({ appendFile }) =>
++        appendFile(process.env.GITHUB_OUTPUT, `${lines.join('\n')}\n`, 'utf8')
++      );
++    }
++
++    console.log(JSON.stringify(result, null, 2));
++  } finally {
++    await rm(tempRoot, { recursive: true, force: true });
++  }
++}
++
++await main();

@@ -1,0 +1,443 @@
+diff --git a/.github/workflows/sync-marketplace.yml b/.github/workflows/sync-marketplace.yml
+new file mode 100644
+index 0000000..d69f538
+--- /dev/null
++++ b/.github/workflows/sync-marketplace.yml
+@@ -0,0 +1,65 @@
++name: Sync Marketplace
++
++on:
++  schedule:
++    - cron: '*/15 * * * *'
++  workflow_dispatch:
++    inputs:
++      source_repo:
++        description: Optional plugin repository to sync, for example leeguooooo/yapi-plugin
++        required: false
++        default: ''
++        type: string
++      force:
++        description: Force a sync even when the remote SHA matches the recorded snapshot
++        required: false
++        default: false
++        type: boolean
++
++permissions:
++  contents: write
++
++concurrency:
++  group: marketplace-sync
++  cancel-in-progress: false
++
++jobs:
++  sync:
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout marketplace
++        uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++
++      - name: Setup Node
++        uses: actions/setup-node@v4
++        with:
++          node-version: 20
++
++      - name: Sync plugin snapshots
++        env:
++          SOURCE_REPO: ${{ inputs.source_repo || '' }}
++          FORCE_SYNC: ${{ inputs.force && 'true' || 'false' }}
++        run: |
++          if [ -n "$SOURCE_REPO" ]; then
++            node scripts/sync-plugin.mjs --repo "$SOURCE_REPO" --force "$FORCE_SYNC"
++          else
++            node scripts/sync-plugin.mjs --force "$FORCE_SYNC"
++          fi
++
++      - name: Validate marketplace
++        run: node scripts/validate-template.mjs
++
++      - name: Commit and push synced plugins
++        run: |
++          if git diff --quiet; then
++            echo "No marketplace sync changes detected."
++            exit 0
++          fi
++
++          git config user.name "github-actions[bot]"
++          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
++          git add .
++          git commit -m "chore(sync): refresh plugin snapshots"
++          git push origin HEAD:main
+diff --git a/.github/workflows/sync-plugin.yml b/.github/workflows/sync-plugin.yml
+deleted file mode 100644
+index d472070..0000000
+--- a/.github/workflows/sync-plugin.yml
++++ /dev/null
+@@ -1,75 +0,0 @@
+-name: Sync Plugin
+-
+-on:
+-  repository_dispatch:
+-    types:
+-      - plugin-updated
+-  workflow_dispatch:
+-    inputs:
+-      source_repo:
+-        description: Source plugin repository, for example leeguooooo/yapi-plugin
+-        required: true
+-        type: string
+-      source_ref:
+-        description: Branch or tag to sync
+-        required: false
+-        default: main
+-        type: string
+-      source_sha:
+-        description: Optional exact commit SHA to sync
+-        required: false
+-        default: ''
+-        type: string
+-
+-permissions:
+-  contents: write
+-
+-concurrency:
+-  group: sync-plugin-${{ github.event.client_payload.source_repo || inputs.source_repo || github.run_id }}
+-  cancel-in-progress: false
+-
+-jobs:
+-  sync:
+-    runs-on: ubuntu-latest
+-    steps:
+-      - name: Checkout marketplace
+-        uses: actions/checkout@v4
+-        with:
+-          fetch-depth: 0
+-
+-      - name: Setup Node
+-        uses: actions/setup-node@v4
+-        with:
+-          node-version: 20
+-
+-      - name: Sync plugin snapshot
+-        id: sync
+-        env:
+-          SOURCE_REPO: ${{ github.event.client_payload.source_repo || inputs.source_repo }}
+-          SOURCE_REF: ${{ github.event.client_payload.source_ref || inputs.source_ref || 'main' }}
+-          SOURCE_SHA: ${{ github.event.client_payload.source_sha || inputs.source_sha || '' }}
+-        run: |
+-          node scripts/sync-plugin.mjs \
+-            --repo "$SOURCE_REPO" \
+-            --ref "$SOURCE_REF" \
+-            --sha "$SOURCE_SHA"
+-
+-      - name: Validate marketplace
+-        run: node scripts/validate-template.mjs
+-
+-      - name: Commit and push synced plugin
+-        env:
+-          PLUGIN_DIR: ${{ steps.sync.outputs.plugin_dir }}
+-          SOURCE_REPO: ${{ steps.sync.outputs.source_repo }}
+-          SOURCE_REF: ${{ steps.sync.outputs.source_ref }}
+-        run: |
+-          if git diff --quiet; then
+-            echo "No sync changes detected."
+-            exit 0
+-          fi
+-
+-          git config user.name "github-actions[bot]"
+-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+-          git add "."
+-          git commit -m "chore(sync): update ${PLUGIN_DIR} from ${SOURCE_REPO}@${SOURCE_REF}"
+-          git push origin HEAD:main
+diff --git a/README.md b/README.md
+index 295a26f..52fda04 100644
+--- a/README.md
++++ b/README.md
+@@ -32,13 +32,14 @@ node scripts/validate-template.mjs
+ - `leeguooooo/zentao-plugin`
+ - `leeguooooo/curl-crypto-plugin`
+ 
+-When one of those repositories pushes to `main`, it can trigger the marketplace sync workflow. The workflow:
++The marketplace owns synchronization. A scheduled workflow checks the configured source repositories and pulls the latest `main` snapshot when it changes. The workflow:
+ 
+ 1. clones the source repository,
+ 2. syncs it into `plugins/<plugin-name>/`,
+-3. excludes generated and private files such as `node_modules`, `dist`, `.astro`, and `vendor/runtime.dat`,
+-4. validates the marketplace,
+-5. commits and pushes the updated snapshot to `main`.
++3. records the synced source SHA in `plugins/<plugin-name>/.marketplace-sync.json`,
++4. excludes generated and private files such as `node_modules`, `dist`, `.astro`, and `vendor/runtime.dat`,
++5. validates the marketplace,
++6. commits and pushes the updated snapshot to `main`.
+ 
+ Manual fallback:
+ 
+@@ -47,10 +48,6 @@ node scripts/sync-plugin.mjs --repo leeguooooo/yapi-plugin --ref main
+ node scripts/validate-template.mjs
+ ```
+ 
+-Required secret in each source plugin repository:
+-
+-- `PORT_WIND_MARKETPLACE_TOKEN`: a token that can call `repository_dispatch` on `port-wind/marketplace`
+-
+ ## Claude Code
+ 
+ Add this marketplace in Claude Code with:
+diff --git a/plugins/curl-crypto-plugin/.marketplace-sync.json b/plugins/curl-crypto-plugin/.marketplace-sync.json
+new file mode 100644
+index 0000000..5263458
+--- /dev/null
++++ b/plugins/curl-crypto-plugin/.marketplace-sync.json
+@@ -0,0 +1,6 @@
++{
++  "sourceRepo": "leeguooooo/curl-crypto-plugin",
++  "sourceRef": "main",
++  "sourceSha": "a30af0c5cc6350989750ea170f749396d023262f",
++  "syncedAt": "2026-03-30T05:00:03.509Z"
++}
+diff --git a/plugins/yapi-plugin/.claude-plugin/plugin.json b/plugins/yapi-plugin/.claude-plugin/plugin.json
+new file mode 100644
+index 0000000..c4d5898
+--- /dev/null
++++ b/plugins/yapi-plugin/.claude-plugin/plugin.json
+@@ -0,0 +1,8 @@
++{
++  "name": "yapi-plugin",
++  "description": "Use YApi from Claude Code through the local yapi CLI. Install it automatically, reuse existing login state, inspect interfaces, and run docs-sync workflows.",
++  "version": "0.1.0",
++  "author": {
++    "name": "leeguooooo"
++  }
++}
+diff --git a/plugins/yapi-plugin/.marketplace-sync.json b/plugins/yapi-plugin/.marketplace-sync.json
+new file mode 100644
+index 0000000..f8a2b24
+--- /dev/null
++++ b/plugins/yapi-plugin/.marketplace-sync.json
+@@ -0,0 +1,6 @@
++{
++  "sourceRepo": "leeguooooo/yapi-plugin",
++  "sourceRef": "main",
++  "sourceSha": "f70e3b9e3481d1ab4d9d8c085f3849c36c3c672d",
++  "syncedAt": "2026-03-30T04:59:59.804Z"
++}
+diff --git a/plugins/zentao-plugin/.claude-plugin/plugin.json b/plugins/zentao-plugin/.claude-plugin/plugin.json
+new file mode 100644
+index 0000000..88ea2cd
+--- /dev/null
++++ b/plugins/zentao-plugin/.claude-plugin/plugin.json
+@@ -0,0 +1,8 @@
++{
++  "name": "zentao-plugin",
++  "description": "Use ZenTao from Claude Code through the local zentao CLI. Install it automatically, reuse existing login state, inspect products and bugs, and run self-test workflows.",
++  "version": "0.1.0",
++  "author": {
++    "name": "leeguooooo"
++  }
++}
+diff --git a/plugins/zentao-plugin/.marketplace-sync.json b/plugins/zentao-plugin/.marketplace-sync.json
+new file mode 100644
+index 0000000..32d3396
+--- /dev/null
++++ b/plugins/zentao-plugin/.marketplace-sync.json
+@@ -0,0 +1,6 @@
++{
++  "sourceRepo": "leeguooooo/zentao-plugin",
++  "sourceRef": "main",
++  "sourceSha": "feafc2f0ceab539087ae6f4f1a7532cbd55d31d1",
++  "syncedAt": "2026-03-30T05:00:01.512Z"
++}
+diff --git a/scripts/sync-plugin.mjs b/scripts/sync-plugin.mjs
+index 42f7f69..f53ce41 100644
+--- a/scripts/sync-plugin.mjs
++++ b/scripts/sync-plugin.mjs
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env node
+ 
+-import { mkdtemp, rm } from 'node:fs/promises';
++import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+ import os from 'node:os';
+ import path from 'node:path';
+ import process from 'node:process';
+@@ -10,12 +10,13 @@ import { promisify } from 'node:util';
+ const execFile = promisify(execFileCallback);
+ 
+ const PLUGIN_REPO_MAP = {
+-  'leeguooooo/yapi-plugin': 'yapi-plugin',
+-  'leeguooooo/zentao-plugin': 'zentao-plugin',
+-  'leeguooooo/curl-crypto-plugin': 'curl-crypto-plugin',
++  'leeguooooo/yapi-plugin': { pluginDir: 'yapi-plugin', ref: 'main' },
++  'leeguooooo/zentao-plugin': { pluginDir: 'zentao-plugin', ref: 'main' },
++  'leeguooooo/curl-crypto-plugin': { pluginDir: 'curl-crypto-plugin', ref: 'main' },
+ };
+ 
+ const RSYNC_EXCLUDES = ['.git', 'node_modules', 'dist', '.astro', 'coverage', 'vendor/runtime.dat'];
++const SYNC_STATE_FILENAME = '.marketplace-sync.json';
+ 
+ function parseArgs(argv) {
+   const options = {};
+@@ -47,6 +48,19 @@ function normalizeRef(ref = '') {
+   return ref.replace(/^refs\/heads\//, '').replace(/^refs\/tags\//, '');
+ }
+ 
++function getConfiguredPlugins(selectedRepo = '') {
++  if (selectedRepo) {
++    const entry = PLUGIN_REPO_MAP[selectedRepo];
++    if (!entry) {
++      throw new Error(`No plugin mapping configured for ${selectedRepo}.`);
++    }
++
++    return [[selectedRepo, entry]];
++  }
++
++  return Object.entries(PLUGIN_REPO_MAP);
++}
++
+ async function run(command, args, options = {}) {
+   const result = await execFile(command, args, {
+     encoding: 'utf8',
+@@ -60,37 +74,52 @@ async function run(command, args, options = {}) {
+   };
+ }
+ 
+-async function main() {
+-  const args = parseArgs(process.argv.slice(2));
+-  const sourceRepo = args.repo;
+-  const pluginDir = args.plugin || PLUGIN_REPO_MAP[sourceRepo];
+-  const sourceRef = normalizeRef(args.ref);
+-  const sourceSha = args.sha || '';
+-
+-  if (!sourceRepo) {
+-    throw new Error('Missing required --repo argument.');
++async function readSyncState(pluginRoot) {
++  try {
++    const raw = await readFile(path.join(pluginRoot, SYNC_STATE_FILENAME), 'utf8');
++    return JSON.parse(raw);
++  } catch {
++    return null;
+   }
++}
+ 
+-  if (!pluginDir) {
+-    throw new Error(`No plugin mapping configured for ${sourceRepo}.`);
++async function writeSyncState(pluginRoot, state) {
++  await writeFile(path.join(pluginRoot, SYNC_STATE_FILENAME), `${JSON.stringify(state, null, 2)}\n`, 'utf8');
++}
++
++async function getRemoteSha(sourceRepo, sourceRef) {
++  const result = await run('git', ['ls-remote', `https://github.com/${sourceRepo}.git`, `refs/heads/${sourceRef}`]);
++  const [sha] = result.stdout.split(/\s+/, 1);
++
++  if (!sha) {
++    throw new Error(`Unable to resolve ${sourceRepo}@${sourceRef}.`);
+   }
+ 
+-  const workspace = process.cwd();
++  return sha;
++}
++
++async function syncSinglePlugin({ workspace, sourceRepo, pluginDir, sourceRef, force = false }) {
+   const targetDir = path.join(workspace, 'plugins', pluginDir);
++  const syncState = await readSyncState(targetDir);
++  const remoteSha = await getRemoteSha(sourceRepo, sourceRef);
++
++  if (!force && syncState?.sourceRepo === sourceRepo && syncState?.sourceRef === sourceRef && syncState?.sourceSha === remoteSha) {
++    return {
++      status: 'skipped',
++      sourceRepo,
++      sourceRef,
++      sourceSha: remoteSha,
++      pluginDir,
++      reason: 'already-synced',
++    };
++  }
++
+   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'marketplace-sync-'));
+   const cloneDir = path.join(tempRoot, 'source');
+ 
+   try {
+     await run('git', ['clone', '--depth', '1', '--branch', sourceRef, `https://github.com/${sourceRepo}.git`, cloneDir]);
+ 
+-    if (sourceSha) {
+-      const current = await run('git', ['rev-parse', 'HEAD'], { cwd: cloneDir });
+-      if (current.stdout !== sourceSha) {
+-        await run('git', ['fetch', '--depth', '1', 'origin', sourceSha], { cwd: cloneDir });
+-        await run('git', ['checkout', '--detach', 'FETCH_HEAD'], { cwd: cloneDir });
+-      }
+-    }
+-
+     const rsyncArgs = ['-a', '--delete'];
+     for (const exclude of RSYNC_EXCLUDES) {
+       rsyncArgs.push(`--exclude=${exclude}`);
+@@ -99,30 +128,54 @@ async function main() {
+ 
+     await run('rsync', rsyncArgs);
+ 
+-    const result = {
+-      ok: true,
++    await writeSyncState(targetDir, {
+       sourceRepo,
+       sourceRef,
+-      sourceSha,
++      sourceSha: remoteSha,
++      syncedAt: new Date().toISOString(),
++    });
++
++    return {
++      status: 'updated',
++      sourceRepo,
++      sourceRef,
++      sourceSha: remoteSha,
+       pluginDir,
+       targetDir: path.relative(workspace, targetDir),
+     };
+-
+-    if (process.env.GITHUB_OUTPUT) {
+-      const lines = [
+-        `plugin_dir=${pluginDir}`,
+-        `source_repo=${sourceRepo}`,
+-        `source_ref=${sourceRef}`,
+-      ];
+-      await import('node:fs/promises').then(({ appendFile }) =>
+-        appendFile(process.env.GITHUB_OUTPUT, `${lines.join('\n')}\n`, 'utf8')
+-      );
+-    }
+-
+-    console.log(JSON.stringify(result, null, 2));
+   } finally {
+     await rm(tempRoot, { recursive: true, force: true });
+   }
+ }
+ 
++async function main() {
++  const args = parseArgs(process.argv.slice(2));
++  const sourceRepo = args.repo || '';
++  const force = args.force === 'true';
++  const configuredPlugins = getConfiguredPlugins(sourceRepo);
++
++  const workspace = process.cwd();
++  const results = [];
++
++  for (const [repoName, entry] of configuredPlugins) {
++    results.push(
++      await syncSinglePlugin({
++        workspace,
++        sourceRepo: repoName,
++        pluginDir: args.plugin || entry.pluginDir,
++        sourceRef: normalizeRef(args.ref || entry.ref),
++        force,
++      })
++    );
++  }
++
++  const summary = {
++    ok: true,
++    updated: results.filter((item) => item.status === 'updated'),
++    skipped: results.filter((item) => item.status === 'skipped'),
++  };
++
++  console.log(JSON.stringify(summary, null, 2));
++}
++
+ await main();
