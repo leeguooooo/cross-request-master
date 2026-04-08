@@ -27,11 +27,23 @@ export type DiagramRenderMetric = {
 
 let cachedPandocAvailable: boolean | null = null;
 let cachedMmdcAvailable: boolean | null = null;
+let cachedMmdcAvailableCommand: string | null = null;
 let cachedMmdcCommand: string | null = null;
 let cachedMarkdownIt: MarkdownIt | null = null;
 let cachedPlantUmlAvailable: boolean | null = null;
 let cachedGraphvizAvailable: boolean | null = null;
 let cachedD2Available: boolean | null = null;
+let cachedMermaidRuntimeProbe: MermaidRuntimeProbeResult | null = null;
+let cachedMermaidRuntimeProbeCommand: string | null = null;
+
+type MermaidRuntimeProbeResult =
+  | { ok: true }
+  | {
+      ok: false;
+      browserMissing: boolean;
+      message: string;
+      installHint?: string;
+    };
 
 function stripAnsi(input: string): string {
   // Some TS parsers/lint setups dislike control characters in regex literals.
@@ -85,6 +97,8 @@ export function isPandocAvailable(): boolean {
 }
 
 function resolveMmdcCommand(): string {
+  const override = String(process.env.YAPI_MMDC_PATH || "").trim();
+  if (override) return override;
   if (cachedMmdcCommand) return cachedMmdcCommand;
   const binName = process.platform === "win32" ? "mmdc.cmd" : "mmdc";
   const localBin = path.resolve(__dirname, "..", "..", "node_modules", ".bin", binName);
@@ -97,13 +111,17 @@ function resolveMmdcCommand(): string {
 }
 
 export function isMmdcAvailable(): boolean {
-  if (cachedMmdcAvailable !== null) return cachedMmdcAvailable;
+  const command = resolveMmdcCommand();
+  if (cachedMmdcAvailable !== null && cachedMmdcAvailableCommand === command) {
+    return cachedMmdcAvailable;
+  }
   try {
-    execFileSync(resolveMmdcCommand(), ["--version"], { stdio: "ignore" });
+    execFileSync(command, ["--version"], { stdio: "ignore" });
     cachedMmdcAvailable = true;
   } catch {
     cachedMmdcAvailable = false;
   }
+  cachedMmdcAvailableCommand = command;
   return cachedMmdcAvailable;
 }
 
@@ -178,6 +196,81 @@ function renderMermaidWithMmdc(source: string, config?: MermaidRenderConfig): st
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
+}
+
+function getMermaidBrowserInstallHint(): string {
+  return "Install a Puppeteer browser first: npx puppeteer browsers install chrome-headless-shell";
+}
+
+function parseMermaidRuntimeProbeError(error: unknown): MermaidRuntimeProbeResult {
+  const err = error as { message?: string; stderr?: unknown; stdout?: unknown };
+  const stderrText = stripAnsi(
+    typeof err?.stderr === "string"
+      ? err.stderr
+      : Buffer.isBuffer(err?.stderr)
+        ? Buffer.from(err.stderr as Buffer).toString("utf8")
+        : "",
+  );
+  const stdoutText = stripAnsi(
+    typeof err?.stdout === "string"
+      ? err.stdout
+      : Buffer.isBuffer(err?.stdout)
+        ? Buffer.from(err.stdout as Buffer).toString("utf8")
+        : "",
+  );
+  const message = formatRenderError(error);
+  const lower = [err?.message || "", stderrText, stdoutText, message].join("\n").toLowerCase();
+  const browserMissing =
+    lower.includes("chrome-headless-shell") ||
+    lower.includes("could not find chrome") ||
+    lower.includes("could not find chromium") ||
+    lower.includes("browser was not found") ||
+    (lower.includes("puppeteer") && lower.includes("browser"));
+  if (browserMissing) {
+    return {
+      ok: false,
+      browserMissing: true,
+      message: `mmdc is installed but its Puppeteer browser is missing. ${getMermaidBrowserInstallHint()}`,
+      installHint: getMermaidBrowserInstallHint(),
+    };
+  }
+  return {
+    ok: false,
+    browserMissing: false,
+    message,
+  };
+}
+
+function getMermaidRuntimeProbeMessage(error: unknown): string {
+  const result = parseMermaidRuntimeProbeError(error);
+  return result.ok ? "unknown mermaid runtime error" : result.message;
+}
+
+export function probeMermaidRuntime(config?: {
+  look?: "classic" | "handDrawn";
+  handDrawnSeed?: number;
+}): MermaidRuntimeProbeResult {
+  const command = resolveMmdcCommand();
+  if (cachedMermaidRuntimeProbe && cachedMermaidRuntimeProbeCommand === command) {
+    return cachedMermaidRuntimeProbe;
+  }
+  if (!isMmdcAvailable()) {
+    cachedMermaidRuntimeProbe = {
+      ok: false,
+      browserMissing: false,
+      message: "mmdc (mermaid-cli) not found. Install it to render Mermaid diagrams.",
+    };
+    cachedMermaidRuntimeProbeCommand = command;
+    return cachedMermaidRuntimeProbe;
+  }
+  try {
+    renderMermaidWithMmdc("graph TD\nA[Start] --> B[Done]", config);
+    cachedMermaidRuntimeProbe = { ok: true };
+  } catch (error) {
+    cachedMermaidRuntimeProbe = parseMermaidRuntimeProbeError(error);
+  }
+  cachedMermaidRuntimeProbeCommand = command;
+  return cachedMermaidRuntimeProbe;
 }
 
 function ensurePlantUml(): void {
@@ -440,7 +533,7 @@ export function preprocessMarkdown(markdown: string, options: MarkdownRenderOpti
         return `<div class="mermaid-diagram">\n${result.svg}\n</div>`;
       } catch (error) {
         if (shouldLogMermaid) {
-          const message = formatRenderError(error);
+          const message = getMermaidRuntimeProbeMessage(error);
           logger(`Mermaid 块 #${index} 渲染失败，保持代码块原样。原因: ${message}`);
         }
         if (options.onMermaidError) {

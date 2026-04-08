@@ -8,12 +8,20 @@ import { runInstallSkill } from "../src/skill/install";
 import { findOutdatedSkillInstalls, readSkillMetadata, SKILL_METADATA_FILE } from "../src/skill/metadata";
 
 const PACKAGE_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const REPO_SKILL_PATH = path.resolve(PACKAGE_ROOT, "..", "..", "skills", "yapi", "SKILL.md");
+const TEMPLATE_SKILL_PATH = path.join(PACKAGE_ROOT, "skill-template", "SKILL.md");
 
 function makeTempDir(prefix: string): string {
   return mkdtempSync(path.join(tmpdir(), prefix));
 }
 
 describe("skill install metadata", () => {
+  test("repository skill matches published template", () => {
+    const repoSkill = fs.readFileSync(REPO_SKILL_PATH, "utf8");
+    const templateSkill = fs.readFileSync(TEMPLATE_SKILL_PATH, "utf8");
+    assert.equal(repoSkill, templateSkill);
+  });
+
   test("runInstallSkill writes metadata alongside installed skill", async () => {
     const root = makeTempDir("yapi-skill-install-");
     const yapiHome = path.join(root, ".yapi");

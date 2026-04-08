@@ -1126,8 +1126,14 @@ const CrossRequest = {
       return `# 先全局安装 yapi CLI（如已安装可跳过）
 npm install -g @leeguoo/yapi-mcp
 
-# 安装 Skill 到 Codex/Claude/Cursor
-yapi install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-email=${safeEmail} --force`;
+# 推荐：用 skills 安装 Skill 到 Codex/Claude/Cursor
+npx skills add leeguooooo/cross-request-master -y -g
+
+# 初始化 ~/.yapi/config.toml
+yapi config init --base-url=${baseUrl} --auth-mode=global --email=${safeEmail}
+
+# 首次使用推荐同步一次浏览器登录态
+yapi login --base-url=${baseUrl} --browser`;
     };
 
     const getCookieValue = (key) => {
@@ -1661,7 +1667,7 @@ yapi install-skill --yapi-base-url=${baseUrl} --yapi-auth-mode=global --yapi-ema
     const renderSkillPanel = async (container, origin) => {
       const { container: header } = renderSectionHeader(
         'Skill 一键安装（Codex/Claude/Cursor）',
-        '执行后会安装到 ~/.codex/skills/yapi、~/.claude/skills/yapi、~/.cursor/skills/yapi，并写入 ~/.yapi/config.toml。'
+        '推荐用 npx skills add 安装 Skill，再用 yapi config init 初始化 ~/.yapi/config.toml。'
       );
       container.appendChild(header);
 

@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import type {
@@ -16,7 +15,6 @@ import type {
   DocsSyncOptions,
   DocsSyncPreviewAction,
   DocsSyncPreviewItem,
-  DocsSyncProjectEnv,
   DocsSyncProjectInfo,
   DocsSyncProjectsConfig,
   YapiRequest,
@@ -45,6 +43,7 @@ import {
   isMmdcAvailable,
   isPandocAvailable,
   isPlantUmlAvailable,
+  probeMermaidRuntime,
   renderMarkdownToHtml,
 } from "../../docs/markdown";
 import { YApiAuthService } from "../../services/yapi/auth";
@@ -205,19 +204,6 @@ function saveDocsSyncDeployments(homeDir: string, config: DocsSyncDeploymentsCon
 
 // --- binding dir helpers ---
 
-function resolveBindingDir(rootDir: string, bindingDir: string): string {
-  if (!bindingDir) return rootDir;
-  return path.isAbsolute(bindingDir) ? bindingDir : path.resolve(rootDir, bindingDir);
-}
-
-function normalizeBindingDir(rootDir: string, bindingDir: string): string {
-  const resolved = resolveBindingDir(rootDir, bindingDir);
-  const relative = path.relative(rootDir, resolved);
-  if (!relative || relative === ".") return ".";
-  if (relative.startsWith("..") || path.isAbsolute(relative)) return resolved;
-  return relative;
-}
-
 function getBindingBaseDir(homeDir: string, rootDir: string, cwd: string): {
   baseDir: string;
   gitRoot: string | null;
@@ -309,6 +295,37 @@ function resolveSourceFiles(dirPath: string, mapping: DocsSyncMapping): string[]
     return resolved;
   });
 }
+
+function cloneMappingForSync(mapping: DocsSyncMapping, sourceFiles?: string[]): DocsSyncMapping {
+  const next: DocsSyncMapping = {
+    ...mapping,
+    files: mapping.files ? { ...mapping.files } : {},
+    file_hashes: mapping.file_hashes ? { ...mapping.file_hashes } : {},
+    file_render_modes: mapping.file_render_modes ? { ...mapping.file_render_modes } : {},
+  };
+  if (sourceFiles?.length) {
+    next.source_files = [...sourceFiles];
+  }
+  return next;
+}
+
+function mergeSyncState(target: DocsSyncMapping, source: DocsSyncMapping): void {
+  target.project_id = source.project_id;
+  target.catid = source.catid;
+  target.template_id = source.template_id;
+  target.files = source.files ? { ...source.files } : {};
+  target.file_hashes = source.file_hashes ? { ...source.file_hashes } : {};
+  target.file_render_modes = source.file_render_modes ? { ...source.file_render_modes } : {};
+}
+
+type DocsSyncRenderMode = "default" | "classic" | "no-mermaid";
+
+type DocsSyncRetryAttempt = {
+  mode: DocsSyncRenderMode;
+  payloadBytes?: number;
+  htmlBytes?: number;
+  message?: string;
+};
 
 // --- interface helpers ---
 
@@ -418,6 +435,7 @@ function buildDocsSyncPayloadTooLargeMessage(
   fileName: string,
   preview: DocsSyncPreviewItem,
   error: HttpStatusError,
+  attempts: DocsSyncRetryAttempt[] = [],
 ): string {
   const lines = [
     `413 Payload Too Large while syncing ${fileName}`,
@@ -438,9 +456,101 @@ function buildDocsSyncPayloadTooLargeMessage(
   } else {
     lines.push("- largest Mermaid block: none");
   }
+  attempts.forEach((attempt) => {
+    if (attempt.mode === "default") return;
+    const label =
+      attempt.mode === "classic" ? "--mermaid-classic" : "--no-mermaid";
+    if (attempt.payloadBytes && attempt.htmlBytes) {
+      lines.push(
+        `- retry with ${label}: payload=${formatBytes(attempt.payloadBytes)} html=${formatBytes(attempt.htmlBytes)}`,
+      );
+    }
+    if (attempt.message) {
+      lines.push(`- ${label} retry result: ${attempt.message}`);
+    }
+  });
   lines.push("- suggestion: run `yapi docs-sync --dry-run ...` to preview all files before upload");
   lines.push("- suggestion: split oversized Mermaid diagrams or move them into separate docs");
+  lines.push("- suggestion: if even `--no-mermaid` still hits 413, the remaining limit is on the YApi server/proxy side");
   return lines.join("\n");
+}
+
+function resolveRenderModeLabel(mode: DocsSyncRenderMode): string {
+  if (mode === "classic") return "--mermaid-classic";
+  if (mode === "no-mermaid") return "--no-mermaid";
+  return "default Mermaid rendering";
+}
+
+function resolveDocsSyncOptionsForMode(
+  options: DocsSyncOptions,
+  mode: DocsSyncRenderMode,
+): DocsSyncOptions {
+  if (mode === "classic") {
+    return {
+      ...options,
+      noMermaid: false,
+      mermaidLook: "classic",
+    };
+  }
+  if (mode === "no-mermaid") {
+    return {
+      ...options,
+      noMermaid: true,
+    };
+  }
+  return { ...options };
+}
+
+function resolveInitialRenderMode(
+  options: DocsSyncOptions,
+  rememberedMode?: "classic" | "no-mermaid",
+): DocsSyncRenderMode {
+  if (options.noMermaid) return "no-mermaid";
+  if (options.mermaidLook === "classic") return "classic";
+  if (rememberedMode) return rememberedMode;
+  return "default";
+}
+
+function resolveRetryModes(
+  mode: DocsSyncRenderMode,
+  hasMermaidBlocks: boolean,
+): DocsSyncRenderMode[] {
+  if (!hasMermaidBlocks) return [];
+  if (mode === "default") return ["classic", "no-mermaid"];
+  if (mode === "classic") return ["no-mermaid"];
+  return [];
+}
+
+function renderDocsSyncHtml(
+  markdown: string,
+  options: DocsSyncOptions,
+  logPrefix: string,
+): {
+  html: string;
+  mermaidFailed: boolean;
+  diagramFailed: boolean;
+  diagramMetrics: DiagramRenderMetric[];
+} {
+  let mermaidFailed = false;
+  let diagramFailed = false;
+  const diagramMetrics: DiagramRenderMetric[] = [];
+  const html = renderMarkdownToHtml(markdown, {
+    noMermaid: options.noMermaid,
+    logMermaid: true,
+    mermaidLook: options.mermaidLook,
+    mermaidHandDrawnSeed: options.mermaidHandDrawnSeed,
+    logger: (message) => console.log(`${logPrefix} ${message}`),
+    onDiagramRendered: (metric) => {
+      diagramMetrics.push(metric);
+    },
+    onMermaidError: () => {
+      mermaidFailed = true;
+    },
+    onDiagramError: () => {
+      diagramFailed = true;
+    },
+  });
+  return { html, mermaidFailed, diagramFailed, diagramMetrics };
 }
 
 async function addInterface(
@@ -565,7 +675,19 @@ async function syncDocsDir(
       fileInfos[relName] = { docId: Number(docId), apiPath: resolvedPath };
     }
 
-    const contentHash = buildDocsSyncHash(markdown, options);
+    const logPrefix = `[docs-sync:${relName}]`;
+    const hasMermaidBlocks = /```mermaid\s*\r?\n/i.test(markdown);
+    const rememberedMode =
+      !options.noMermaid && options.mermaidLook === "handDrawn"
+        ? mapping.file_render_modes?.[relName]
+        : undefined;
+    let appliedMode = resolveInitialRenderMode(options, rememberedMode);
+    let effectiveOptions = resolveDocsSyncOptionsForMode(options, appliedMode);
+    if (rememberedMode) {
+      console.log(`${logPrefix} using remembered fallback: ${resolveRenderModeLabel(appliedMode)}.`);
+    }
+
+    let contentHash = buildDocsSyncHash(markdown, effectiveOptions);
     const previousHash = mapping.file_hashes[relName];
     const currentTitle = docId ? byId[String(docId)]?.title : "";
     const titleToUpdate = !docId
@@ -586,26 +708,11 @@ async function syncDocsDir(
       continue;
     }
 
-    const logPrefix = `[docs-sync:${relName}]`;
-    let mermaidFailed = false;
-    let diagramFailed = false;
-    const diagramMetrics: DiagramRenderMetric[] = [];
-    const html = renderMarkdownToHtml(markdown, {
-      noMermaid: options.noMermaid,
-      logMermaid: true,
-      mermaidLook: options.mermaidLook,
-      mermaidHandDrawnSeed: options.mermaidHandDrawnSeed,
-      logger: (message) => console.log(`${logPrefix} ${message}`),
-      onDiagramRendered: (metric) => {
-        diagramMetrics.push(metric);
-      },
-      onMermaidError: () => {
-        mermaidFailed = true;
-      },
-      onDiagramError: () => {
-        diagramFailed = true;
-      },
-    });
+    let { html, mermaidFailed, diagramFailed, diagramMetrics } = renderDocsSyncHtml(
+      markdown,
+      effectiveOptions,
+      logPrefix,
+    );
 
     if (shouldSkipUnchanged) {
       action = "skip";
@@ -633,10 +740,57 @@ async function syncDocsDir(
         await updateInterface(docId, titleToUpdate, markdown, html, request);
       } catch (error) {
         if (error instanceof HttpStatusError && error.status === 413) {
-          throw new Error(buildDocsSyncPayloadTooLargeMessage(relName, preview, error));
+          const attempts: DocsSyncRetryAttempt[] = [];
+          let resolved = false;
+          for (const retryMode of resolveRetryModes(appliedMode, hasMermaidBlocks)) {
+            console.warn(
+              `${logPrefix} 413 received, retrying with ${resolveRenderModeLabel(retryMode)} for this file.`,
+            );
+            const retryAttempt: DocsSyncRetryAttempt = { mode: retryMode };
+            attempts.push(retryAttempt);
+            try {
+              const retryOptions = resolveDocsSyncOptionsForMode(options, retryMode);
+              const retryResult = renderDocsSyncHtml(markdown, retryOptions, logPrefix);
+              const retryPayload = buildUpdatePayload(
+                docId,
+                titleToUpdate,
+                markdown,
+                retryResult.html,
+              );
+              retryAttempt.payloadBytes = Buffer.byteLength(JSON.stringify(retryPayload), "utf8");
+              retryAttempt.htmlBytes = Buffer.byteLength(retryResult.html, "utf8");
+              await updateInterface(docId, titleToUpdate, markdown, retryResult.html, request);
+              html = retryResult.html;
+              mermaidFailed = retryResult.mermaidFailed;
+              diagramFailed = retryResult.diagramFailed;
+              diagramMetrics = retryResult.diagramMetrics;
+              appliedMode = retryMode;
+              effectiveOptions = retryOptions;
+              contentHash = buildDocsSyncHash(markdown, effectiveOptions);
+              resolved = true;
+              break;
+            } catch (retryError) {
+              retryAttempt.message =
+                retryError instanceof Error ? retryError.message : String(retryError);
+            }
+          }
+          if (!resolved) {
+            throw new Error(buildDocsSyncPayloadTooLargeMessage(relName, preview, error, attempts));
+          }
+        } else {
+          throw error;
         }
-        throw error;
       }
+    }
+    if (appliedMode === "default") {
+      if (mapping.file_render_modes) {
+        delete mapping.file_render_modes[relName];
+      }
+    } else {
+      if (!mapping.file_render_modes || typeof mapping.file_render_modes !== "object") {
+        mapping.file_render_modes = {};
+      }
+      mapping.file_render_modes[relName] = appliedMode;
     }
     if (docId && !mermaidFailed && !diagramFailed) {
       mapping.file_hashes[relName] = contentHash;
@@ -925,6 +1079,14 @@ export async function runDocsSync(options: DocsSyncOptions): Promise<number> {
     if (!options.noMermaid && !isMmdcAvailable()) {
       console.warn("mmdc not found, Mermaid blocks will stay as code.");
       console.warn("Install mermaid-cli: npm i -g @mermaid-js/mermaid-cli");
+    } else if (!options.noMermaid) {
+      const mermaidRuntime = probeMermaidRuntime({
+        look: options.mermaidLook,
+        handDrawnSeed: options.mermaidHandDrawnSeed,
+      });
+      if (!mermaidRuntime.ok) {
+        console.warn(`mermaid runtime check failed: ${mermaidRuntime.message}`);
+      }
     }
     if (!isPlantUmlAvailable()) {
       console.warn("plantuml not found, PlantUML blocks will be removed from HTML.");
@@ -1202,7 +1364,8 @@ export async function runDocsSync(options: DocsSyncOptions): Promise<number> {
           throw new Error(`dir not found for binding ${name}: ${dirPath}`);
         }
 
-        const result = await syncDocsDir(dirPath, binding, options, request);
+        const runtimeBinding = cloneMappingForSync(binding, options.sourceFiles);
+        const result = await syncDocsDir(dirPath, runtimeBinding, options, request);
         if (options.dryRun) {
           console.log(`dry-run preview binding=${name}`);
           result.previews.forEach((item) => console.log(buildDocsSyncPreviewLine(item)));
@@ -1210,6 +1373,7 @@ export async function runDocsSync(options: DocsSyncOptions): Promise<number> {
         console.log(
           `synced=${result.updated} created=${result.created} skipped=${result.skipped} preview_only=${result.previewOnly} binding=${name} dir=${dirPath}`,
         );
+        mergeSyncState(binding, runtimeBinding);
         bindingResults[name] = { binding, files: result.files };
       }
 
@@ -1225,13 +1389,15 @@ export async function runDocsSync(options: DocsSyncOptions): Promise<number> {
         }
 
         const { mapping, mappingPath } = loadMapping(dirPath);
-        const result = await syncDocsDir(dirPath, mapping, options, request);
+        const runtimeMapping = cloneMappingForSync(mapping, options.sourceFiles);
+        const result = await syncDocsDir(dirPath, runtimeMapping, options, request);
         if (options.dryRun) {
           console.log(`dry-run preview dir=${dirPath}`);
           result.previews.forEach((item) => console.log(buildDocsSyncPreviewLine(item)));
         }
 
         if (!options.dryRun) {
+          mergeSyncState(mapping, runtimeMapping);
           saveMapping(mapping, mappingPath);
         }
 

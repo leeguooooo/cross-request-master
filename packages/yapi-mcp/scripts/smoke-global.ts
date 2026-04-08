@@ -11,12 +11,6 @@ function getArgValue(name: string): string | undefined {
   return undefined;
 }
 
-function requireEnv(key: string): string {
-  const v = process.env[key];
-  if (!v) throw new Error(`Missing env ${key}`);
-  return v;
-}
-
 function toEnvRecord(env: NodeJS.ProcessEnv): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(env)) {

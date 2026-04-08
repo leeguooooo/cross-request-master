@@ -14,6 +14,7 @@ import { fetchWithTimeout } from "./cli/http";
 import { findOutdatedSkillInstalls } from "./skill/metadata";
 import { runLogin } from "./cli/commands/login";
 import { runLogout } from "./cli/commands/logout";
+import { runConfig } from "./cli/commands/config";
 import { runWhoami } from "./cli/commands/whoami";
 import { runSearch } from "./cli/commands/search";
 import { runGroup } from "./cli/commands/group";
@@ -90,6 +91,9 @@ function toDocsSyncOptions(argv: Record<string, unknown>): DocsSyncOptions {
     timeout: argv.timeout as number | undefined,
     dirs: rawDirs.length ? rawDirs : positionalDirs,
     bindings: argv.binding ? (Array.isArray(argv.binding) ? argv.binding as string[] : [argv.binding as string]) : [],
+    sourceFiles: argv["source-file"]
+      ? (Array.isArray(argv["source-file"]) ? argv["source-file"] as string[] : [argv["source-file"] as string])
+      : [],
     dryRun: (argv.dryRun || argv["dry-run"]) as boolean | undefined,
     noMermaid: (argv.noMermaid || argv["no-mermaid"]) as boolean | undefined,
     mermaidLook: argv["mermaid-classic"] ? "classic" : "handDrawn",
@@ -101,7 +105,7 @@ function toDocsSyncOptions(argv: Record<string, unknown>): DocsSyncOptions {
 function toDocsSyncBindArgs(argv: Record<string, unknown>): DocsSyncBindArgs {
   return {
     name: (argv.name || argv.binding) as string | undefined,
-    dir: argv.dir as string | undefined,
+    dir: argv.dir ? (Array.isArray(argv.dir) ? argv.dir[0] as string : argv.dir as string) : undefined,
     projectId: argv["project-id"] !== undefined ? Number(argv["project-id"]) : undefined,
     catId: argv.catid !== undefined ? Number(argv.catid) : (argv["cat-id"] !== undefined ? Number(argv["cat-id"]) : undefined),
     templateId: argv["template-id"] !== undefined ? Number(argv["template-id"]) : undefined,
@@ -180,7 +184,7 @@ function warnIfInstalledSkillsOutdated(options: { skip?: boolean }): void {
     .map((item) => `${item.label}@${item.installedVersion || "unknown"}`)
     .join(", ");
   console.warn(
-    `skill update available: installed ${summary}, current ${currentVersion}. Run: yapi install-skill --force`,
+    `skill update available: installed ${summary}, current ${currentVersion}. Run: npx skills add leeguooooo/cross-request-master -y -g`,
   );
 }
 
@@ -214,6 +218,25 @@ async function main(): Promise<number> {
     .help("help")
     .alias("h", "help")
     .strict(false)
+    .command(
+      "config [action]",
+      "Config operations (init)",
+      (y: ReturnType<typeof yargs>) =>
+        y
+          .positional("action", { type: "string", default: "init" })
+          .option("config", { type: "string", describe: "config file path" })
+          .option("base-url", { type: "string", describe: "YApi base URL" })
+          .option("auth-mode", { type: "string", describe: "token or global" })
+          .option("email", { type: "string", describe: "login email for global mode" })
+          .option("password", { type: "string", describe: "login password for global mode" })
+          .option("token", { type: "string", describe: "project token" })
+          .option("project-id", { type: "string", describe: "default project id" }),
+      async (argv: Record<string, unknown>) => {
+        commandHandled = true;
+        const action = String(argv.action || "init").toLowerCase();
+        process.exitCode = await runConfig(action, toOptions(argv));
+      },
+    )
     .command(
       "login",
       "Login to YApi",

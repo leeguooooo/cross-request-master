@@ -8,6 +8,7 @@
 - `CHROME_WEB_STORE_CHECKLIST.md`：提交前快速核对清单
 - `TESTING.md`：手工测试场景与排查步骤
 - `ROADMAP.md`：后续技术演进计划
+- `TEAM_AI_SYSTEM.md`：团队 AI 体系搭建指南
 
 ## 归档文档
 

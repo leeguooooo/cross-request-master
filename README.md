@@ -7,7 +7,7 @@
 面向 API 开发/测试的 Chrome 扩展：绕过 CORS 发请求、自动生成 cURL，并对 YApi「运行」页做增强（内嵌 cURL、路径参数 `{param}` 引导填写）。
 
 本仓库包含生态内的 CLI/Skill 子项目：`packages/yapi-mcp`（发布包名保持为 `@leeguoo/yapi-mcp`，MCP 配置作为兼容方案保留，不影响扩展打包）。
-`yapi-mcp` 已支持浏览器登录同步 Cookie（`yapi login --browser`），可用于仅支持 SSO/无法账号密码登录的 YApi 场景。
+当前推荐安装链路是 `npx skills add leeguooooo/cross-request-master -y -g` 安装 Skill，再用 `yapi config init` 初始化 `~/.yapi/config.toml`。`yapi-mcp` 已支持浏览器登录同步 Cookie（`yapi login --browser`），可用于仅支持 SSO/无法账号密码登录的 YApi 场景。
 
 
 <p align="center">
@@ -32,7 +32,7 @@
 - 内嵌 cURL：YApi「运行」页 URL 下方展示可复制的 cURL 命令
 - 路径参数引导：URL 含 `{param}` 时提示填写，避免请求失败
 - 固定 Header：为跨域请求自动追加自定义 Header
-- YApi 工具箱：Skill 一键安装（推荐）/ MCP 配置（兼容）/ CLI 使用与 docs-sync
+- YApi 工具箱：Skill 一键安装（推荐，支持 `npx skills add`）/ MCP 配置（兼容）/ CLI 使用与 docs-sync
 - 复制给 AI：把当前接口信息整理为 Markdown 一键复制
 - 现代请求支持：优先 `fetch` / Promise 工作流，兼容历史 `$.ajax`
 - Manifest V3：兼容最新 Chrome 扩展标准
@@ -57,8 +57,19 @@ cd cross-request-master
 安装后直接在 YApi「运行」页发送请求即可，扩展会自动处理跨域、显示 cURL，并把 JSON 响应解析为对象供脚本使用。
 
 在接口详情页（基本信息区域右上角）额外提供：
-- **YApi 工具箱**：包含 Skill 一键安装（推荐，支持 Codex/Claude/Cursor）、MCP 配置（兼容）、CLI 使用与 docs-sync 说明（自动拼好命令）
+- **YApi 工具箱**：包含 Skill 一键安装（推荐，支持 Codex/Claude/Cursor 与 `npx skills add`）、MCP 配置（兼容）、CLI 使用与 docs-sync 说明（自动拼好命令）
 - **复制给 AI**：把当前接口信息整理成 Markdown（仅接口相关字段）复制到剪贴板
+
+如果你要在本机直接装好 Skill + CLI，当前最短路径是：
+
+```bash
+npm install -g @leeguoo/yapi-mcp
+npx skills add leeguooooo/cross-request-master -y -g
+yapi config init --base-url=https://your-yapi-domain.com --auth-mode=global --email=your_email@example.com
+yapi login --base-url=https://your-yapi-domain.com --browser
+```
+
+更完整说明见 [`packages/yapi-mcp/README.md`](./packages/yapi-mcp/README.md)。
 
 ### ClawHub Skill 同步
 

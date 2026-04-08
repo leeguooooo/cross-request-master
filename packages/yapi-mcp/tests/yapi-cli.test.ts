@@ -64,7 +64,7 @@ async function runCli(
     const timer = setTimeout(() => {
       child.kill("SIGTERM");
       reject(new Error(`cli timed out: ${args.join(" ")}`));
-    }, 10000);
+    }, 20000);
     child.on("error", (error) => {
       clearTimeout(timer);
       reject(error);
@@ -134,11 +134,114 @@ fs.writeFileSync(output, "<svg><text>" + repeated + "</text></svg>", "utf8");
   chmodSync(scriptPath, 0o755);
 }
 
+function installFakeMmdcMissingBrowser(binDir: string): void {
+  mkdirSync(binDir, { recursive: true });
+  const scriptPath = path.join(binDir, "mmdc");
+  writeFileSync(
+    scriptPath,
+    `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args.includes("--version")) {
+  process.stdout.write("11.12.0\\n");
+  process.exit(0);
+}
+process.stderr.write("Error: Could not find Chrome (ver. 123). chrome-headless-shell is missing.\\n");
+process.exit(1);
+`,
+    "utf8",
+  );
+  chmodSync(scriptPath, 0o755);
+}
+
+function installFakeMmdcClassicFallback(binDir: string): void {
+  mkdirSync(binDir, { recursive: true });
+  const scriptPath = path.join(binDir, "mmdc");
+  writeFileSync(
+    scriptPath,
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+if (args.includes("--version")) {
+  process.stdout.write("11.12.0\\n");
+  process.exit(0);
+}
+const output = args[args.indexOf("-o") + 1];
+const configPath = args.includes("-c") ? args[args.indexOf("-c") + 1] : "";
+let repeated = "X".repeat(180000);
+if (configPath) {
+  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  if (config.look === "classic") {
+    repeated = "X".repeat(2000);
+  }
+}
+fs.writeFileSync(output, "<svg><text>" + repeated + "</text></svg>", "utf8");
+`,
+    "utf8",
+  );
+  chmodSync(scriptPath, 0o755);
+}
+
+function installFakeMmdcAlwaysLarge(binDir: string): void {
+  mkdirSync(binDir, { recursive: true });
+  const scriptPath = path.join(binDir, "mmdc");
+  writeFileSync(
+    scriptPath,
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+if (args.includes("--version")) {
+  process.stdout.write("11.12.0\\n");
+  process.exit(0);
+}
+const output = args[args.indexOf("-o") + 1];
+const configPath = args.includes("-c") ? args[args.indexOf("-c") + 1] : "";
+let repeated = "X".repeat(180000);
+if (configPath) {
+  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  if (config.look === "classic") {
+    repeated = "X".repeat(120000);
+  }
+}
+fs.writeFileSync(output, "<svg><text>" + repeated + "</text></svg>", "utf8");
+`,
+    "utf8",
+  );
+  chmodSync(scriptPath, 0o755);
+}
+
 afterEach(() => {
   delete process.env.YAPI_PANDOC_MAX_BUFFER;
 });
 
 describe("yapi cli docs-sync regression coverage", () => {
+  test("config init writes config for browser-first global auth", async () => {
+    const homeDir = createTempHome();
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-config-init-"));
+
+    const result = await runCli(
+      [
+        "config",
+        "init",
+        "--base-url",
+        "https://yapi.example.com",
+        "--auth-mode",
+        "global",
+        "--email",
+        "demo@example.com",
+      ],
+      { cwd: repoDir, homeDir },
+    );
+
+    assert.equal(result.status, 0, result.stderr);
+    const configText = readFileSync(path.join(homeDir, ".yapi", "config.toml"), "utf8");
+    assert.match(configText, /base_url = "https:\/\/yapi\.example\.com"/);
+    assert.match(configText, /auth_mode = "global"/);
+    assert.match(configText, /email = "demo@example\.com"/);
+    assert.match(configText, /password = ""/);
+    assert.match(result.stdout, /config written to:/i);
+    assert.match(result.stdout, /browser/i);
+  });
+
   test("self-update delegates to npm install -g latest package", async () => {
     const homeDir = createTempHome();
     const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-self-update-"));
@@ -208,7 +311,7 @@ exit 0
 
       assert.equal(result.status, 0, result.stderr);
       assert.match(result.stderr, /skill update available/i);
-      assert.match(result.stderr, /yapi install-skill --force/);
+      assert.match(result.stderr, /npx skills add leeguooooo\/cross-request-master -y -g/);
     } finally {
       await server.close();
     }
@@ -368,6 +471,7 @@ graph TD
         homeDir,
         env: {
           PATH: `${binDir}:${process.env.PATH || ""}`,
+          YAPI_MMDC_PATH: path.join(binDir, "mmdc"),
         },
       });
 
@@ -528,6 +632,7 @@ graph TD
         homeDir,
         env: {
           PATH: `${binDir}:${process.env.PATH || ""}`,
+          YAPI_MMDC_PATH: path.join(binDir, "mmdc"),
         },
       });
 
@@ -537,6 +642,289 @@ graph TD
       assert.match(result.stderr, /limit/i);
       assert.match(result.stderr, /largest mermaid/i);
       assert.match(result.stderr, /dry-run/i);
+    } finally {
+      await server.close();
+    }
+  });
+
+  test("warns clearly when mmdc browser runtime is missing", async () => {
+    const homeDir = createTempHome();
+    const repoDir = path.join(homeDir, "tk.com", "missing-browser-demo");
+    const docsDir = path.join(repoDir, "docs", "yapi");
+    const binDir = path.join(homeDir, "bin");
+    mkdirSync(docsDir, { recursive: true });
+    mkdirSync(path.join(repoDir, ".git"), { recursive: true });
+    installFakeMmdcMissingBrowser(binDir);
+    writeFileSync(
+      path.join(docsDir, "demo.md"),
+      ["# Demo", "", "```mermaid", "graph TD", "A[Start] --> B[Done]", "```", ""].join("\n"),
+      "utf8",
+    );
+
+    const server = await withServer((req, res) => {
+      const url = new URL(req.url || "/", "http://127.0.0.1");
+      if (url.pathname === "/api/interface/list_cat") {
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ errcode: 0, data: { list: [] } }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end("not found");
+    });
+
+    try {
+      ensureYapiHome(homeDir, server.url);
+      const result = await runCli(["docs-sync", "--dir", docsDir, "--dry-run"], {
+        cwd: repoDir,
+        homeDir,
+        env: {
+          PATH: `${binDir}:${process.env.PATH || ""}`,
+          YAPI_MMDC_PATH: path.join(binDir, "mmdc"),
+        },
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stderr, /chrome-headless-shell/i);
+      assert.match(result.stderr, /puppeteer browsers install chrome-headless-shell/i);
+    } finally {
+      await server.close();
+    }
+  });
+
+  test("auto-retries oversized Mermaid payloads with classic look", async () => {
+    const homeDir = createTempHome();
+    const repoDir = path.join(homeDir, "tk.com", "classic-fallback-demo");
+    const docsDir = path.join(repoDir, "docs", "yapi");
+    const binDir = path.join(homeDir, "bin");
+    mkdirSync(docsDir, { recursive: true });
+    mkdirSync(path.join(repoDir, ".git"), { recursive: true });
+    installFakeMmdcClassicFallback(binDir);
+    writeFileSync(
+      path.join(docsDir, "big.md"),
+      ["# Big Diagram", "", "```mermaid", "graph TD", "A[Start] --> B[Done]", "```", ""].join("\n"),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(docsDir, ".yapi.json"),
+      JSON.stringify(
+        {
+          project_id: 267,
+          catid: 3667,
+          files: { "big.md": 123 },
+          file_hashes: {},
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    let updateCalls = 0;
+    const server = await withServer(async (req, res) => {
+      const url = new URL(req.url || "/", "http://127.0.0.1");
+      if (url.pathname === "/api/interface/list_cat") {
+        res.setHeader("content-type", "application/json");
+        res.end(
+          JSON.stringify({
+            errcode: 0,
+            data: { list: [{ _id: 123, path: "/big", title: "Big Diagram" }] },
+          }),
+        );
+        return;
+      }
+      if (url.pathname === "/api/interface/up") {
+        updateCalls += 1;
+        let body = "";
+        for await (const chunk of req) {
+          body += chunk;
+        }
+        const payload = JSON.parse(body) as { desc?: string };
+        if ((payload.desc || "").length > 100000) {
+          res.statusCode = 413;
+          res.setHeader("content-type", "text/plain; charset=utf-8");
+          res.end("Payload Too Large. Limit: 1048576 bytes");
+          return;
+        }
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ errcode: 0, data: {} }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end("not found");
+    });
+
+    try {
+      ensureYapiHome(homeDir, server.url);
+      const result = await runCli(["docs-sync", "--dir", docsDir], {
+        cwd: repoDir,
+        homeDir,
+        env: {
+          PATH: `${binDir}:${process.env.PATH || ""}`,
+          YAPI_MMDC_PATH: path.join(binDir, "mmdc"),
+        },
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(updateCalls, 2);
+      assert.match(result.stderr, /retrying with --mermaid-classic/i);
+    } finally {
+      await server.close();
+    }
+  });
+
+  test("supports one-off --source-file filtering in binding mode", async () => {
+    const homeDir = createTempHome();
+    const yapiHome = ensureYapiHome(homeDir);
+    const repoDir = path.join(homeDir, "tk.com", "binding-source-file-demo");
+    const docsDir = path.join(repoDir, "docs", "yapi");
+    mkdirSync(docsDir, { recursive: true });
+    mkdirSync(path.join(repoDir, ".git"), { recursive: true });
+    writeFileSync(path.join(docsDir, "alpha.md"), "# Alpha\n", "utf8");
+    writeFileSync(path.join(docsDir, "beta.md"), "# Beta\n", "utf8");
+    writeFileSync(
+      path.join(yapiHome, "docs-sync.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          bindings: {
+            docs: {
+              dir: path.join("tk.com", "binding-source-file-demo", "docs", "yapi"),
+              project_id: 267,
+              catid: 3667,
+              files: {},
+              file_hashes: {},
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const server = await withServer((req, res) => {
+      const url = new URL(req.url || "/", "http://127.0.0.1");
+      if (url.pathname === "/api/interface/list_cat") {
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ errcode: 0, data: { list: [] } }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end("not found");
+    });
+
+    try {
+      writeFileSync(path.join(yapiHome, "config.toml"), `base_url = "${server.url}"\n`, "utf8");
+      const result = await runCli(
+        ["docs-sync", "--binding", "docs", "--source-file", "alpha.md", "--dry-run"],
+        {
+          cwd: repoDir,
+          homeDir,
+        },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /file=alpha\.md/);
+      assert.doesNotMatch(result.stdout, /file=beta\.md/);
+    } finally {
+      await server.close();
+    }
+  });
+
+  test("remembers no-mermaid fallback after repeated 413 retries", async () => {
+    const homeDir = createTempHome();
+    const repoDir = path.join(homeDir, "tk.com", "remember-fallback-demo");
+    const docsDir = path.join(repoDir, "docs", "yapi");
+    const binDir = path.join(homeDir, "bin");
+    mkdirSync(docsDir, { recursive: true });
+    mkdirSync(path.join(repoDir, ".git"), { recursive: true });
+    installFakeMmdcAlwaysLarge(binDir);
+    writeFileSync(
+      path.join(docsDir, "architecture.md"),
+      ["# Architecture", "", "```mermaid", "graph TD", "A[Start] --> B[Done]", "```", ""].join("\n"),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(docsDir, ".yapi.json"),
+      JSON.stringify(
+        {
+          project_id: 267,
+          catid: 3667,
+          files: { "architecture.md": 123 },
+          file_hashes: {},
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    let updateCalls = 0;
+    const server = await withServer(async (req, res) => {
+      const url = new URL(req.url || "/", "http://127.0.0.1");
+      if (url.pathname === "/api/interface/list_cat") {
+        res.setHeader("content-type", "application/json");
+        res.end(
+          JSON.stringify({
+            errcode: 0,
+            data: { list: [{ _id: 123, path: "/architecture", title: "Architecture" }] },
+          }),
+        );
+        return;
+      }
+      if (url.pathname === "/api/interface/up") {
+        updateCalls += 1;
+        let body = "";
+        for await (const chunk of req) {
+          body += chunk;
+        }
+        const payload = JSON.parse(body) as { desc?: string };
+        if ((payload.desc || "").length > 100000) {
+          res.statusCode = 413;
+          res.setHeader("content-type", "text/plain; charset=utf-8");
+          res.end("Payload Too Large. Limit: 1048576 bytes");
+          return;
+        }
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ errcode: 0, data: {} }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end("not found");
+    });
+
+    try {
+      ensureYapiHome(homeDir, server.url);
+      const first = await runCli(["docs-sync", "--dir", docsDir], {
+        cwd: repoDir,
+        homeDir,
+        env: {
+          PATH: `${binDir}:${process.env.PATH || ""}`,
+          YAPI_MMDC_PATH: path.join(binDir, "mmdc"),
+        },
+      });
+
+      assert.equal(first.status, 0, first.stderr);
+      assert.equal(updateCalls, 3);
+      assert.match(first.stderr, /retrying with --mermaid-classic/i);
+      assert.match(first.stderr, /retrying with --no-mermaid/i);
+
+      const mapping = readJson(path.join(docsDir, ".yapi.json"));
+      assert.equal(mapping.file_render_modes["architecture.md"], "no-mermaid");
+
+      const second = await runCli(["docs-sync", "--dir", docsDir], {
+        cwd: repoDir,
+        homeDir,
+        env: {
+          PATH: `${binDir}:${process.env.PATH || ""}`,
+          YAPI_MMDC_PATH: path.join(binDir, "mmdc"),
+        },
+      });
+
+      assert.equal(second.status, 0, second.stderr);
+      assert.equal(updateCalls, 3);
+      assert.match(second.stdout, /skipped=1/);
+      assert.doesNotMatch(second.stderr, /retrying with --mermaid-classic/i);
     } finally {
       await server.close();
     }

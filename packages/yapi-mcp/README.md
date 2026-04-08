@@ -54,27 +54,46 @@ Yapi Auto MCP Server 是一个基于 [Model Context Protocol](https://modelconte
 
 ### 推荐方式：用 Cross Request Master 一键安装 Skill（免手动找 Token）
 
-如果你日常就在浏览器里使用 YApi，推荐安装 Chrome 扩展 [cross-request-master](https://github.com/leeguooooo/cross-request-master)。它会在 YApi 接口详情页（基本信息区域右上角）提供 **「YApi 工具箱」** 按钮，包含 Skill 一键安装（推荐）/MCP 配置（兼容）/CLI docs-sync 说明；另外保留 **「复制给 AI」** 一键复制接口 Markdown：
+如果你日常就在浏览器里使用 YApi，推荐安装 Chrome 扩展 [cross-request-master](https://github.com/leeguooooo/cross-request-master)。它会在 YApi 接口详情页（基本信息区域右上角）提供 **「YApi 工具箱」** 按钮，包含 Skill 一键安装（推荐，支持 `npx skills add`）/MCP 配置（兼容）/CLI docs-sync 说明；另外保留 **「复制给 AI」** 一键复制接口 Markdown：
 
-- Skill 一键安装（推荐）：生成 Codex/Claude Skill，并写入全局配置 `~/.yapi/config.toml`
+- Skill 一键安装（推荐）：优先生成 `npx skills add` 命令安装仓库导出的 Skill，再配合 `yapi config init` 初始化全局配置；如需一步写入配置，保留 `yapi install-skill` 兼容路径
 - MCP 配置（兼容）：使用 `--yapi-auth-mode=global`（账号密码），默认会自动懒登录；也可手动调用一次 `yapi_update_token` 预热缓存
 - CLI 使用与 docs-sync：提供本地 CLI 安装命令和文档同步示例
 
 ### Skill 一键安装与 CLI
 
-一条命令把 Skill 安装到 Codex / Claude Code / Cursor，并写入 `~/.yapi/config.toml`（缺省会提示输入）：
+推荐先用 `skills` 安装仓库导出的 Skill：
 
 ```bash
-# 推荐：全局安装后使用 yapi 命令
-npm install -g @leeguoo/yapi-mcp
+# 推荐：把仓库里的 yapi Skill 装到全局 agent 目录
+npx skills add leeguooooo/cross-request-master -y -g
+```
 
+这条命令只负责安装 Skill 文件，不会写入 `~/.yapi/config.toml`。如果你还没有本地配置，继续执行下面任一方式：
+
+```bash
+# 方式一：推荐单独初始化配置
+npm install -g @leeguoo/yapi-mcp
+yapi config init \
+  --base-url=https://your-yapi-domain.com \
+  --auth-mode=global \
+  --email=your_email@example.com
+
+# 如未保存密码，首次再同步一次浏览器登录态
+yapi login --base-url=https://your-yapi-domain.com --browser
+```
+
+也可以继续使用兼容命令，在安装 Skill 的同时写入 `~/.yapi/config.toml`：
+
+```bash
+npm install -g @leeguoo/yapi-mcp
 yapi install-skill \
   --yapi-base-url=https://your-yapi-domain.com \
   --yapi-email=your_email@example.com \
   --yapi-password=your_password
 ```
 
-也可以用 npx 临时运行（不全局安装）：
+也可以用 npx 临时运行兼容命令（不全局安装）：
 
 ```bash
 npx -y -p @leeguoo/yapi-mcp yapi install-skill \
@@ -83,22 +102,20 @@ npx -y -p @leeguoo/yapi-mcp yapi install-skill \
   --yapi-password=your_password
 ```
 
-Skill 安装目录：
-- Codex: `~/.codex/skills/yapi/`
-- Claude Code: `~/.claude/skills/yapi/`
-- Cursor: `~/.cursor/skills/yapi/`
+`skills` CLI 会维护一份规范化安装副本，并按目标 agent 建立链接/映射。当前全局安装通常可在 `~/.agents/skills/yapi/` 看到 canonical copy，具体 agent 侧落点由 `skills` CLI 决定。
 
-Skill 模板来源：`packages/yapi-mcp/skill-template/SKILL.md`（发布后从包内复制到技能目录）。
+仓库导出的 Skill 来源：`skills/yapi/SKILL.md`（供 `npx skills add` 发现）。
+npm 包内安装模板来源：`packages/yapi-mcp/skill-template/SKILL.md`（供 `yapi install-skill` 复制到技能目录）。
 后续当 CLI 升级而本地 Skill 仍是旧版本时，`yapi` 会自动提示：
 
 ```bash
-skill update available: installed Codex@0.3.24, current 0.3.25. Run: yapi install-skill --force
+skill update available: installed Codex@0.3.24, current 0.3.25. Run: npx skills add leeguooooo/cross-request-master -y -g
 ```
 
 也可以手动重装 Skill：
 
 ```bash
-yapi install-skill --force
+npx skills add leeguooooo/cross-request-master -y -g
 ```
 
 ### CLI 使用
@@ -106,13 +123,14 @@ yapi install-skill --force
 推荐全局安装后直接使用 `yapi` 命令（走同一份 `~/.yapi/config.toml`）：
 
 当前 CLI 能力补充：
+- 支持 `yapi config init`：单独初始化/更新 `~/.yapi/config.toml`，适合和 `npx skills add` 组合使用
 - 支持 `yapi login --browser`：通过 `agent-browser-stealth` 打开页面，登录后自动同步 `_yapi_token/_yapi_uid` 到本地缓存
 - 默认打开 `base-url` 首页（不强制 `/login`），适配“已登录可直接拿 Cookie”的场景
 - 支持 `yapi login --login-url <url>` 指定登录页
 - 支持 `yapi logout` 清理当前 `base_url` 对应的全局会话缓存
 - 适用于 SSO/额外验证体系：无法使用账号密码时可只走浏览器登录
 - 支持 `yapi self-update` 升级全局 CLI
-- 当已安装的 Skill 版本落后于当前 CLI 时，会自动提示重新执行 `yapi install-skill --force`
+- 当已安装的 Skill 版本落后于当前 CLI 时，会自动提示重新执行 `npx skills add leeguooooo/cross-request-master -y -g`
 
 ```bash
 # 检查版本
@@ -194,12 +212,14 @@ yapi docs-sync
 - 绑定模式同步后会写入 `.yapi/docs-sync.deployments.json`（本地文档 → 已部署 URL）
 - 兼容旧方式：`--dir` 读取目录内 `.yapi.json` 的 `project_id/catid` 与 `source_files`
 - 管理绑定：`yapi docs-sync bind list|get|add|update|remove`
+- 也可以在运行时临时过滤文件：`yapi docs-sync --binding projectA --source-file architecture.md`；优先级是 `--source-file` > 绑定里的 `source_files` > 目录全量扫描
 - `--query` 支持像 curl 一样写成单个字符串：`--query "catid=4631&limit=50&page=1"`
 - 可用 `--dry-run` 只做预览不更新；现在会输出每个文件的 Markdown/HTML/请求体大小，并提前暴露超大文档风险
 - 默认只同步内容变更的文件，如需全量更新使用 `--force`
 - 普通同步命中相同 `file_hashes` 时会在渲染前直接跳过，不再重复渲染 Mermaid / PlantUML / Graphviz / D2；`--dry-run` 仍会保留预览渲染
-- 如果上传返回 `413 Payload Too Large`，CLI 会显示当前请求大小、解析出的服务端限制值（如果响应里有）、以及最大的 Mermaid 块大小，并建议先拆分文档
+- 如果上传返回 `413 Payload Too Large`，CLI 会按 `默认 Mermaid -> --mermaid-classic -> --no-mermaid` 自动降级；某个文件一旦降级成功，会把该模式记住，后续同步优先直接使用，避免每次先撞一次 413
 - Mermaid 预渲染依赖 `mmdc`（默认手绘风格；安装时会尝试拉取，失败不影响同步）
+- 如果 `mmdc` 已安装但提示缺少 `chrome-headless-shell` / Puppeteer 浏览器，执行：`npx puppeteer browsers install chrome-headless-shell`
 - PlantUML 预渲染依赖 `plantuml`（需要本机 Java 环境）
 - Graphviz 预渲染依赖 `dot`（graphviz）
 - D2 预渲染依赖 `d2`（默认手绘风格输出）

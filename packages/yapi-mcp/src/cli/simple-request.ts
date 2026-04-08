@@ -5,7 +5,6 @@ import {
   looksLikeAuthError,
   parseJsonMaybe,
   parseSimpleToml,
-  readVersion,
   resolveToken,
 } from "./utils";
 import { buildUrl, fetchWithTimeout } from "./http";

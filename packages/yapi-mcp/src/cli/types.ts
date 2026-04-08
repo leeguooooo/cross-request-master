@@ -49,6 +49,7 @@ export type DocsSyncOptions = {
   timeout?: number;
   dirs: string[];
   bindings: string[];
+  sourceFiles: string[];
   dryRun?: boolean;
   noMermaid?: boolean;
   mermaidLook?: "classic" | "handDrawn";
@@ -64,6 +65,7 @@ export type DocsSyncMapping = {
   source_files?: string[];
   files?: Record<string, number>;
   file_hashes?: Record<string, string>;
+  file_render_modes?: Record<string, "classic" | "no-mermaid">;
   [key: string]: unknown;
 };
 
