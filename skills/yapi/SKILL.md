@@ -68,9 +68,45 @@ yapi whoami
 1. If user gives a YApi URL, verify it belongs to configured `base_url`.
 2. Confirm auth (`yapi whoami`), then run `yapi login --browser` when needed (open base URL, finish login in browser, then press Enter to sync cookie).
 3. Resolve target by `api_id` / keyword / category.
-4. Fetch raw JSON first, then summarize: method, path, headers, params, body, response schema/examples.
-5. For docs sync tasks, do `--dry-run` first, then real sync.
-6. If docs sync still hits `413`, note that CLI already retries the file with `--mermaid-classic`; if it still fails, split the doc or reduce embedded diagrams.
+4. If the keyword is fuzzy product language, expand and retry related search terms before asking follow-up questions.
+5. Fetch raw JSON first, then summarize: method, path, headers, params, body, response schema/examples.
+6. For docs sync tasks, do `--dry-run` first, then real sync.
+7. If docs sync still hits `413`, note that CLI already retries the file with `--mermaid-classic`; if it still fails, split the doc or reduce embedded diagrams.
+
+## Keyword expansion
+
+Do not stop after one failed `yapi search`.
+
+When the user asks with fuzzy product wording such as "语音房列表", "房间列表", "房间详情", "推荐房间", "语音房", "直播间", or similar:
+
+1. Search the original phrase first.
+2. If there is no direct hit, immediately retry 3-6 closely related variants before asking the user for more detail.
+3. Prefer Chinese variants, English variants, and endpoint-style nouns.
+4. If there are still no interface hits, search likely related nouns/categories separately before giving up.
+
+Suggested expansions for room-style queries:
+
+- `语音房列表`
+- `房间列表`
+- `语音房`
+- `房间详情`
+- `房间推荐`
+- `room list`
+- `room detail`
+- `voice room`
+
+Example:
+
+```bash
+yapi search --q "语音房列表"
+yapi search --q "房间列表"
+yapi search --q "语音房"
+yapi search --q "房间详情"
+yapi search --q "room list"
+yapi search --q "voice room"
+```
+
+Only ask the user for project name / extra keywords after the expanded search pass still returns no useful interface results.
 
 ## URL detection
 
