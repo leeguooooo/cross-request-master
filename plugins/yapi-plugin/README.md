@@ -2,6 +2,8 @@
 
 Cursor and Claude Code plugin for YApi workflows.
 
+> 本插件已从独立仓库 [leeguooooo/yapi-plugin](https://github.com/leeguooooo/yapi-plugin) 合并回主仓库 [cross-request-master](https://github.com/leeguooooo/cross-request-master)，当前目录为 `plugins/yapi-plugin/`。独立仓库已归档。
+
 It wraps the existing `yapi` CLI so you can use YApi without leaving the editor. The plugin checks whether `yapi` is installed, installs `@leeguoo/yapi-mcp` automatically when needed, reuses your existing `~/.yapi/config.toml`, and exposes the common query and `docs-sync` flows as Cursor skills and commands.
 
 ## What it does
@@ -27,17 +29,18 @@ It wraps the existing `yapi` CLI so you can use YApi without leaving the editor.
 
 - `.cursor-plugin/plugin.json`: marketplace metadata
 - `.claude-plugin/plugin.json`: Claude Code plugin metadata
-- `skills/yapi/SKILL.md`: YApi routing and URL handling guidance
+- `skills/yapi/SKILL.md`: YApi routing and URL handling guidance（与仓库顶层 `skills/yapi/SKILL.md` 保持一致）
 - `commands/`: setup, login, query, and docs-sync command prompts
 - `scripts/`: local Node wrappers around the `yapi` CLI
 
 ## Local development
 
+从仓库根目录运行：
+
 ```bash
-npm test
-npm run validate
-npm run dev
-npm run build
+cd plugins/yapi-plugin
+npm test             # node --test tests/*.test.mjs
+npm run validate     # node scripts/validate-template.mjs
 ```
 
 ## Runtime assumptions
@@ -46,22 +49,11 @@ npm run build
 - global npm install is permitted
 - YApi authentication is still managed by `yapi login`
 
-## GitHub Pages
-
-The repository now includes a lightweight Astro site for GitHub Pages:
-
-- homepage: product overview and installation entry point
-- docs area: setup, commands, and development notes
-
-Once the Pages workflow is merged to `main`, the site will publish at:
-
-- `https://leeguooooo.github.io/yapi-plugin/`
-
 ## Marketplace copy
 
 Short description:
 
-> Use YApi from Cursor through the local yapi CLI. Install it automatically, reuse existing login state, inspect interfaces, and run docs-sync workflows.
+> Use YApi from Cursor / Claude Code through the local yapi CLI. Install it automatically, reuse existing login state, inspect interfaces, and run docs-sync workflows.
 
 Primary workflows:
 
