@@ -1,0 +1,35 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+---
+
+<SiteLayout title="Getting Started | YApi Plugin" description="Get the YApi Cursor plugin running with setup, login, and first query steps.">
+  <article class="doc-article">
+    <p class="eyebrow">Getting Started</p>
+    <h1>First run</h1>
+    <p>
+      YApi Plugin assumes you already want to use the upstream <code>yapi</code> CLI. It does not introduce a second
+      client or a second credential store.
+    </p>
+
+    <h2>Requirements</h2>
+    <ul>
+      <li><code>node</code> is installed locally</li>
+      <li><code>npm</code> is installed locally</li>
+      <li>Your environment allows <code>npm install -g</code></li>
+    </ul>
+
+    <h2>Recommended order</h2>
+    <ol>
+      <li>Run the <strong>Setup YApi</strong> command.</li>
+      <li>If the wrapper reports <code>NOT_LOGGED_IN</code>, run <strong>Login YApi</strong>.</li>
+      <li>Re-run setup or <strong>Who Am I</strong> to confirm the current account.</li>
+      <li>Move on to search, query, or docs-sync workflows.</li>
+    </ol>
+
+    <h2>What setup actually does</h2>
+    <p>
+      Setup checks whether <code>yapi</code> exists on PATH. If it does not, the wrapper installs
+      <code>@leeguoo/yapi-mcp</code> globally through npm, then checks login state with <code>yapi whoami</code>.
+    </p>
+  </article>
+</SiteLayout>

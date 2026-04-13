@@ -1,0 +1,28 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+---
+
+<SiteLayout title="Development | YApi Plugin" description="Development notes for the YApi Cursor plugin and its Pages site.">
+  <article class="doc-article">
+    <p class="eyebrow">Development</p>
+    <h1>Local development</h1>
+    <p>
+      The repository now includes both the Cursor plugin files and a lightweight Astro site for GitHub Pages.
+    </p>
+
+    <h2>Useful commands</h2>
+    <ul>
+      <li><code>npm test</code></li>
+      <li><code>npm run validate</code></li>
+      <li><code>npm run dev</code></li>
+      <li><code>npm run build</code></li>
+    </ul>
+
+    <h2>Structure</h2>
+    <ul>
+      <li><code>skills/</code> and <code>commands/</code> power the Cursor plugin</li>
+      <li><code>scripts/</code> wrap the local <code>yapi</code> CLI</li>
+      <li><code>src/pages/</code> and <code>src/layouts/</code> power GitHub Pages</li>
+    </ul>
+  </article>
+</SiteLayout>

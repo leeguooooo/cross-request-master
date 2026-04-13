@@ -1,0 +1,8 @@
+{
+  "name": "yapi-plugin",
+  "description": "Use YApi from Claude Code through the local yapi CLI. Install it automatically, reuse existing login state, inspect interfaces, and run docs-sync workflows.",
+  "version": "0.1.2",
+  "author": {
+    "name": "leeguooooo"
+  }
+}

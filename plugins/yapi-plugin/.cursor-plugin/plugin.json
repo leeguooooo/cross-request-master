@@ -1,0 +1,14 @@
+{
+  "name": "yapi-plugin",
+  "displayName": "YAPI",
+  "version": "0.1.2",
+  "description": "Use YApi from Cursor through the local yapi CLI. Install it automatically, reuse existing login state, inspect interfaces, and run docs-sync workflows.",
+  "author": {
+    "name": "leeguooooo"
+  },
+  "license": "MIT",
+  "keywords": ["cursor", "plugin", "yapi", "api", "api-docs", "docs-sync", "developer-tools"],
+  "logo": "assets/logo.svg",
+  "skills": "skills",
+  "commands": "commands"
+}

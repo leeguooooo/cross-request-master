@@ -1,0 +1,46 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+
+const groups = [
+  {
+    title: 'Environment',
+    items: ['Setup YApi', 'Login YApi', 'Who Am I'],
+  },
+  {
+    title: 'Query',
+    items: ['Search Interface', 'Get Interface By ID', 'List Category Interfaces'],
+  },
+  {
+    title: 'Docs Sync',
+    items: ['Bind Docs Sync', 'Run Docs Sync'],
+  },
+];
+---
+
+<SiteLayout title="Commands | YApi Plugin" description="Command surface for the YApi Cursor plugin.">
+  <article class="doc-article">
+    <p class="eyebrow">Commands</p>
+    <h1>First release command set</h1>
+    <p>
+      The plugin keeps the command surface small on purpose. Each command maps to one high-value YApi workflow and is
+      backed by a local Node wrapper instead of raw shell prompts.
+    </p>
+
+    {groups.map((group) => (
+      <section class="command-group">
+        <h2>{group.title}</h2>
+        <ul class="command-list">
+          {group.items.map((item) => (
+            <li>{item}</li>
+          ))}
+        </ul>
+      </section>
+    ))}
+
+    <h2>Wrapper behavior</h2>
+    <p>
+      Commands rely on <code>node scripts/ensure-yapi.mjs</code>, <code>node scripts/setup-yapi.mjs</code>, and
+      <code>node scripts/run-yapi.mjs</code> so errors are normalized and Cursor receives stable JSON responses.
+    </p>
+  </article>
+</SiteLayout>

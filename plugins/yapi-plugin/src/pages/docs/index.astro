@@ -1,0 +1,43 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+const basePath = import.meta.env.BASE_URL;
+const withBase = (path = '') => `${basePath.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+
+const entries = [
+  {
+    href: withBase('docs/getting-started/'),
+    title: 'Getting Started',
+    description: 'Install or verify the YApi CLI, reuse your login state, and confirm the plugin is ready.',
+  },
+  {
+    href: withBase('docs/commands/'),
+    title: 'Commands',
+    description: 'See the first release command set for setup, login, interface lookup, and docs-sync.',
+  },
+  {
+    href: withBase('docs/development/'),
+    title: 'Development',
+    description: 'Run tests, validate the plugin manifest, and understand the local wrapper scripts.',
+  },
+];
+---
+
+<SiteLayout title="YApi Plugin Docs" description="Documentation entry point for the YApi Cursor plugin.">
+  <section class="docs-hero">
+    <p class="eyebrow">Documentation</p>
+    <h1>Start small now, grow into a full docs site later.</h1>
+    <p>
+      The first docs release covers setup, command surfaces, and development notes. The structure is intentionally
+      simple so future content can expand under the same Pages site.
+    </p>
+  </section>
+
+  <section class="docs-grid">
+    {entries.map((entry) => (
+      <a class="docs-card" href={entry.href}>
+        <h2>{entry.title}</h2>
+        <p>{entry.description}</p>
+      </a>
+    ))}
+  </section>
+</SiteLayout>

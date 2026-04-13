@@ -1,0 +1,65 @@
+---
+import '../styles/global.css';
+
+const {
+  title = 'YApi Plugin',
+  description = 'Use YApi from Cursor through the local yapi CLI. Install it automatically, reuse existing login state, inspect interfaces, and run docs-sync workflows.',
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const basePath = import.meta.env.BASE_URL;
+const withBase = (path = '') => `${basePath.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <link rel="icon" href={withBase('logo.svg')} />
+    <link rel="canonical" href={canonical} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="page-glow page-glow-one"></div>
+      <div class="page-glow page-glow-two"></div>
+      <header class="site-header">
+        <a class="brand" href={withBase()}>
+          <img src={withBase('logo.svg')} alt="YApi Plugin logo" />
+          <span>YApi Plugin</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href={withBase()}>Home</a>
+          <a href={withBase('docs/')}>Docs</a>
+          <a href="https://github.com/leeguooooo/yapi-plugin">GitHub</a>
+        </nav>
+      </header>
+      <main>
+        <slot />
+      </main>
+      <footer class="site-footer">
+        <div>
+          <strong>YApi Plugin</strong>
+          <p>Cursor workflows for YApi setup, interface lookup, and docs-sync.</p>
+        </div>
+        <div class="footer-links">
+          <a href={withBase('docs/getting-started/')}>Getting Started</a>
+          <a href={withBase('docs/commands/')}>Commands</a>
+          <a href="https://github.com/leeguooooo/yapi-plugin">Repository</a>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
