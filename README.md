@@ -6,7 +6,10 @@
 
 面向 API 开发/测试的 Chrome 扩展：绕过 CORS 发请求、自动生成 cURL，并对 YApi「运行」页做增强（内嵌 cURL、路径参数 `{param}` 引导填写）。
 
-本仓库包含生态内的 CLI/Skill 子项目：`packages/yapi-mcp`（发布包名保持为 `@leeguoo/yapi-mcp`，MCP 配置作为兼容方案保留，不影响扩展打包）。
+本仓库包含生态内的多个子项目：
+- `packages/yapi-mcp` — CLI / Skill（发布包名保持为 `@leeguoo/yapi-mcp`，MCP 配置作为兼容方案保留，不影响扩展打包）
+- `plugins/yapi-plugin` — Cursor 与 Claude Code 插件（已从原独立仓库 `leeguooooo/yapi-plugin` 归档并整合回本仓库）
+
 当前推荐安装链路是 `npx skills add leeguooooo/cross-request-master -y -g` 安装 Skill，再用 `yapi config init` 初始化 `~/.yapi/config.toml`。`yapi-mcp` 已支持浏览器登录同步 Cookie（`yapi login --browser`），可用于仅支持 SSO/无法账号密码登录的 YApi 场景。
 
 
@@ -32,7 +35,7 @@
 - 内嵌 cURL：YApi「运行」页 URL 下方展示可复制的 cURL 命令
 - 路径参数引导：URL 含 `{param}` 时提示填写，避免请求失败
 - 固定 Header：为跨域请求自动追加自定义 Header
-- YApi 工具箱：Skill 一键安装（推荐，支持 `npx skills add`）/ MCP 配置（兼容）/ CLI 使用与 docs-sync
+- YApi 工具箱：Skill 一键安装（推荐，支持 `npx skills add`）/ Cursor 与 Claude Code 插件（`plugins/yapi-plugin/`）/ MCP 配置（兼容）/ CLI 使用与 docs-sync
 - 复制给 AI：把当前接口信息整理为 Markdown 一键复制
 - 现代请求支持：优先 `fetch` / Promise 工作流，兼容历史 `$.ajax`
 - Manifest V3：兼容最新 Chrome 扩展标准
@@ -168,8 +171,13 @@ manifest.json        MV3 配置
 background.js        Service Worker
 content-script.js    注入/通信
 index.js             页面侧 API 与适配器
+popup.html/popup.js  扩展弹出窗口
 src/helpers/         可复用 helper
 tests/               Jest 单测
+skills/yapi/         YApi Skill（canonical；自动同步到 packages/yapi-mcp/skill-template 与 plugins/yapi-plugin/skills）
+packages/yapi-mcp/   CLI（@leeguoo/yapi-mcp）与 MCP skill-template
+plugins/yapi-plugin/ Cursor 与 Claude Code 插件
+docs/                文档（见 docs/README.md）
 ```
 
 常用命令：
@@ -224,3 +232,4 @@ pnpm format
 - 文档总览：`docs/README.md`
 - 测试指南：`docs/TESTING.md`
 - 技术路线图：`docs/ROADMAP.md`
+- YApi 插件（Cursor / Claude Code）：`docs/yapi-plugin/README.md`

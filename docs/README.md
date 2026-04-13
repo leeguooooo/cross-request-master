@@ -9,11 +9,13 @@
 - `TESTING.md`：手工测试场景与排查步骤
 - `ROADMAP.md`：后续技术演进计划
 - `TEAM_AI_SYSTEM.md`：团队 AI 体系搭建指南
+- `yapi-plugin/README.md`：YApi 插件（Cursor / Claude Code）入口说明
 
 ## 归档文档
 
 - `archive/FIXES.md`：历史修复复盘
 - `archive/RELEASE_NOTES_v4.5.3.md`：历史版本发布说明
+- `archive/marketplace-auto-sync.patch` / `archive/marketplace-pull-sync.patch`：yapi-plugin 独立仓库时期的 marketplace 同步 workflow 草稿（已随仓库合并失效）
 
 ## 维护约定
 
