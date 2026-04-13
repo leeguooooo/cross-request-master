@@ -46,3 +46,4 @@ Cursor 和 Claude Code 插件，用于在编辑器里直接调用本地 `yapi` C
 - [开发说明](../../plugins/yapi-plugin/docs/development.md)
 - [如何接入 marketplace](../../plugins/yapi-plugin/docs/add-a-plugin.md)
 - [marketplace 提交清单](../../plugins/yapi-plugin/docs/marketplace-submission.md)
+- [改进路线图 / 需求单](./ROADMAP.md)
