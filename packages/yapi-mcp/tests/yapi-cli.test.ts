@@ -7,6 +7,7 @@ import { Readable } from "node:stream";
 import { afterEach, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { detectPackageManager } from "../src/cli/commands/self-update";
 import { main as runMain } from "../src/yapi-cli";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -25,6 +26,28 @@ let nextMockServerId = 0;
 
 function createTempHome(): string {
   return mkdtempSync(path.join(tmpdir(), "yapi-cli-home-"));
+}
+
+function withTempEnv<T>(mutations: Record<string, string | undefined>, run: () => T): T {
+  const previous = new Map(Object.keys(mutations).map((key) => [key, process.env[key]]));
+  try {
+    for (const [key, value] of Object.entries(mutations)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    return run();
+  } finally {
+    for (const [key, value] of previous.entries()) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
 }
 
 function ensureYapiHome(homeDir: string, baseUrl = "https://unused.example.com"): string {
@@ -331,6 +354,88 @@ afterEach(() => {
 });
 
 describe("yapi cli docs-sync regression coverage", () => {
+  test("detectPackageManager defaults to npm", () => {
+    const manager = withTempEnv(
+      { npm_execpath: undefined },
+      () => detectPackageManager({ dirnameHint: "/tmp/yapi-mcp/dist/cli", bunVersion: undefined }),
+    );
+
+    assert.equal(manager.bin, "npm");
+    assert.deepEqual(manager.installArgs("@leeguoo/yapi-mcp@latest"), [
+      "install",
+      "-g",
+      "@leeguoo/yapi-mcp@latest",
+    ]);
+    assert.deepEqual(manager.viewArgs("@leeguoo/yapi-mcp"), [
+      "view",
+      "@leeguoo/yapi-mcp",
+      "version",
+      "--json",
+    ]);
+  });
+
+  test("detectPackageManager prefers pnpm when npm_execpath points to pnpm", () => {
+    const manager = withTempEnv(
+      { npm_execpath: "/Users/test/Library/pnpm/pnpm.cjs" },
+      () => detectPackageManager({ dirnameHint: "/tmp/yapi-mcp/dist/cli", bunVersion: undefined }),
+    );
+
+    assert.equal(manager.bin, "pnpm");
+    assert.deepEqual(manager.installArgs("@leeguoo/yapi-mcp@latest"), [
+      "add",
+      "-g",
+      "@leeguoo/yapi-mcp@latest",
+    ]);
+    assert.deepEqual(manager.viewArgs("@leeguoo/yapi-mcp"), [
+      "view",
+      "@leeguoo/yapi-mcp",
+      "version",
+      "--json",
+    ]);
+  });
+
+  test("detectPackageManager detects pnpm from __dirname-style path", () => {
+    const manager = withTempEnv(
+      { npm_execpath: undefined },
+      () =>
+        detectPackageManager({
+          dirnameHint: "/tmp/project/node_modules/.pnpm/@leeguoo+yapi-mcp/dist/cli",
+          bunVersion: undefined,
+        }),
+    );
+
+    assert.equal(manager.bin, "pnpm");
+    assert.deepEqual(manager.installArgs("@leeguoo/yapi-mcp@latest"), [
+      "add",
+      "-g",
+      "@leeguoo/yapi-mcp@latest",
+    ]);
+  });
+
+  test("detectPackageManager detects yarn from __dirname-style path", () => {
+    const manager = withTempEnv(
+      { npm_execpath: undefined },
+      () =>
+        detectPackageManager({
+          dirnameHint: "/tmp/project/.yarn/cache/@leeguoo-yapi-mcp/dist/cli",
+          bunVersion: undefined,
+        }),
+    );
+
+    assert.equal(manager.bin, "yarn");
+    assert.deepEqual(manager.installArgs("@leeguoo/yapi-mcp@latest"), [
+      "global",
+      "add",
+      "@leeguoo/yapi-mcp@latest",
+    ]);
+    assert.deepEqual(manager.viewArgs("@leeguoo/yapi-mcp"), [
+      "view",
+      "@leeguoo/yapi-mcp",
+      "version",
+      "--json",
+    ]);
+  });
+
   test("config init writes config for browser-first global auth", async () => {
     const homeDir = createTempHome();
     const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-config-init-"));
@@ -369,6 +474,10 @@ describe("yapi cli docs-sync regression coverage", () => {
     writeFileSync(
       npmPath,
       `#!/bin/sh
+if [ "$1" = "view" ]; then
+  echo '"0.6.0"'
+  exit 0
+fi
 echo "$@" > ${JSON.stringify(logPath)}
 exit 0
 `,
@@ -387,6 +496,58 @@ exit 0
     assert.equal(result.status, 0, result.stderr);
     assert.match(readFileSync(logPath, "utf8"), /install -g @leeguoo\/yapi-mcp@latest/);
     assert.match(result.stdout, /updated yapi cli/i);
+  });
+
+  test("self-update skips install when latest version is already installed", async () => {
+    const homeDir = createTempHome();
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-self-update-current-"));
+    const binDir = path.join(homeDir, "bin");
+    const logPath = path.join(homeDir, "npm.log");
+    mkdirSync(binDir, { recursive: true });
+    const npmPath = path.join(binDir, "npm");
+    writeFileSync(
+      npmPath,
+      `#!/bin/sh
+echo "$@" >> ${JSON.stringify(logPath)}
+if [ "$1" = "view" ]; then
+  echo '"0.5.0"'
+  exit 0
+fi
+exit 0
+`,
+      "utf8",
+    );
+    chmodSync(npmPath, 0o755);
+
+    const result = await runCli(["self-update"], {
+      cwd: repoDir,
+      homeDir,
+      env: {
+        PATH: `${binDir}:${process.env.PATH || ""}`,
+      },
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    const logText = readFileSync(logPath, "utf8");
+    assert.match(logText, /view @leeguoo\/yapi-mcp version --json/);
+    assert.doesNotMatch(logText, /install -g @leeguoo\/yapi-mcp@latest/);
+    assert.match(result.stdout, /already up to date/i);
+  });
+
+  test("self-update reports a clear error when npm is unavailable", async () => {
+    const homeDir = createTempHome();
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-self-update-missing-npm-"));
+
+    const result = await runCli(["self-update"], {
+      cwd: repoDir,
+      homeDir,
+      env: {
+        PATH: "",
+      },
+    });
+
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /npm was not found in PATH/i);
   });
 
   test("warns when installed skill metadata is older than current package version", async () => {
