@@ -204,6 +204,28 @@ function readJson(filePath: string): any {
   return JSON.parse(readFileSync(filePath, "utf8"));
 }
 
+function writeSkillInstall(homeDir: string, version: string): string {
+  const codexHome = path.join(homeDir, ".codex");
+  const skillRoot = path.join(codexHome, "skills", "yapi");
+  mkdirSync(skillRoot, { recursive: true });
+  writeFileSync(path.join(skillRoot, "SKILL.md"), "# yapi\n", "utf8");
+  writeFileSync(
+    path.join(skillRoot, ".yapi-skill.json"),
+    JSON.stringify(
+      {
+        skillName: "yapi",
+        packageName: "@leeguoo/yapi-mcp",
+        packageVersion: version,
+        installedAt: "2026-03-01T00:00:00.000Z",
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+  return codexHome;
+}
+
 function installFakeMmdc(binDir: string): void {
   mkdirSync(binDir, { recursive: true });
   const scriptPath = path.join(binDir, "mmdc");
@@ -526,25 +548,31 @@ exit 0
     assert.match(result.stdout, /summary:/);
   });
 
-  test("docs-sync binding run auto-recovers old relative dir against current repo", async () => {
+  test("docs-sync binding dir mismatch suggests bind update command for matching candidate", async () => {
     const homeDir = createTempHome();
     const yapiHome = ensureYapiHome(homeDir);
     const repoDir = path.join(homeDir, "tk.com", "ai-girls");
-    const docsDir = path.join(repoDir, "docs", "yapi");
+    const docsDir = path.join(repoDir, "docs", "yapi-sync", "projectA");
     mkdirSync(path.join(repoDir, ".git"), { recursive: true });
     mkdirSync(docsDir, { recursive: true });
-    writeFileSync(path.join(docsDir, "README.md"), "# demo\n", "utf8");
+    writeFileSync(path.join(docsDir, "a.md"), "# a\n", "utf8");
+    writeFileSync(path.join(docsDir, "b.md"), "# b\n", "utf8");
+    writeFileSync(path.join(docsDir, "c.md"), "# c\n", "utf8");
     writeFileSync(
       path.join(yapiHome, "docs-sync.json"),
       JSON.stringify(
         {
           version: 1,
           bindings: {
-            broken: {
-              dir: "docs/yapi",
+            projectA: {
+              dir: "docs/old/path",
               project_id: 267,
               catid: 3667,
-              files: {},
+              files: {
+                "a.md": 101,
+                "b.md": 102,
+                "c.md": 103,
+              },
               file_hashes: {},
             },
           },
@@ -555,30 +583,82 @@ exit 0
       "utf8",
     );
 
-    const server = await withServer((req, res) => {
-      const url = new URL(req.url || "/", "http://127.0.0.1");
-      if (url.pathname === "/api/interface/list_cat") {
-        res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify({ errcode: 0, data: { list: [] } }));
-        return;
-      }
-      res.statusCode = 404;
-      res.end("not found");
+    const result = await runCli(["docs-sync", "--binding", "projectA", "--dry-run"], {
+      cwd: repoDir,
+      homeDir,
     });
 
-    try {
-      writeFileSync(path.join(yapiHome, "config.toml"), `base_url = "${server.url}"\n`, "utf8");
-      const result = await runCli(["docs-sync", "--binding", "broken", "--dry-run"], {
-        cwd: repoDir,
-        homeDir,
-      });
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /binding 'projectA' dir=docs\/old\/path/);
+    assert.match(result.stderr, /候选目录（命中 3\/3 文件）/);
+    assert.match(result.stderr, /docs\/yapi-sync\/projectA/);
+    assert.match(
+      result.stderr,
+      /hint: yapi docs-sync bind update --name projectA --dir docs\/yapi-sync\/projectA/,
+    );
+  });
 
-      assert.equal(result.status, 0, result.stderr);
-      assert.match(result.stdout, /binding=broken/);
-      assert.match(result.stdout, /docs\/yapi/);
-    } finally {
-      await server.close();
-    }
+  test("docs-sync binding dir mismatch falls back to generic bind update template when no candidates found", async () => {
+    const homeDir = createTempHome();
+    const yapiHome = ensureYapiHome(homeDir);
+    const repoDir = path.join(homeDir, "tk.com", "no-candidate-demo");
+    mkdirSync(path.join(repoDir, ".git"), { recursive: true });
+    mkdirSync(path.join(repoDir, "docs", "misc"), { recursive: true });
+    writeFileSync(path.join(repoDir, "docs", "misc", "unrelated.md"), "# unrelated\n", "utf8");
+    writeFileSync(
+      path.join(yapiHome, "docs-sync.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          bindings: {
+            projectA: {
+              dir: "docs/old/path",
+              project_id: 267,
+              catid: 3667,
+              files: {
+                "alpha.md": 101,
+                "beta.md": 102,
+              },
+              file_hashes: {},
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const result = await runCli(["docs-sync", "--binding", "projectA", "--dry-run"], {
+      cwd: repoDir,
+      homeDir,
+    });
+
+    assert.equal(result.status, 2);
+    assert.match(
+      result.stderr,
+      /hint: yapi docs-sync bind update --name projectA --dir <new-relative-path>/,
+    );
+  });
+
+  test("docs-sync --watch yargs flag is accepted and exits when no watch targets resolved", async () => {
+    const homeDir = createTempHome();
+    ensureYapiHome(homeDir);
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-watch-"));
+
+    const result = await runCli(
+      ["docs-sync", "--binding", "does-not-exist", "--watch"],
+      { cwd: repoDir, homeDir },
+    );
+
+    assert.equal(result.status, 2);
+    const combined = result.stdout + result.stderr;
+    assert.match(combined, /\[watch\] /, "should reach the watch code path");
+    assert.match(
+      combined,
+      /no directories to watch|binding not found/,
+      "should fail-fast when nothing is watchable",
+    );
   });
 
   test("docs-sync skips unchanged files before Mermaid rendering on normal sync", async () => {
@@ -1216,5 +1296,140 @@ describe("yapi cli interface list-menu filtering", () => {
     assert.equal(Array.isArray(out.data), true);
     assert.equal(out.data.length, 2);
     assert.equal(out.data[0].name, "Auth");
+  });
+
+  test("skill update reminder=never suppresses warning", async () => {
+    const homeDir = createTempHome();
+    const yapiHome = ensureYapiHome(homeDir);
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-skillwarn-never-"));
+    const codexHome = writeSkillInstall(homeDir, "0.3.20");
+    writeFileSync(
+      path.join(yapiHome, "config.toml"),
+      'base_url = "https://unused.example.com"\nskill_update_reminder = "never"\n',
+      "utf8",
+    );
+
+    const server = await withServer((req, res) => {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true }));
+    });
+
+    try {
+      const result = await runCli(["--url", `${server.url}/health`], {
+        cwd: repoDir,
+        homeDir,
+        env: { CODEX_HOME: codexHome },
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.doesNotMatch(result.stderr, /skill update available/i);
+    } finally {
+      await server.close();
+    }
+  });
+
+  test("skill update reminder=daily suppresses warning within 24 hours", async () => {
+    const homeDir = createTempHome();
+    const yapiHome = ensureYapiHome(homeDir);
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-skillwarn-daily-fresh-"));
+    const codexHome = writeSkillInstall(homeDir, "0.3.20");
+    writeFileSync(
+      path.join(yapiHome, "config.toml"),
+      'base_url = "https://unused.example.com"\nskill_update_reminder = "daily"\n',
+      "utf8",
+    );
+    writeFileSync(
+      path.join(yapiHome, ".skill-update-reminder-cache.json"),
+      `${JSON.stringify({ lastWarnedAt: Date.now() - 100 }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const server = await withServer((req, res) => {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true }));
+    });
+
+    try {
+      const result = await runCli(["--url", `${server.url}/health`], {
+        cwd: repoDir,
+        homeDir,
+        env: { CODEX_HOME: codexHome },
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.doesNotMatch(result.stderr, /skill update available/i);
+    } finally {
+      await server.close();
+    }
+  });
+
+  test("skill update reminder=daily warns after 24 hours and updates cache", async () => {
+    const homeDir = createTempHome();
+    const yapiHome = ensureYapiHome(homeDir);
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-skillwarn-daily-stale-"));
+    const codexHome = writeSkillInstall(homeDir, "0.3.20");
+    writeFileSync(
+      path.join(yapiHome, "config.toml"),
+      'base_url = "https://unused.example.com"\nskill_update_reminder = "daily"\n',
+      "utf8",
+    );
+    const cachePath = path.join(yapiHome, ".skill-update-reminder-cache.json");
+    const staleAt = Date.now() - 48 * 3600 * 1000;
+    writeFileSync(
+      cachePath,
+      `${JSON.stringify({ lastWarnedAt: staleAt }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const server = await withServer((req, res) => {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true }));
+    });
+
+    try {
+      const result = await runCli(["--url", `${server.url}/health`], {
+        cwd: repoDir,
+        homeDir,
+        env: { CODEX_HOME: codexHome },
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stderr, /skill update available/i);
+      const cache = readJson(cachePath);
+      assert.equal(typeof cache.lastWarnedAt, "number");
+      assert.ok(cache.lastWarnedAt > staleAt);
+    } finally {
+      await server.close();
+    }
+  });
+
+  test("skill update reminder=always preserves current warning behavior", async () => {
+    const homeDir = createTempHome();
+    const yapiHome = ensureYapiHome(homeDir);
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-skillwarn-always-"));
+    const codexHome = writeSkillInstall(homeDir, "0.3.20");
+    writeFileSync(
+      path.join(yapiHome, "config.toml"),
+      'base_url = "https://unused.example.com"\nskill_update_reminder = "always"\n',
+      "utf8",
+    );
+
+    const server = await withServer((req, res) => {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true }));
+    });
+
+    try {
+      const result = await runCli(["--url", `${server.url}/health`], {
+        cwd: repoDir,
+        homeDir,
+        env: { CODEX_HOME: codexHome },
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stderr, /skill update available/i);
+    } finally {
+      await server.close();
+    }
   });
 });

@@ -2,6 +2,7 @@ import fs from "fs";
 import type { Options } from "../types";
 import {
   globalConfigPath,
+  normalizeSkillUpdateReminder,
   parseSimpleToml,
   promptRequired,
   writeConfig,
@@ -38,6 +39,16 @@ export async function runConfig(action: string, options: Options): Promise<numbe
   if (options.password !== undefined) merged.password = options.password;
   if (options.token !== undefined) merged.token = options.token;
   if (options.projectId !== undefined) merged.project_id = options.projectId;
+  if (options.skillUpdateReminder !== undefined) {
+    const normalizedReminder = String(options.skillUpdateReminder || "")
+      .trim()
+      .toLowerCase();
+    if (!["never", "daily", "always"].includes(normalizedReminder)) {
+      console.error("invalid --skill-update-reminder (use never, daily, or always)");
+      return 2;
+    }
+    merged.skill_update_reminder = normalizedReminder;
+  }
 
   if (!merged.base_url) {
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -58,6 +69,7 @@ export async function runConfig(action: string, options: Options): Promise<numbe
   merged.password = merged.password || "";
   merged.token = merged.token || "";
   merged.project_id = merged.project_id || "";
+  merged.skill_update_reminder = normalizeSkillUpdateReminder(merged.skill_update_reminder);
 
   writeConfig(configPath, merged);
 

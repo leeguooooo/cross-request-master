@@ -1,16 +1,20 @@
 #!/usr/bin/env node
 
-import path from "node:path";
-import { pathToFileURL } from "node:url";
+import fs from "node:fs";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import type { Options, DocsSyncOptions, DocsSyncBindArgs } from "./cli/types";
 import {
+  globalConfigPath,
+  normalizeSkillUpdateReminder,
   readVersion,
+  readSkillUpdateReminderCache,
   readUpdateCache,
   writeUpdateCache,
+  writeSkillUpdateReminderCache,
   isNewerVersion,
   UPDATE_CHECK_TTL_MS,
+  parseSimpleToml,
 } from "./cli/utils";
 import { fetchWithTimeout } from "./cli/http";
 import { findOutdatedSkillInstalls } from "./skill/metadata";
@@ -69,6 +73,8 @@ function toOptions(argv: Record<string, unknown>): Options {
     noUpdate: (argv.noUpdate || argv["no-update"]) as boolean | undefined,
     q: argv.q as string | undefined,
     noPretty: (argv.noPretty || argv["no-pretty"]) as boolean | undefined,
+    skillUpdateReminder:
+      (argv.skillUpdateReminder || argv["skill-update-reminder"]) as string | undefined,
   };
 }
 
@@ -101,6 +107,8 @@ function toDocsSyncOptions(argv: Record<string, unknown>): DocsSyncOptions {
     mermaidLook: argv["mermaid-classic"] ? "classic" : "handDrawn",
     mermaidHandDrawnSeed: argv["mermaid-hand-drawn-seed"] as number | undefined,
     force: argv.force as boolean | undefined,
+    watch: argv.watch as boolean | undefined,
+    watchDebounceMs: (argv.watchDebounceMs || argv["watch-debounce-ms"]) as number | undefined,
   };
 }
 
@@ -182,12 +190,35 @@ function warnIfInstalledSkillsOutdated(options: { skip?: boolean }): void {
   const outdated = findOutdatedSkillInstalls(currentVersion);
   if (!outdated.length) return;
 
+  const config = (() => {
+    try {
+      const configPath = globalConfigPath();
+      if (!fs.existsSync(configPath)) return {};
+      return parseSimpleToml(fs.readFileSync(configPath, "utf8"));
+    } catch {
+      return {};
+    }
+  })();
+  const reminder = normalizeSkillUpdateReminder(config.skill_update_reminder);
+  if (reminder === "never") return;
+
+  const now = Date.now();
+  const cache = readSkillUpdateReminderCache();
+  if (
+    reminder === "daily" &&
+    Number.isFinite(cache.lastWarnedAt ?? NaN) &&
+    now - Number(cache.lastWarnedAt) < 24 * 60 * 60 * 1000
+  ) {
+    return;
+  }
+
   const summary = outdated
     .map((item) => `${item.label}@${item.installedVersion || "unknown"}`)
     .join(", ");
   console.warn(
     `skill update available: installed ${summary}, current ${currentVersion}. Run: npx skills add leeguooooo/cross-request-master -y -g`,
   );
+  writeSkillUpdateReminderCache({ lastWarnedAt: now });
 }
 
 // --- main ---
@@ -231,7 +262,12 @@ export async function main(rawArgs = hideBin(process.argv)): Promise<number> {
           .option("email", { type: "string", describe: "login email for global mode" })
           .option("password", { type: "string", describe: "login password for global mode" })
           .option("token", { type: "string", describe: "project token" })
-          .option("project-id", { type: "string", describe: "default project id" }),
+          .option("project-id", { type: "string", describe: "default project id" })
+          .option("skill-update-reminder", {
+            type: "string",
+            choices: ["never", "daily", "always"] as const,
+            describe: "skill update warning frequency",
+          }),
       async (argv: Record<string, unknown>) => {
         commandHandled = true;
         const action = String(argv.action || "init").toLowerCase();
@@ -602,6 +638,8 @@ export async function main(rawArgs = hideBin(process.argv)): Promise<number> {
           .option("mermaid-classic", { type: "boolean", describe: "render with classic look" })
           .option("mermaid-hand-drawn-seed", { type: "number", describe: "hand-drawn seed" })
           .option("force", { type: "boolean", describe: "sync all files even if unchanged" })
+          .option("watch", { type: "boolean", describe: "watch md files and re-sync on change (Ctrl+C to stop)" })
+          .option("watch-debounce-ms", { type: "number", describe: "debounce window for watch (default: 500)" })
           // bind-specific options
           .option("name", { type: "string", describe: "binding name (for bind actions)" })
           .option("catid", { type: "string", describe: "YApi category id" })
@@ -692,9 +730,13 @@ export async function main(rawArgs = hideBin(process.argv)): Promise<number> {
 }
 
 function isDirectExecution(): boolean {
-  const entry = process.argv[1];
-  if (!entry) return false;
-  return import.meta.url === pathToFileURL(path.resolve(entry)).href;
+  // CJS check (compiled output is CommonJS): true when this module is the entry point.
+  // Tests import { main } and call it directly, so require.main !== module there.
+  try {
+    return typeof require !== "undefined" && typeof module !== "undefined" && require.main === module;
+  } catch {
+    return false;
+  }
 }
 
 if (isDirectExecution()) {

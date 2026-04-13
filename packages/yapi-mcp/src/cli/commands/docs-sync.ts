@@ -204,6 +204,96 @@ function saveDocsSyncDeployments(homeDir: string, config: DocsSyncDeploymentsCon
 
 // --- binding dir helpers ---
 
+const SCAN_EXCLUDE_DIRS = new Set([
+  "node_modules",
+  ".git",
+  ".yapi",
+  "dist",
+  "build",
+  ".next",
+  ".astro",
+  "coverage",
+  "out",
+  ".turbo",
+  ".cache",
+]);
+
+function findBindingDirCandidates(
+  scanRoot: string,
+  expectedFiles: string[],
+  maxDepth = 4,
+): { relativeDir: string; matchCount: number; total: number }[] {
+  if (!expectedFiles.length) return [];
+  const total = expectedFiles.length;
+  const expectedSet = new Set(expectedFiles);
+  const matches: { relativeDir: string; matchCount: number; total: number }[] = [];
+
+  const walk = (currentDir: string, depth: number): void => {
+    if (depth > maxDepth) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    let matchCount = 0;
+    for (const entry of entries) {
+      if (entry.isFile() && expectedSet.has(entry.name)) {
+        matchCount++;
+      }
+    }
+    if (matchCount > 0) {
+      const rel = path.relative(scanRoot, currentDir);
+      if (rel) {
+        matches.push({ relativeDir: rel, matchCount, total });
+      }
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (SCAN_EXCLUDE_DIRS.has(entry.name)) continue;
+      if (entry.name.startsWith(".")) continue;
+      walk(path.join(currentDir, entry.name), depth + 1);
+    }
+  };
+
+  walk(scanRoot, 0);
+  return matches
+    .filter((item) => item.matchCount * 2 >= item.total)
+    .sort((a, b) => b.matchCount - a.matchCount || a.relativeDir.localeCompare(b.relativeDir));
+}
+
+function buildMissingBindingDirMessage(
+  bindingName: string,
+  bindingDir: string,
+  binding: DocsSyncBinding,
+  scanRoot: string,
+): string {
+  const expectedFiles = binding.files ? Object.keys(binding.files).sort() : [];
+  const candidates = findBindingDirCandidates(scanRoot, expectedFiles);
+  const lines: string[] = [];
+  lines.push(`binding '${bindingName}' dir=${bindingDir} 在当前仓库找不到。`);
+  if (candidates.length > 0) {
+    const top = candidates[0];
+    lines.push(`候选目录（命中 ${top.matchCount}/${top.total} 文件）：`);
+    lines.push(`  ${top.relativeDir}`);
+    if (candidates.length > 1) {
+      const others = candidates
+        .slice(1, 4)
+        .map((c) => `  ${c.relativeDir} (命中 ${c.matchCount}/${c.total})`);
+      lines.push("其它候选：");
+      lines.push(...others);
+    }
+    lines.push(
+      `hint: yapi docs-sync bind update --name ${bindingName} --dir ${top.relativeDir}`,
+    );
+  } else {
+    lines.push(
+      `hint: yapi docs-sync bind update --name ${bindingName} --dir <new-relative-path>`,
+    );
+  }
+  return lines.join("\n");
+}
+
 function getBindingBaseDir(homeDir: string, rootDir: string, cwd: string): {
   baseDir: string;
   gitRoot: string | null;
@@ -1111,7 +1201,138 @@ export async function runDocsSyncBindings(action: string, args: DocsSyncBindArgs
 
 // --- main docs-sync command ---
 
+function resolveWatchTargets(options: DocsSyncOptions): string[] {
+  const targets = new Set<string>();
+  for (const dir of options.dirs || []) {
+    const resolved = path.resolve(dir);
+    if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+      targets.add(resolved);
+    }
+  }
+  if (options.bindings && options.bindings.length > 0) {
+    const home = resolveDocsSyncHome(process.cwd(), false);
+    if (home) {
+      const config = loadDocsSyncConfig(home);
+      const rootDir = path.dirname(home);
+      for (const name of options.bindings) {
+        const binding = config.bindings[name];
+        if (!binding) continue;
+        const dirPath = resolveBindingDirForContext(home, rootDir, process.cwd(), binding.dir);
+        if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+          targets.add(dirPath);
+        }
+      }
+    }
+  }
+  return Array.from(targets);
+}
+
+export async function runDocsSyncWatch(options: DocsSyncOptions): Promise<number> {
+  const debounceMs =
+    typeof options.watchDebounceMs === "number" && options.watchDebounceMs > 0
+      ? options.watchDebounceMs
+      : 500;
+  const innerOptions: DocsSyncOptions = { ...options, watch: false };
+
+  console.log("[watch] running initial sync...");
+  let initialCode = 0;
+  try {
+    initialCode = await runDocsSync(innerOptions);
+  } catch (error) {
+    console.error(
+      "[watch] initial sync threw:",
+      error instanceof Error ? error.message : String(error),
+    );
+    initialCode = 2;
+  }
+  if (initialCode !== 0) {
+    console.warn(`[watch] initial sync exited with ${initialCode}; continuing to watch anyway`);
+  }
+
+  const targets = resolveWatchTargets(options);
+  if (targets.length === 0) {
+    console.error(
+      "[watch] no directories to watch (use --dir <path> or --binding <name>); exiting",
+    );
+    return 2;
+  }
+
+  console.log(`[watch] watching ${targets.length} dir(s):`);
+  for (const t of targets) console.log(`  - ${t}`);
+  console.log(`[watch] debounce=${debounceMs}ms (Ctrl+C to stop)`);
+
+  let pending: NodeJS.Timeout | null = null;
+  let syncing = false;
+  const triggerSync = (): void => {
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(async () => {
+      pending = null;
+      if (syncing) {
+        triggerSync();
+        return;
+      }
+      syncing = true;
+      const ts = new Date().toISOString();
+      console.log(`[watch] [${ts}] syncing...`);
+      try {
+        const code = await runDocsSync(innerOptions);
+        console.log(`[watch] sync ${code === 0 ? "ok" : `exited ${code}`}`);
+      } catch (error) {
+        console.error(
+          "[watch] sync threw:",
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        syncing = false;
+      }
+    }, debounceMs);
+  };
+
+  const watchers: fs.FSWatcher[] = [];
+  for (const target of targets) {
+    try {
+      const watcher = fs.watch(target, { recursive: true }, (_event, filename) => {
+        if (!filename) return;
+        const name = String(filename);
+        if (!name.endsWith(".md")) return;
+        console.log(`[watch] change detected: ${name}`);
+        triggerSync();
+      });
+      watchers.push(watcher);
+    } catch (error) {
+      console.error(
+        `[watch] failed to watch ${target}:`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+  if (watchers.length === 0) {
+    console.error("[watch] no watchers could be installed; exiting");
+    return 2;
+  }
+
+  return await new Promise<number>((resolve) => {
+    const cleanup = (): void => {
+      console.log("\n[watch] stopping...");
+      for (const w of watchers) {
+        try {
+          w.close();
+        } catch {
+          /* ignore */
+        }
+      }
+      if (pending) clearTimeout(pending);
+      resolve(0);
+    };
+    process.once("SIGINT", cleanup);
+    process.once("SIGTERM", cleanup);
+  });
+}
+
 export async function runDocsSync(options: DocsSyncOptions): Promise<number> {
+  if (options.watch) {
+    return await runDocsSyncWatch(options);
+  }
   try {
     if (!isPandocAvailable()) {
       console.warn("pandoc not found, fallback to markdown-it renderer.");
@@ -1403,7 +1624,8 @@ export async function runDocsSync(options: DocsSyncOptions): Promise<number> {
           binding.dir,
         );
         if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
-          throw new Error(`dir not found for binding ${name}: ${dirPath}`);
+          const scanRoot = findGitRoot(process.cwd()) || process.cwd();
+          throw new Error(buildMissingBindingDirMessage(name, binding.dir, binding, scanRoot));
         }
 
         const runtimeBinding = cloneMappingForSync(binding, options.sourceFiles);

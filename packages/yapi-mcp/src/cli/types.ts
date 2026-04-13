@@ -32,6 +32,7 @@ export type Options = {
   noUpdate?: boolean;
   q?: string;
   noPretty?: boolean;
+  skillUpdateReminder?: string;
   help?: boolean;
   version?: boolean;
 };
@@ -56,6 +57,8 @@ export type DocsSyncOptions = {
   mermaidHandDrawnSeed?: number;
   force?: boolean;
   help?: boolean;
+  watch?: boolean;
+  watchDebounceMs?: number;
 };
 
 export type DocsSyncMapping = {
@@ -159,7 +162,10 @@ export type DocsSyncBindArgs = {
   help?: boolean;
 };
 
-export type ConfigInitOptions = Pick<Options, "baseUrl" | "email" | "password" | "token" | "projectId">;
+export type ConfigInitOptions = Pick<
+  Options,
+  "baseUrl" | "email" | "password" | "token" | "projectId" | "skillUpdateReminder"
+>;
 
 export type SimpleRequestResult = {
   ok: boolean;
@@ -189,4 +195,10 @@ export type UpdateCache = {
   latest?: string;
   lastNotified?: string;
   lastNotifiedAt?: number;
+};
+
+export type SkillUpdateReminder = "never" | "daily" | "always";
+
+export type SkillUpdateReminderCache = {
+  lastWarnedAt?: number;
 };

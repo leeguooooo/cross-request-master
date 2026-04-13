@@ -9,6 +9,8 @@ import type {
   ConfigInitOptions,
   DocsSyncOptions,
   DocsSyncProjectEnv,
+  SkillUpdateReminder,
+  SkillUpdateReminderCache,
   UpdateCache,
 } from "./types";
 
@@ -123,8 +125,11 @@ export function joinUrl(baseUrl: string, endpoint: string): string {
 }
 
 export function globalConfigPath(): string {
-  const yapiHome = process.env.YAPI_HOME || path.join(os.homedir(), ".yapi");
-  return path.join(yapiHome, "config.toml");
+  return path.join(yapiHomeDir(), "config.toml");
+}
+
+export function yapiHomeDir(): string {
+  return process.env.YAPI_HOME || path.join(os.homedir(), ".yapi");
 }
 
 export function parseSimpleToml(text: string): Record<string, string> {
@@ -440,6 +445,9 @@ export async function initConfigIfMissing(
     token: options.token || "",
     project_id: options.projectId || "",
   };
+  if (options.skillUpdateReminder) {
+    config.skill_update_reminder = options.skillUpdateReminder;
+  }
   const configPath = globalConfigPath();
   writeConfig(configPath, config);
   return { configPath, config };
@@ -484,8 +492,7 @@ export function buildDocsSyncHash(markdown: string, options: DocsSyncOptions): s
 export const UPDATE_CHECK_TTL_MS = 12 * 60 * 60 * 1000;
 
 export function updateCachePath(): string {
-  const yapiHome = process.env.YAPI_HOME || path.join(os.homedir(), ".yapi");
-  return path.join(yapiHome, "update.json");
+  return path.join(yapiHomeDir(), "update.json");
 }
 
 export function readUpdateCache(): UpdateCache {
@@ -503,6 +510,44 @@ export function readUpdateCache(): UpdateCache {
 export function writeUpdateCache(cache: UpdateCache): void {
   try {
     const cachePath = updateCachePath();
+    fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+    fs.writeFileSync(cachePath, `${JSON.stringify(cache, null, 2)}\n`, "utf8");
+  } catch {
+    // ignore cache failures
+  }
+}
+
+export function normalizeSkillUpdateReminder(
+  value: string | undefined | null,
+): SkillUpdateReminder {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (normalized === "never" || normalized === "always") {
+    return normalized;
+  }
+  return "daily";
+}
+
+export function skillUpdateReminderCachePath(): string {
+  return path.join(yapiHomeDir(), ".skill-update-reminder-cache.json");
+}
+
+export function readSkillUpdateReminderCache(): SkillUpdateReminderCache {
+  try {
+    const cachePath = skillUpdateReminderCachePath();
+    if (!fs.existsSync(cachePath)) return {};
+    const raw = fs.readFileSync(cachePath, "utf8");
+    const parsed = JSON.parse(raw) as SkillUpdateReminderCache;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function writeSkillUpdateReminderCache(cache: SkillUpdateReminderCache): void {
+  try {
+    const cachePath = skillUpdateReminderCachePath();
     fs.mkdirSync(path.dirname(cachePath), { recursive: true });
     fs.writeFileSync(cachePath, `${JSON.stringify(cache, null, 2)}\n`, "utf8");
   } catch {
