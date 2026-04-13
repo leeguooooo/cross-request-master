@@ -930,3 +930,112 @@ graph TD
     }
   });
 });
+
+describe("yapi cli interface list-menu filtering", () => {
+  function listMenuFixture() {
+    return {
+      errcode: 0,
+      errmsg: "ok",
+      data: [
+        {
+          _id: 100,
+          name: "Auth",
+          list: [
+            { _id: 1, title: "Login", path: "/api/auth/login", method: "POST", project_id: 365, catid: 100 },
+            { _id: 2, title: "Get Token", path: "/api/auth/token", method: "POST", project_id: 365, catid: 100 },
+            { _id: 3, title: "Logout", path: "/api/auth/logout", method: "POST", project_id: 365, catid: 100 },
+          ],
+        },
+        {
+          _id: 101,
+          name: "User",
+          list: [
+            { _id: 4, title: "Get user", path: "/api/user/get", method: "GET", project_id: 365, catid: 101 },
+            { _id: 5, title: "Refresh token", path: "/api/user/token/refresh", method: "POST", project_id: 365, catid: 101 },
+          ],
+        },
+      ],
+    };
+  }
+
+  async function runListMenuCli(args: string[]) {
+    const homeDir = createTempHome();
+    const repoDir = mkdtempSync(path.join(tmpdir(), "yapi-cli-listmenu-"));
+    const server = await withServer((req, res) => {
+      res.setHeader("content-type", "application/json");
+      if (req.url?.startsWith("/api/interface/list_menu")) {
+        res.end(JSON.stringify(listMenuFixture()));
+        return;
+      }
+      res.statusCode = 404;
+      res.end("not found");
+    });
+    try {
+      const result = await runCli(
+        [
+          "interface",
+          "list-menu",
+          "--base-url",
+          server.url,
+          "--project-id",
+          "365",
+          "--auth-mode",
+          "token",
+          "--token",
+          "any",
+          ...args,
+        ],
+        { cwd: repoDir, homeDir },
+      );
+      return result;
+    } finally {
+      await server.close();
+    }
+  }
+
+  test("filters menu by --path substring (case-insensitive)", async () => {
+    const result = await runListMenuCli(["--path", "/api/AUTH/token"]);
+    assert.equal(result.status, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.data.total, 1);
+    assert.equal(out.data.matches[0].path, "/api/auth/token");
+    assert.equal(out.data.matches[0]._id, 2);
+    assert.equal(out.data.matches[0].cat_name, "Auth");
+  });
+
+  test("filters menu by --method (exact match, case-insensitive)", async () => {
+    const result = await runListMenuCli(["--method", "get"]);
+    assert.equal(result.status, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.data.total, 1);
+    assert.equal(out.data.matches[0].method, "GET");
+    assert.equal(out.data.matches[0].path, "/api/user/get");
+  });
+
+  test("combines --path and --method filters with AND semantics", async () => {
+    const result = await runListMenuCli(["--path", "/api/auth", "--method", "POST"]);
+    assert.equal(result.status, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.data.total, 3);
+    const paths = out.data.matches.map((m: { path: string }) => m.path).sort();
+    assert.deepEqual(paths, ["/api/auth/login", "/api/auth/logout", "/api/auth/token"]);
+  });
+
+  test("returns empty matches when nothing matches the filter", async () => {
+    const result = await runListMenuCli(["--path", "/no/such/route"]);
+    assert.equal(result.status, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.data.total, 0);
+    assert.deepEqual(out.data.matches, []);
+  });
+
+  test("passes through full menu when no filter is given", async () => {
+    const result = await runListMenuCli([]);
+    assert.equal(result.status, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    // unchanged shape: data is the raw category list
+    assert.equal(Array.isArray(out.data), true);
+    assert.equal(out.data.length, 2);
+    assert.equal(out.data[0].name, "Auth");
+  });
+});

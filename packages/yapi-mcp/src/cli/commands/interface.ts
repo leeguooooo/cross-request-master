@@ -40,6 +40,41 @@ export async function runInterface(action: string, subAction: string, options: O
         }
         return { ok: true, queryItems: [["project_id", projectId]] };
       },
+      (payload, opts) => {
+        const pathFilter = String(opts.path || "").trim().toLowerCase();
+        const methodFilter = String(opts.method || "").trim().toUpperCase();
+        if (!pathFilter && !methodFilter) return payload;
+
+        if (!payload || typeof payload !== "object") return payload;
+        const record = payload as Record<string, any>;
+        const cats = record.data;
+        if (!Array.isArray(cats)) return payload;
+
+        const matches: Array<Record<string, unknown>> = [];
+        for (const cat of cats) {
+          const list = Array.isArray(cat?.list) ? cat.list : [];
+          for (const item of list) {
+            const itemPath = String(item?.path || "").toLowerCase();
+            const itemMethod = String(item?.method || "").toUpperCase();
+            if (pathFilter && !itemPath.includes(pathFilter)) continue;
+            if (methodFilter && itemMethod !== methodFilter) continue;
+            matches.push({
+              project_id: item?.project_id,
+              catid: item?.catid,
+              cat_name: cat?.name,
+              _id: item?._id,
+              title: item?.title,
+              path: item?.path,
+              method: item?.method,
+            });
+          }
+        }
+        return {
+          errcode: record.errcode ?? 0,
+          errmsg: record.errmsg ?? "ok",
+          data: { matches, total: matches.length },
+        };
+      },
     );
   }
   if (action === "get") {

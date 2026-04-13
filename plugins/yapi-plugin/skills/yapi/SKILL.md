@@ -67,13 +67,56 @@ yapi whoami
 ```
 
 ## Quick workflow
-1. If user gives a YApi URL, verify it belongs to configured `base_url`.
+1. **Classify the user input first** — do not pick a strategy until you know which it is:
+   - **A. YApi page URL** (`https://yapi.example.com/project/123/api/456`) → extract IDs from path → `yapi interface get --id 456`. Skip search.
+   - **B. HTTP endpoint path** (`/api/auth/token`, `/v1/users/:id`) → see `## Find interface by HTTP path` below. **`yapi search` does not index paths**, do not use it for this case.
+   - **C. Product keyword** (`语音房列表`, `voice room`) → `yapi search` with keyword expansion (see `## Keyword expansion`).
+   - **D. Numeric `api_id`** → `yapi interface get --id <api_id>` directly.
 2. Confirm auth (`yapi whoami`), then run `yapi login --browser` when needed (open base URL, finish login in browser, then press Enter to sync cookie).
-3. Resolve target by `api_id` / keyword / category.
-4. If the keyword is fuzzy product language, expand and retry related search terms before asking follow-up questions.
-5. Fetch raw JSON first, then summarize: method, path, headers, params, body, response schema/examples.
-6. For docs sync tasks, do `--dry-run` first, then real sync.
-7. If docs sync still hits `413`, note that CLI already retries the file with `--mermaid-classic`; if it still fails, split the doc or reduce embedded diagrams.
+3. Fetch raw JSON first, then summarize: method, path, headers, params, body, response schema/examples.
+4. For docs sync tasks, do `--dry-run` first, then real sync.
+5. If docs sync still hits `413`, note that CLI already retries the file with `--mermaid-classic`; if it still fails, split the doc or reduce embedded diagrams.
+
+## Find interface by HTTP path
+
+When the user gives an HTTP endpoint path like `/api/auth/token` (not a YApi page URL), `yapi search` will return empty because YApi's project search **does not index interface paths**. Use `yapi interface list-menu` with the built-in `--path` filter instead — the CLI does the filtering, no shell pipes needed.
+
+**Required input**: project ID. If the user did not provide one, ask first or list candidates (`yapi project list --group-id <id>`); do not start enumerating projects/groups speculatively.
+
+```bash
+# substring match, case-insensitive (matches /api/auth/token, /api/auth/token/refresh, etc.)
+yapi interface list-menu --project-id 365 --path /api/auth/token
+
+# narrow further by HTTP method (case-insensitive exact match)
+yapi interface list-menu --project-id 365 --path /api/auth/token --method POST
+
+# combine to find all POST endpoints under a prefix
+yapi interface list-menu --project-id 365 --path /api/auth --method POST
+```
+
+The filtered response shape is:
+```json
+{
+  "errcode": 0,
+  "data": {
+    "matches": [
+      { "project_id": 365, "catid": 100, "cat_name": "Auth",
+        "_id": 31400, "title": "Get Token", "path": "/api/auth/token", "method": "POST" }
+    ],
+    "total": 1
+  }
+}
+```
+
+After locating the `_id`, fetch full details:
+```bash
+yapi interface get --id 31400
+```
+
+**Anti-patterns — do not do these**:
+- ❌ `yapi search --q '/api/auth/token'` (project search does not index paths; will return empty)
+- ❌ `yapi interface list --project-id X --limit all | python ...` (slow, brittle, blocked by most security gates)
+- ❌ Enumerating groups → projects → repeated `search` to guess where the path lives. Ask the user for the project instead.
 
 ## Keyword expansion
 
@@ -152,6 +195,8 @@ yapi project list --group-id 129 --page 1 --limit 10
 yapi project get --id 365
 yapi project token --project-id 365
 yapi interface list-menu --project-id 365
+yapi interface list-menu --project-id 365 --path /api/auth/token
+yapi interface list-menu --project-id 365 --path /api/auth --method POST
 yapi interface list --project-id 365 --limit all
 yapi interface get --id 31400
 yapi interface cat add --project-id 365 --name "公共分类" --desc ""

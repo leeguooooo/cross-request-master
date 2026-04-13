@@ -386,6 +386,14 @@ async function main(): Promise<number> {
           .option("desc", { type: "string" })
           .option("page", { type: "number" })
           .option("limit", { type: "string" })
+          .option("path", {
+            type: "string",
+            describe: "(list-menu) filter results by HTTP path substring (case-insensitive)",
+          })
+          .option("method", {
+            type: "string",
+            describe: "(list-menu) filter results by HTTP method (case-insensitive exact match)",
+          })
           .option("no-pretty", { type: "boolean" }),
       async (argv: Record<string, unknown>) => {
         commandHandled = true;
@@ -630,7 +638,7 @@ async function main(): Promise<number> {
     )
     .option("path", { type: "string", describe: "API path (e.g., /api/interface/get)" })
     .option("url", { type: "string", describe: "full URL (overrides base-url/path)" })
-    .option("method", { type: "string", describe: "HTTP method", default: "GET" })
+    .option("method", { type: "string", describe: "HTTP method (default: GET)" })
     .option("query", { type: "string", array: true, describe: "query param key=value (repeatable)" })
     .option("header", { type: "string", array: true, describe: "request header Header:Value (repeatable)" })
     .option("data", { type: "string", describe: "request body (JSON or text)" })
