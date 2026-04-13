@@ -29,6 +29,8 @@ yapi install-skill --yapi-base-url=https://your-yapi-domain.com --yapi-auth-mode
 
 ## Command policy
 
+Always use the real `yapi` CLI directly; **do not call plugin-local `node scripts/...` files from the user's project**. Inside Cursor or Claude Code, commands run from the user's workspace, so relative plugin paths are unreliable.
+
 Prefer `yapi` command. If missing, fallback to one-shot npx without forcing global install:
 
 ```bash
