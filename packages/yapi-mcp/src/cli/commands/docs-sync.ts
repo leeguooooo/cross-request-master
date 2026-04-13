@@ -933,7 +933,7 @@ export async function runDocsSyncBindings(action: string, args: DocsSyncBindArgs
   }
 
   const writeActions = new Set(["add", "update", "remove", "rm", "delete", "del"]);
-  const readActions = new Set(["list", "get"]);
+  const readActions = new Set(["list", "get", "show"]);
   if (!writeActions.has(action) && !readActions.has(action)) {
     console.error(`unknown docs-sync bind action: ${action}`);
     return 2;
@@ -976,13 +976,55 @@ export async function runDocsSyncBindings(action: string, args: DocsSyncBindArgs
     return 2;
   }
 
-  if (action === "get") {
+  if (action === "get" || action === "show") {
     const binding = config.bindings[args.name];
     if (!binding) {
       console.error(`binding not found: ${args.name}`);
       return 2;
     }
-    console.log(JSON.stringify(binding, null, 2));
+    const fileDocIds = binding.files && typeof binding.files === "object" ? binding.files : {};
+    const fileHashes =
+      binding.file_hashes && typeof binding.file_hashes === "object" ? binding.file_hashes : {};
+    const fileLastSyncedAt =
+      (binding as DocsSyncBinding & { file_last_synced_at?: Record<string, string> })
+        .file_last_synced_at || {};
+    const fileNames = Array.from(new Set([...Object.keys(fileDocIds), ...Object.keys(fileHashes)]))
+      .sort((a, b) => a.localeCompare(b));
+    const files = fileNames.reduce<Record<string, Record<string, string | number>>>(
+      (result, fileName) => {
+        const entry: Record<string, string | number> = {};
+        if (typeof fileHashes[fileName] === "string") {
+          entry.hash = fileHashes[fileName];
+        }
+        if (typeof fileDocIds[fileName] === "number") {
+          entry.doc_id = fileDocIds[fileName];
+        }
+        if (typeof fileLastSyncedAt[fileName] === "string") {
+          entry.last_synced_at = fileLastSyncedAt[fileName];
+        }
+        result[fileName] = entry;
+        return result;
+      },
+      {},
+    );
+    const payload: Record<string, unknown> = {
+      name: args.name,
+      dir: binding.dir,
+      project_id: binding.project_id,
+      catid: binding.catid,
+      files,
+    };
+    if (binding.template_id !== undefined) {
+      payload.template_id = binding.template_id;
+    }
+    console.log(JSON.stringify(payload, null, 2));
+    console.log("summary:");
+    console.log(`binding ${args.name} -> dir=${binding.dir}`);
+    console.log(
+      `project_id=${binding.project_id ?? ""} catid=${binding.catid ?? ""}` +
+        (binding.template_id !== undefined ? ` template_id=${binding.template_id}` : ""),
+    );
+    console.log(`files=${fileNames.length}`);
     return 0;
   }
 

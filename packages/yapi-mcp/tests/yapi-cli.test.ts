@@ -1,22 +1,27 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { spawn } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, chmodSync, existsSync } from "node:fs";
-import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { afterEach, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { main as runMain } from "../src/yapi-cli";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = path.resolve(TEST_DIR, "..");
-const CLI_ENTRY = path.join(PACKAGE_ROOT, "src", "yapi-cli.ts");
-const TSX_BIN = path.join(
-  PACKAGE_ROOT,
-  "node_modules",
-  ".bin",
-  process.platform === "win32" ? "tsx.cmd" : "tsx",
-);
+const MOCK_SERVER_HOST = "mock.yapi.test";
+const mockServers = new Map<
+  string,
+  (
+    req: IncomingMessage,
+    res: ServerResponse<IncomingMessage>,
+  ) => void | Promise<void>
+>();
+const originalFetch = globalThis.fetch.bind(globalThis);
+let mockFetchInstalled = false;
+let nextMockServerId = 0;
 
 function createTempHome(): string {
   return mkdtempSync(path.join(tmpdir(), "yapi-cli-home-"));
@@ -37,71 +42,160 @@ async function runCli(
     env?: Record<string, string>;
   },
 ): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  installMockFetch();
   const yapiHome = path.join(options.homeDir, ".yapi");
-  const child = spawn(TSX_BIN, [CLI_ENTRY, ...args], {
-    cwd: options.cwd,
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      HOME: options.homeDir,
-      YAPI_HOME: yapiHome,
-      YAPI_NO_UPDATE_CHECK: "1",
-      FORCE_COLOR: "0",
-      ...options.env,
-    },
-  });
   let stdout = "";
   let stderr = "";
-  child.stdout?.setEncoding("utf8");
-  child.stderr?.setEncoding("utf8");
-  child.stdout?.on("data", (chunk) => {
-    stdout += chunk;
-  });
-  child.stderr?.on("data", (chunk) => {
-    stderr += chunk;
-  });
-  const status = await new Promise<number | null>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error(`cli timed out: ${args.join(" ")}`));
-    }, 20000);
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve(code);
-    });
-  });
+  const previousCwd = process.cwd();
+  const previousExitCode = process.exitCode;
+  const envKeys = [
+    "HOME",
+    "YAPI_HOME",
+    "YAPI_NO_UPDATE_CHECK",
+    "FORCE_COLOR",
+    ...Object.keys(options.env || {}),
+  ];
+  const previousEnv = new Map(envKeys.map((key) => [key, process.env[key]]));
+  const stdoutWrite = process.stdout.write.bind(process.stdout);
+  const stderrWrite = process.stderr.write.bind(process.stderr);
+  const stdoutCapture = ((chunk: unknown, encoding?: BufferEncoding, cb?: (error?: Error | null) => void) => {
+    stdout += Buffer.isBuffer(chunk) ? chunk.toString(encoding || "utf8") : String(chunk);
+    cb?.(null);
+    return true;
+  }) as typeof process.stdout.write;
+  const stderrCapture = ((chunk: unknown, encoding?: BufferEncoding, cb?: (error?: Error | null) => void) => {
+    stderr += Buffer.isBuffer(chunk) ? chunk.toString(encoding || "utf8") : String(chunk);
+    cb?.(null);
+    return true;
+  }) as typeof process.stderr.write;
+
+  process.chdir(options.cwd);
+  process.stdout.write = stdoutCapture;
+  process.stderr.write = stderrCapture;
+  process.env.HOME = options.homeDir;
+  process.env.YAPI_HOME = yapiHome;
+  process.env.YAPI_NO_UPDATE_CHECK = "1";
+  process.env.FORCE_COLOR = "0";
+  for (const [key, value] of Object.entries(options.env || {})) {
+    process.env[key] = value;
+  }
+  process.exitCode = undefined;
+
+  let status: number | null = null;
+  try {
+    status = await Promise.race([
+      runMain(args),
+      new Promise<number>((_, reject) => {
+        setTimeout(() => reject(new Error(`cli timed out: ${args.join(" ")}`)), 20000);
+      }),
+    ]);
+  } finally {
+    process.chdir(previousCwd);
+    process.stdout.write = stdoutWrite;
+    process.stderr.write = stderrWrite;
+    process.exitCode = previousExitCode;
+    for (const key of envKeys) {
+      const value = previousEnv.get(key);
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+
   return { status, stdout, stderr };
 }
 
 async function withServer(
   handler: (
-    req: http.IncomingMessage,
-    res: http.ServerResponse<http.IncomingMessage>,
+    req: IncomingMessage,
+    res: ServerResponse<IncomingMessage>,
   ) => void | Promise<void>,
 ): Promise<{ url: string; close: () => Promise<void> }> {
-  const server = http.createServer(async (req, res) => {
-    try {
-      await handler(req, res);
-    } catch (error) {
-      res.statusCode = 500;
-      res.end(error instanceof Error ? error.stack || error.message : String(error));
-    }
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  if (!address || typeof address === "string") {
-    throw new Error("failed to bind test server");
-  }
+  const id = `server-${nextMockServerId++}`;
+  mockServers.set(id, handler);
   return {
-    url: `http://127.0.0.1:${address.port}`,
-    close: () =>
-      new Promise<void>((resolve, reject) => {
-        server.closeAllConnections?.();
-        server.close((error) => (error ? reject(error) : resolve()));
+    url: `http://${MOCK_SERVER_HOST}/${id}`,
+    close: async () => {
+      mockServers.delete(id);
+    },
+  };
+}
+
+function installMockFetch(): void {
+  if (mockFetchInstalled) return;
+  mockFetchInstalled = true;
+  globalThis.fetch = async (input: URL | RequestInfo, init?: RequestInit): Promise<Response> => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    if (url.hostname !== MOCK_SERVER_HOST) {
+      return originalFetch(input, init);
+    }
+
+    const segments = url.pathname.split("/").filter(Boolean);
+    const serverId = segments.shift();
+    if (!serverId) {
+      return new Response("mock server not found", { status: 404 });
+    }
+    const handler = mockServers.get(serverId);
+    if (!handler) {
+      return new Response("mock server not found", { status: 404 });
+    }
+
+    const requestPath = `/${segments.join("/")}${url.search}`;
+    const bodyText = await request.text();
+    const req = Object.assign(Readable.from(bodyText ? [bodyText] : []), {
+      method: request.method,
+      url: requestPath,
+      headers: Object.fromEntries(request.headers.entries()),
+    }) as IncomingMessage;
+    const responseState = createMockResponse();
+
+    try {
+      await handler(req, responseState.res);
+    } catch (error) {
+      responseState.res.statusCode = 500;
+      responseState.res.end(error instanceof Error ? error.stack || error.message : String(error));
+    }
+
+    return responseState.toResponse();
+  };
+}
+
+function createMockResponse(): {
+  res: ServerResponse<IncomingMessage>;
+  toResponse: () => Response;
+} {
+  let statusCode = 200;
+  const headers = new Headers();
+  const chunks: string[] = [];
+
+  const res = {
+    get statusCode() {
+      return statusCode;
+    },
+    set statusCode(value: number) {
+      statusCode = value;
+    },
+    setHeader(name: string, value: string) {
+      headers.set(name, value);
+      return this;
+    },
+    end(chunk?: string | Buffer) {
+      if (chunk !== undefined) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk));
+      }
+      return this;
+    },
+  } as unknown as ServerResponse<IncomingMessage>;
+
+  return {
+    res,
+    toResponse: () =>
+      new Response(chunks.join(""), {
+        status: statusCode,
+        headers,
       }),
   };
 }
@@ -211,6 +305,7 @@ fs.writeFileSync(output, "<svg><text>" + repeated + "</text></svg>", "utf8");
 
 afterEach(() => {
   delete process.env.YAPI_PANDOC_MAX_BUFFER;
+  mockServers.clear();
 });
 
 describe("yapi cli docs-sync regression coverage", () => {
@@ -345,6 +440,90 @@ exit 0
     const config = readJson(path.join(yapiHome, "docs-sync.json"));
     assert.equal(config.bindings.projectA.dir, path.join("tk.com", "ai-girls", "docs", "yapi"));
     assert.match(result.stdout, /resolved/i);
+  });
+
+  test("bind show matches bind get output for the same binding", async () => {
+    const homeDir = createTempHome();
+    const yapiHome = ensureYapiHome(homeDir);
+    const repoDir = path.join(homeDir, "tk.com", "bind-show-demo");
+    mkdirSync(path.join(repoDir, ".git"), { recursive: true });
+    writeFileSync(
+      path.join(yapiHome, "docs-sync.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          bindings: {
+            docs: {
+              dir: "docs/yapi",
+              project_id: 267,
+              catid: 3667,
+              template_id: 88,
+              files: { "alpha.md": 101, "beta.md": 102 },
+              file_hashes: { "alpha.md": "hash-alpha", "beta.md": "hash-beta" },
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const getResult = await runCli(["docs-sync", "bind", "get", "--name", "docs"], {
+      cwd: repoDir,
+      homeDir,
+    });
+    const showResult = await runCli(["docs-sync", "bind", "show", "--name", "docs"], {
+      cwd: repoDir,
+      homeDir,
+    });
+
+    assert.equal(getResult.status, 0, getResult.stderr);
+    assert.equal(showResult.status, 0, showResult.stderr);
+    assert.equal(showResult.stdout, getResult.stdout);
+  });
+
+  test("bind get prints structured files mapping in JSON output", async () => {
+    const homeDir = createTempHome();
+    const yapiHome = ensureYapiHome(homeDir);
+    const repoDir = path.join(homeDir, "tk.com", "bind-get-demo");
+    mkdirSync(path.join(repoDir, ".git"), { recursive: true });
+    writeFileSync(
+      path.join(yapiHome, "docs-sync.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          bindings: {
+            docs: {
+              dir: "docs/yapi",
+              project_id: 267,
+              catid: 3667,
+              files: { "alpha.md": 101 },
+              file_hashes: { "alpha.md": "hash-alpha" },
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const result = await runCli(["docs-sync", "bind", "get", "--name", "docs"], {
+      cwd: repoDir,
+      homeDir,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    const [jsonText] = result.stdout.split("summary:\n");
+    const payload = JSON.parse(jsonText);
+    assert.deepEqual(payload.files, {
+      "alpha.md": {
+        doc_id: 101,
+        hash: "hash-alpha",
+      },
+    });
+    assert.match(result.stdout, /summary:/);
   });
 
   test("docs-sync binding run auto-recovers old relative dir against current repo", async () => {

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import type { Options, DocsSyncOptions, DocsSyncBindArgs } from "./cli/types";
@@ -190,8 +192,7 @@ function warnIfInstalledSkillsOutdated(options: { skip?: boolean }): void {
 
 // --- main ---
 
-async function main(): Promise<number> {
-  const rawArgs = hideBin(process.argv);
+export async function main(rawArgs = hideBin(process.argv)): Promise<number> {
 
   // Pre-parse for update check flags
   const hasHelp = rawArgs.includes("-h") || rawArgs.includes("--help");
@@ -578,7 +579,11 @@ async function main(): Promise<number> {
       (y: ReturnType<typeof yargs>) =>
         y
           .positional("subcmd", { type: "string", default: "" })
-          .positional("bindaction", { type: "string", default: "" })
+          .positional("bindaction", {
+            type: "string",
+            default: "",
+            describe: "bind action (list|get|show|add|update|remove)",
+          })
           .option("config", { type: "string" })
           .option("base-url", { type: "string" })
           .option("token", { type: "string" })
@@ -686,8 +691,19 @@ async function main(): Promise<number> {
   return 0;
 }
 
-main().then((code) => {
-  if (process.exitCode === undefined || process.exitCode === null) {
-    process.exitCode = code;
-  }
-});
+function isDirectExecution(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return import.meta.url === pathToFileURL(path.resolve(entry)).href;
+}
+
+if (isDirectExecution()) {
+  main().then((code) => {
+    if (process.exitCode === undefined || process.exitCode === null) {
+      process.exitCode = code;
+    }
+  }).catch((error) => {
+    console.error(error instanceof Error ? error.stack || error.message : String(error));
+    process.exitCode = 1;
+  });
+}
