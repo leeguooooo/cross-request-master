@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "cross-request-marketplace",
+  "owner": {
+    "name": "leeguooooo",
+    "email": "leeguooooo@gmail.com"
+  },
+  "metadata": {
+    "description": "Plugins from the cross-request-master project."
+  },
+  "plugins": [
+    {
+      "name": "yapi-plugin",
+      "description": "Use YApi from Claude Code through the local yapi CLI. Inspect interfaces and sync API docs.",
+      "version": "0.1.2",
+      "category": "development",
+      "source": "./plugins/yapi-plugin",
+      "homepage": "https://github.com/leeguooooo/cross-request-master/tree/main/plugins/yapi-plugin"
+    }
+  ]
+}
