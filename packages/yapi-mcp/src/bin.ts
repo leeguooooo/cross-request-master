@@ -40,4 +40,16 @@ if (missing.length > 0) {
 }
 
 // All good — delegate to the real CLI entry.
-require("./yapi-cli");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { main } = require("./yapi-cli") as { main: () => Promise<number> };
+main()
+  .then((code: number) => {
+    if (process.exitCode === undefined || process.exitCode === null) {
+      process.exitCode = code;
+    }
+  })
+  .catch((error: unknown) => {
+    // eslint-disable-next-line no-console
+    console.error(error instanceof Error ? error.stack || error.message : String(error));
+    process.exitCode = 1;
+  });
