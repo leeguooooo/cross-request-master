@@ -667,7 +667,7 @@ async function updateInterface(
   }
 }
 
-async function syncDocsDir(
+export async function syncDocsDir(
   dirPath: string,
   mapping: DocsSyncMapping,
   options: DocsSyncOptions,
