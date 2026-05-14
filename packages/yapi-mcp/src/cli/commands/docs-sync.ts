@@ -37,14 +37,12 @@ import {
 } from "../utils";
 import { HttpStatusError, buildUrl, fetchWithTimeout } from "../http";
 import {
-  extractFirstMarkdownH1Title,
   isD2Available,
   isGraphvizAvailable,
   isMmdcAvailable,
   isPandocAvailable,
   isPlantUmlAvailable,
   probeMermaidRuntime,
-  renderMarkdownToHtml,
 } from "../../docs/markdown";
 import {
   buildPayloadMarkdownField,
@@ -378,10 +376,15 @@ function saveMapping(mapping: DocsSyncMapping, mappingPath: string): void {
 function resolveSourceFiles(dirPath: string, mapping: DocsSyncMapping): string[] {
   const sources = Array.isArray(mapping.source_files) ? mapping.source_files : [];
   if (!sources.length) {
-    return fs
-      .readdirSync(dirPath)
-      .filter((name) => name.endsWith(".md") && name !== "README.md")
-      .map((name) => path.join(dirPath, name))
+    const entries = listSourceDocFiles(dirPath);
+    const { kept, dropped } = resolveConflicts(entries);
+    for (const droppedFile of dropped) {
+      console.warn(
+        `⚠️ 检测到 ${droppedFile} 与同名 .html 共存，将上传 .html 版本；建议删除 ${droppedFile}。`,
+      );
+    }
+    return kept
+      .map((entry) => path.join(dirPath, entry.file))
       .sort((a, b) => a.localeCompare(b));
   }
   return sources.map((source) => {
@@ -618,23 +621,6 @@ function resolveRetryModes(
   return [];
 }
 
-function renderDocsSyncHtml(
-  markdown: string,
-  options: DocsSyncOptions,
-  logPrefix: string,
-): {
-  html: string;
-  mermaidFailed: boolean;
-  diagramFailed: boolean;
-  diagramMetrics: DiagramRenderMetric[];
-} {
-  // 过渡期薄包装：Task 8 把主循环改成直接传 SourceDoc 后，本函数将被删除。
-  return renderSourceDocToHtml(
-    { kind: "markdown", relPath: "", raw: markdown, title: "" },
-    options,
-    logPrefix,
-  );
-}
 
 async function addInterface(
   title: string,
@@ -731,8 +717,8 @@ async function syncDocsDir(
     const relName = path.basename(mdPath);
     const apiPath = `/${stem}`;
 
-    const markdown = fs.readFileSync(mdPath, "utf8");
-    const desiredTitle = extractFirstMarkdownH1Title(markdown).trim() || stem;
+    const doc = loadSourceDoc(mdPath, relName);
+    const desiredTitle = doc.title || stem;
 
     let docId = mapping.files[relName];
     if (!docId) {
@@ -759,7 +745,8 @@ async function syncDocsDir(
     }
 
     const logPrefix = `[docs-sync:${relName}]`;
-    const hasMermaidBlocks = /```mermaid\s*\r?\n/i.test(markdown);
+    const hasMermaidBlocks =
+      doc.kind === "markdown" && /```mermaid\s*\r?\n/i.test(doc.raw);
     const rememberedMode =
       !options.noMermaid && options.mermaidLook === "handDrawn"
         ? mapping.file_render_modes?.[relName]
@@ -770,10 +757,7 @@ async function syncDocsDir(
       console.log(`${logPrefix} using remembered fallback: ${resolveRenderModeLabel(appliedMode)}.`);
     }
 
-    let contentHash = buildDocsSyncHash(
-      { kind: "markdown", relPath: relName, raw: markdown, title: "" },
-      effectiveOptions,
-    );
+    let contentHash = buildDocsSyncHash(doc, effectiveOptions);
     const previousHash = mapping.file_hashes[relName];
     const currentTitle = docId ? byId[String(docId)]?.title : "";
     const titleToUpdate = !docId
@@ -794,8 +778,8 @@ async function syncDocsDir(
       continue;
     }
 
-    let { html, mermaidFailed, diagramFailed, diagramMetrics } = renderDocsSyncHtml(
-      markdown,
+    let { html, mermaidFailed, diagramFailed, diagramMetrics } = renderSourceDocToHtml(
+      doc,
       effectiveOptions,
       logPrefix,
     );
@@ -807,12 +791,12 @@ async function syncDocsDir(
 
     const payloadObject =
       docId && action !== "create"
-        ? buildUpdatePayload(docId, titleToUpdate, markdown, html)
+        ? buildUpdatePayload(docId, titleToUpdate, buildPayloadMarkdownField(doc), html)
         : buildAddPayload({}, desiredTitle, apiPath, Number(mapping.catid || 0), Number(mapping.project_id || 0));
     const preview: DocsSyncPreviewItem = {
       fileName: relName,
       action,
-      markdownBytes: Buffer.byteLength(markdown, "utf8"),
+      markdownBytes: Buffer.byteLength(doc.raw, "utf8"),
       htmlBytes: Buffer.byteLength(html, "utf8"),
       payloadBytes: Buffer.byteLength(JSON.stringify(payloadObject), "utf8"),
       apiPath: docId ? fileInfos[relName]?.apiPath || apiPath : apiPath,
@@ -823,7 +807,7 @@ async function syncDocsDir(
 
     if (!options.dryRun && docId && action !== "skip") {
       try {
-        await updateInterface(docId, titleToUpdate, markdown, html, request);
+        await updateInterface(docId, titleToUpdate, buildPayloadMarkdownField(doc), html, request);
       } catch (error) {
         if (error instanceof HttpStatusError && error.status === 413) {
           const attempts: DocsSyncRetryAttempt[] = [];
@@ -836,26 +820,23 @@ async function syncDocsDir(
             attempts.push(retryAttempt);
             try {
               const retryOptions = resolveDocsSyncOptionsForMode(options, retryMode);
-              const retryResult = renderDocsSyncHtml(markdown, retryOptions, logPrefix);
+              const retryResult = renderSourceDocToHtml(doc, retryOptions, logPrefix);
               const retryPayload = buildUpdatePayload(
                 docId,
                 titleToUpdate,
-                markdown,
+                buildPayloadMarkdownField(doc),
                 retryResult.html,
               );
               retryAttempt.payloadBytes = Buffer.byteLength(JSON.stringify(retryPayload), "utf8");
               retryAttempt.htmlBytes = Buffer.byteLength(retryResult.html, "utf8");
-              await updateInterface(docId, titleToUpdate, markdown, retryResult.html, request);
+              await updateInterface(docId, titleToUpdate, buildPayloadMarkdownField(doc), retryResult.html, request);
               html = retryResult.html;
               mermaidFailed = retryResult.mermaidFailed;
               diagramFailed = retryResult.diagramFailed;
               diagramMetrics = retryResult.diagramMetrics;
               appliedMode = retryMode;
               effectiveOptions = retryOptions;
-              contentHash = buildDocsSyncHash(
-                { kind: "markdown", relPath: relName, raw: markdown, title: "" },
-                effectiveOptions,
-              );
+              contentHash = buildDocsSyncHash(doc, effectiveOptions);
               resolved = true;
               break;
             } catch (retryError) {
