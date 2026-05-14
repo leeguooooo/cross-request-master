@@ -770,7 +770,10 @@ async function syncDocsDir(
       console.log(`${logPrefix} using remembered fallback: ${resolveRenderModeLabel(appliedMode)}.`);
     }
 
-    let contentHash = buildDocsSyncHash(markdown, effectiveOptions);
+    let contentHash = buildDocsSyncHash(
+      { kind: "markdown", relPath: relName, raw: markdown, title: "" },
+      effectiveOptions,
+    );
     const previousHash = mapping.file_hashes[relName];
     const currentTitle = docId ? byId[String(docId)]?.title : "";
     const titleToUpdate = !docId
@@ -849,7 +852,10 @@ async function syncDocsDir(
               diagramMetrics = retryResult.diagramMetrics;
               appliedMode = retryMode;
               effectiveOptions = retryOptions;
-              contentHash = buildDocsSyncHash(markdown, effectiveOptions);
+              contentHash = buildDocsSyncHash(
+                { kind: "markdown", relPath: relName, raw: markdown, title: "" },
+                effectiveOptions,
+              );
               resolved = true;
               break;
             } catch (retryError) {

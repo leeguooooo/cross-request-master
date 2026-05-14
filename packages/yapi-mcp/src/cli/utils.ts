@@ -13,6 +13,7 @@ import type {
   SkillUpdateReminderCache,
   UpdateCache,
 } from "./types";
+import type { SourceDoc } from "../docs/source-doc";
 
 export function parseKeyValue(raw: string): [string, string] {
   if (!raw || !raw.includes("=")) throw new Error("expected key=value");
@@ -474,7 +475,7 @@ export function resolveLimit(value: number | string | undefined, fallback: strin
   return fallback;
 }
 
-export function buildDocsSyncHash(markdown: string, options: DocsSyncOptions): string {
+export function buildDocsSyncHash(doc: SourceDoc, options: DocsSyncOptions): string {
   const hash = crypto.createHash("sha1");
   hash.update(options.noMermaid ? "no-mermaid\n" : "mermaid\n");
   if (!options.noMermaid) {
@@ -485,7 +486,8 @@ export function buildDocsSyncHash(markdown: string, options: DocsSyncOptions): s
       hash.update(`mermaid-seed:${options.mermaidHandDrawnSeed}\n`);
     }
   }
-  hash.update(markdown);
+  // 兼容路径：markdown kind 直接 hash raw（与旧版一字节不差）；html kind 加 "html:" 前缀避免撞车。
+  hash.update(doc.kind === "markdown" ? doc.raw : `html:${doc.raw}`);
   return hash.digest("hex");
 }
 
