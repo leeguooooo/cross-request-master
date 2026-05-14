@@ -250,6 +250,16 @@ Notes:
 - If upload hits `413 Payload Too Large`, the CLI first retries that file with `--mermaid-classic`, then reports payload size, parsed server limit (when available), and the largest Mermaid block if it still fails.
 - Mermaid/PlantUML/Graphviz/D2 rendering depends on local tool availability; missing tools do not block basic sync.
 
+### HTML source files (0.6.0+)
+
+`docs-sync` picks up both `.md` and `.html` in the bound directory. HTML files **skip the rendering pipeline entirely** and are uploaded verbatim as the YApi `desc` field; the `markdown` field carries a warning banner + fenced HTML source so teammates won't accidentally edit the doc on the YApi web UI (which would clobber `desc`).
+
+- HTML must be self-contained (inline CSS, base64 / CDN images); the CLI does not rewrite relative resource paths.
+- HTML content is **not** XSS-sanitized — trust the source.
+- When both `foo.md` and `foo.html` exist in the directory, the CLI uses `.html` and warns; delete the `.md` to silence the warning.
+- Watch mode (`--watch`) monitors both `.md` and `.html` changes.
+- Hash compatibility: existing `.md` files keep their old hash exactly; upgrading from 0.5.x will not trigger spurious re-pushes.
+
 ## Interface creation guardrails
 - Always set `req_body_type` (use `json` if unsure) and provide `res_body` (prefer JSON Schema) when creating/updating interfaces.
 - Put structured request/response fields in `req_*` / `res_body`, not only in free-text `desc`/`markdown`.
