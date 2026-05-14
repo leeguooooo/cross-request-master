@@ -38,6 +38,51 @@ function detectKindByExt(relPath: string): SourceDocKind | null {
   return null;
 }
 
+export interface SourceDocEntry {
+  file: string;
+  kind: SourceDocKind;
+}
+
+export function listSourceDocFiles(dir: string): SourceDocEntry[] {
+  const out: SourceDocEntry[] = [];
+  for (const name of fs.readdirSync(dir)) {
+    if (name === "README.md" || name === "README.html") continue;
+    const kind = detectKindByExt(name);
+    if (!kind) continue;
+    out.push({ file: name, kind });
+  }
+  return out;
+}
+
+export function resolveConflicts(
+  entries: SourceDocEntry[],
+): { kept: SourceDocEntry[]; dropped: string[] } {
+  const byStem = new Map<string, SourceDocEntry[]>();
+  for (const entry of entries) {
+    const stem = entry.file.replace(/\.(md|html)$/, "");
+    const arr = byStem.get(stem) ?? [];
+    arr.push(entry);
+    byStem.set(stem, arr);
+  }
+  const kept: SourceDocEntry[] = [];
+  const dropped: string[] = [];
+  for (const [, group] of byStem) {
+    if (group.length === 1) {
+      kept.push(group[0]);
+      continue;
+    }
+    const htmlOne = group.find((g) => g.kind === "html");
+    const mdOnes = group.filter((g) => g.kind === "markdown");
+    if (htmlOne) {
+      kept.push(htmlOne);
+      for (const m of mdOnes) dropped.push(m.file);
+    } else {
+      kept.push(group[0]);
+    }
+  }
+  return { kept, dropped };
+}
+
 export function loadSourceDoc(absPath: string, relPath: string): SourceDoc {
   const kind = detectKindByExt(relPath);
   if (!kind) {

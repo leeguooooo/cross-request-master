@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 import type { SourceDoc } from "../src/docs/source-doc";
-import { buildPayloadMarkdownField, extractDocTitle, loadSourceDoc } from "../src/docs/source-doc";
+import {
+  buildPayloadMarkdownField,
+  extractDocTitle,
+  listSourceDocFiles,
+  loadSourceDoc,
+  resolveConflicts,
+} from "../src/docs/source-doc";
 
 describe("source-doc module", () => {
   test("bootstrap: SourceDoc type is exported", () => {
@@ -87,5 +93,53 @@ describe("buildPayloadMarkdownField", () => {
     const out = buildPayloadMarkdownField(doc);
     assert.ok(out.includes("~~~html"), "should use ~~~ fence when raw contains ```");
     assert.ok(out.endsWith("~~~"), "closing fence should also be ~~~");
+  });
+});
+
+describe("listSourceDocFiles", () => {
+  test("collects .md and .html, excludes README.*", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "src-doc-list-"));
+    writeFileSync(path.join(dir, "a.md"), "");
+    writeFileSync(path.join(dir, "b.html"), "");
+    writeFileSync(path.join(dir, "README.md"), "");
+    writeFileSync(path.join(dir, "README.html"), "");
+    writeFileSync(path.join(dir, "ignore.txt"), "");
+    writeFileSync(path.join(dir, "ignore.htm"), "");
+    const entries = listSourceDocFiles(dir).sort((x, y) => x.file.localeCompare(y.file));
+    assert.deepEqual(entries, [
+      { file: "a.md", kind: "markdown" },
+      { file: "b.html", kind: "html" },
+    ]);
+  });
+});
+
+describe("resolveConflicts", () => {
+  test("no conflict: returns all kept", () => {
+    const r = resolveConflicts([
+      { file: "a.md", kind: "markdown" },
+      { file: "b.html", kind: "html" },
+    ]);
+    assert.equal(r.kept.length, 2);
+    assert.deepEqual(r.dropped, []);
+  });
+  test("same stem .md + .html → keep html, drop md", () => {
+    const r = resolveConflicts([
+      { file: "foo.md", kind: "markdown" },
+      { file: "foo.html", kind: "html" },
+      { file: "bar.md", kind: "markdown" },
+    ]);
+    assert.deepEqual(r.kept.map((x) => x.file).sort(), ["bar.md", "foo.html"]);
+    assert.deepEqual(r.dropped, ["foo.md"]);
+  });
+  test("multiple conflicts independent", () => {
+    const r = resolveConflicts([
+      { file: "a.md", kind: "markdown" },
+      { file: "a.html", kind: "html" },
+      { file: "b.md", kind: "markdown" },
+      { file: "b.html", kind: "html" },
+    ]);
+    assert.equal(r.kept.length, 2);
+    assert.deepEqual(r.dropped.sort(), ["a.md", "b.md"]);
+    assert.ok(r.kept.every((x) => x.kind === "html"));
   });
 });
