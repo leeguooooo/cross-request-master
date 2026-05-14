@@ -322,12 +322,12 @@ describe("buildPayloadMarkdownField", () => {
     assert.ok(out.includes("<p>hi</p>"));
     assert.ok(out.endsWith("```"));
   });
-  test("html doc with backticks in source still produces parseable fence", () => {
+  test("html doc with backticks in source switches to tilde fence", () => {
     // 极少见但要保护：源 html 包含 ``` 不应让代码围栏提前结束。
     const doc = { kind: "html" as const, relPath: "b.html", raw: "<pre>```inside```</pre>", title: "" };
     const out = buildPayloadMarkdownField(doc);
-    // 用 ~~~html 围栏避开 ``` 冲突
-    assert.ok(out.includes("~~~html") || !out.includes("```inside```\n```\n"));
+    assert.ok(out.includes("~~~html"), "should use ~~~ fence when raw contains ```");
+    assert.ok(out.endsWith("~~~"), "closing fence should also be ~~~");
   });
 });
 ```
@@ -688,12 +688,18 @@ function legacyHash(markdown: string, options: DocsSyncOptions): string {
 }
 
 const opts = {} as DocsSyncOptions;
+const mermaidOpts = { mermaidLook: "handDrawn", mermaidHandDrawnSeed: 42 } as unknown as DocsSyncOptions;
 
 describe("buildDocsSyncHash", () => {
-  test("markdown kind: hash equals legacy hash byte-for-byte", () => {
+  test("markdown kind: hash equals legacy hash byte-for-byte (default options)", () => {
     const md = "# Title\nbody";
     const doc: SourceDoc = { kind: "markdown", relPath: "x.md", raw: md, title: "Title" };
     assert.equal(buildDocsSyncHash(doc, opts), legacyHash(md, opts));
+  });
+  test("markdown kind: hash equals legacy hash with mermaid options", () => {
+    const md = "# T\n\n```mermaid\ngraph TD;A-->B;\n```\n";
+    const doc: SourceDoc = { kind: "markdown", relPath: "x.md", raw: md, title: "T" };
+    assert.equal(buildDocsSyncHash(doc, mermaidOpts), legacyHash(md, mermaidOpts));
   });
   test("html kind: hash differs from same-raw markdown kind", () => {
     const raw = "<p>hi</p>";
@@ -714,7 +720,7 @@ describe("buildDocsSyncHash", () => {
 node --test --import tsx tests/docs-sync-hash.test.ts
 ```
 
-Expected: 3 failing（typescript 类型错误或 runtime 报错）。
+Expected: 4 failing（typescript 类型错误或 runtime 报错）。
 
 - [ ] **Step 3: 改 `buildDocsSyncHash` 签名**
 
@@ -762,7 +768,7 @@ pnpm run type-check
 pnpm test
 ```
 
-Expected: 3 新通过；其它现有测试不受影响。
+Expected: 4 新通过；其它现有测试不受影响。
 
 - [ ] **Step 6: 提交**
 
