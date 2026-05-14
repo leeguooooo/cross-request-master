@@ -19,6 +19,19 @@ function stripTags(input: string): string {
   return input.replace(/<[^>]+>/g, "").trim();
 }
 
+export function buildPayloadMarkdownField(doc: SourceDoc): string {
+  if (doc.kind === "markdown") return doc.raw;
+  const fence = doc.raw.includes("```") ? "~~~" : "```";
+  return [
+    "> ⚠️ 此文档由 HTML 源生成，请勿在 YApi 网页编辑（会覆盖 desc）。",
+    `> 源文件：${doc.relPath}`,
+    "",
+    `${fence}html`,
+    doc.raw,
+    fence,
+  ].join("\n");
+}
+
 function detectKindByExt(relPath: string): SourceDocKind | null {
   if (relPath.endsWith(".md")) return "markdown";
   if (relPath.endsWith(".html")) return "html";

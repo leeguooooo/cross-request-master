@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 import type { SourceDoc } from "../src/docs/source-doc";
-import { extractDocTitle, loadSourceDoc } from "../src/docs/source-doc";
+import { buildPayloadMarkdownField, extractDocTitle, loadSourceDoc } from "../src/docs/source-doc";
 
 describe("source-doc module", () => {
   test("bootstrap: SourceDoc type is exported", () => {
@@ -64,5 +64,28 @@ describe("loadSourceDoc", () => {
     const abs = path.join(dir, "baz.txt");
     writeFileSync(abs, "x", "utf8");
     assert.throws(() => loadSourceDoc(abs, "baz.txt"));
+  });
+});
+
+describe("buildPayloadMarkdownField", () => {
+  test("markdown doc → returns raw verbatim", () => {
+    const doc: SourceDoc = { kind: "markdown", relPath: "a.md", raw: "# Hi\nbody", title: "Hi" };
+    assert.equal(buildPayloadMarkdownField(doc), "# Hi\nbody");
+  });
+  test("html doc → banner + fenced source block", () => {
+    const doc: SourceDoc = { kind: "html", relPath: "a.html", raw: "<p>hi</p>", title: "" };
+    const out = buildPayloadMarkdownField(doc);
+    assert.ok(out.includes("⚠️"));
+    assert.ok(out.includes("此文档由 HTML 源生成"));
+    assert.ok(out.includes("源文件：a.html"));
+    assert.ok(out.includes("```html"));
+    assert.ok(out.includes("<p>hi</p>"));
+    assert.ok(out.endsWith("```"));
+  });
+  test("html doc with backticks in source switches to tilde fence", () => {
+    const doc: SourceDoc = { kind: "html", relPath: "b.html", raw: "<pre>```inside```</pre>", title: "" };
+    const out = buildPayloadMarkdownField(doc);
+    assert.ok(out.includes("~~~html"), "should use ~~~ fence when raw contains ```");
+    assert.ok(out.endsWith("~~~"), "closing fence should also be ~~~");
   });
 });
