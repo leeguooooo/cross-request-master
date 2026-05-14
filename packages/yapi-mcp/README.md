@@ -228,6 +228,28 @@ yapi docs-sync
 - 如需跳过 Mermaid 渲染，使用 `--no-mermaid`
 - 如需回到经典风格，使用 `--mermaid-classic`
 
+#### HTML 源文件支持（0.6.0+）
+
+`docs-sync` 默认会扫目录里的 `.md` 和 `.html` 两种文件。HTML 文件**跳过渲染管线**（不走 mermaid / pandoc / markdown-it），原样作为 YApi 接口文档的 `desc` 字段上传；同时往 `markdown` 字段写一段警告横幅 + 源码围栏，提示团队成员不要在 YApi 网页里直接编辑（会覆盖 desc）：
+
+```
+> ⚠️ 此文档由 HTML 源生成，请勿在 YApi 网页编辑（会覆盖 desc）。
+> 源文件：report.html
+
+` ``html
+<!doctype html>
+<html>...</html>
+` ``
+```
+
+跑 `yapi docs-sync` 后，YApi 网页看到的渲染描述就是 HTML 原文。
+
+约束：
+- HTML 必须 self-contained（CSS inline，图片用 base64 或外链 CDN），CLI 不会处理相对路径资源。
+- HTML 内容不做 XSS 净化，请确保来源可信。
+- 如果同名 `.md` 和 `.html` 同时存在，CLI 会优先用 `.html` 并 warn，建议手动删除 `.md`。
+- watch 模式（`--watch`）会同时监听 `.md` 与 `.html` 文件变更。
+
 ### 兼容方式：使用 npx（MCP）
 
 你可以选择两种模式：
