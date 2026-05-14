@@ -1274,7 +1274,7 @@ export async function runDocsSyncWatch(options: DocsSyncOptions): Promise<number
       const watcher = fs.watch(target, { recursive: true }, (_event, filename) => {
         if (!filename) return;
         const name = String(filename);
-        if (!name.endsWith(".md")) return;
+        if (!name.endsWith(".md") && !name.endsWith(".html")) return;
         console.log(`[watch] change detected: ${name}`);
         triggerSync();
       });
