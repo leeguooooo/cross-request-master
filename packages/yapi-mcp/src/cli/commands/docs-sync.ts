@@ -494,10 +494,10 @@ function buildAddPayload(
 function buildUpdatePayload(
   docId: number,
   title: string | undefined,
-  markdown: string,
+  markdownField: string,
   html: string,
 ): Record<string, unknown> {
-  const payload: Record<string, unknown> = { id: docId, markdown, desc: html };
+  const payload: Record<string, unknown> = { id: docId, markdown: markdownField, desc: html };
   if (title) {
     payload.title = title;
   }
@@ -656,11 +656,11 @@ async function addInterface(
 async function updateInterface(
   docId: number,
   title: string | undefined,
-  markdown: string,
+  markdownField: string,
   html: string,
   request: YapiRequest,
 ): Promise<void> {
-  const payload = buildUpdatePayload(docId, title, markdown, html);
+  const payload = buildUpdatePayload(docId, title, markdownField, html);
   const resp = await request("/api/interface/up", "POST", {}, payload);
   if (resp?.errcode !== 0) {
     throw new Error(`interface up failed: ${resp?.errmsg || "unknown error"}`);
