@@ -46,6 +46,13 @@ import {
   probeMermaidRuntime,
   renderMarkdownToHtml,
 } from "../../docs/markdown";
+import {
+  buildPayloadMarkdownField,
+  listSourceDocFiles,
+  loadSourceDoc,
+  renderSourceDocToHtml,
+  resolveConflicts,
+} from "../../docs/source-doc";
 import { YApiAuthService } from "../../services/yapi/auth";
 
 // --- docs-sync home / config helpers ---
@@ -621,26 +628,12 @@ function renderDocsSyncHtml(
   diagramFailed: boolean;
   diagramMetrics: DiagramRenderMetric[];
 } {
-  let mermaidFailed = false;
-  let diagramFailed = false;
-  const diagramMetrics: DiagramRenderMetric[] = [];
-  const html = renderMarkdownToHtml(markdown, {
-    noMermaid: options.noMermaid,
-    logMermaid: true,
-    mermaidLook: options.mermaidLook,
-    mermaidHandDrawnSeed: options.mermaidHandDrawnSeed,
-    logger: (message) => console.log(`${logPrefix} ${message}`),
-    onDiagramRendered: (metric) => {
-      diagramMetrics.push(metric);
-    },
-    onMermaidError: () => {
-      mermaidFailed = true;
-    },
-    onDiagramError: () => {
-      diagramFailed = true;
-    },
-  });
-  return { html, mermaidFailed, diagramFailed, diagramMetrics };
+  // 过渡期薄包装：Task 8 把主循环改成直接传 SourceDoc 后，本函数将被删除。
+  return renderSourceDocToHtml(
+    { kind: "markdown", relPath: "", raw: markdown, title: "" },
+    options,
+    logPrefix,
+  );
 }
 
 async function addInterface(

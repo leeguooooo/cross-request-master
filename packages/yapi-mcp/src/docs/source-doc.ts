@@ -1,7 +1,12 @@
 // 源文档（.md / .html）抽象：把扫描、加载、标题抽取、渲染、payload markdown 字段
 // 这几件事按文件类型分派，让 docs-sync.ts 主循环不再硬编码 markdown。
 import fs from "node:fs";
-import { extractFirstMarkdownH1Title } from "./markdown";
+import type { DocsSyncOptions } from "../cli/types";
+import {
+  extractFirstMarkdownH1Title,
+  renderMarkdownToHtml,
+  type DiagramRenderMetric,
+} from "./markdown";
 
 export type SourceDocKind = "markdown" | "html";
 
@@ -107,4 +112,39 @@ export function extractDocTitle(kind: SourceDocKind, raw: string): string {
     return stripTags(h1Match[1] || "");
   }
   return "";
+}
+
+export function renderSourceDocToHtml(
+  doc: SourceDoc,
+  options: DocsSyncOptions,
+  logPrefix: string,
+): {
+  html: string;
+  mermaidFailed: boolean;
+  diagramFailed: boolean;
+  diagramMetrics: DiagramRenderMetric[];
+} {
+  if (doc.kind === "html") {
+    return { html: doc.raw, mermaidFailed: false, diagramFailed: false, diagramMetrics: [] };
+  }
+  let mermaidFailed = false;
+  let diagramFailed = false;
+  const diagramMetrics: DiagramRenderMetric[] = [];
+  const html = renderMarkdownToHtml(doc.raw, {
+    noMermaid: options.noMermaid,
+    logMermaid: true,
+    mermaidLook: options.mermaidLook,
+    mermaidHandDrawnSeed: options.mermaidHandDrawnSeed,
+    logger: (message) => console.log(`${logPrefix} ${message}`),
+    onDiagramRendered: (metric) => {
+      diagramMetrics.push(metric);
+    },
+    onMermaidError: () => {
+      mermaidFailed = true;
+    },
+    onDiagramError: () => {
+      diagramFailed = true;
+    },
+  });
+  return { html, mermaidFailed, diagramFailed, diagramMetrics };
 }

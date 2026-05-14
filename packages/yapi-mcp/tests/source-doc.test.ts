@@ -9,8 +9,10 @@ import {
   extractDocTitle,
   listSourceDocFiles,
   loadSourceDoc,
+  renderSourceDocToHtml,
   resolveConflicts,
 } from "../src/docs/source-doc";
+import type { DocsSyncOptions } from "../src/cli/types";
 
 describe("source-doc module", () => {
   test("bootstrap: SourceDoc type is exported", () => {
@@ -141,5 +143,21 @@ describe("resolveConflicts", () => {
     assert.equal(r.kept.length, 2);
     assert.deepEqual(r.dropped.sort(), ["a.md", "b.md"]);
     assert.ok(r.kept.every((x) => x.kind === "html"));
+  });
+});
+
+describe("renderSourceDocToHtml", () => {
+  test("html doc → returns raw verbatim, no diagnostics", () => {
+    const doc: SourceDoc = { kind: "html", relPath: "x.html", raw: "<p>hi</p>", title: "" };
+    const result = renderSourceDocToHtml(doc, {} as DocsSyncOptions, "[test]");
+    assert.equal(result.html, "<p>hi</p>");
+    assert.equal(result.mermaidFailed, false);
+    assert.equal(result.diagramFailed, false);
+    assert.deepEqual(result.diagramMetrics, []);
+  });
+  test("markdown doc → renders to HTML containing rendered content", () => {
+    const doc: SourceDoc = { kind: "markdown", relPath: "x.md", raw: "# Hello", title: "Hello" };
+    const result = renderSourceDocToHtml(doc, {} as DocsSyncOptions, "[test]");
+    assert.ok(result.html.includes("Hello"));
   });
 });
