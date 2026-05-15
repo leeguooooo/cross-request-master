@@ -1789,7 +1789,16 @@ yapi login --base-url=${baseUrl} --browser`;
       btn.id = IMMERSIVE_BTN_ID;
       btn.type = 'button';
       btn.textContent = '↩ 退出沉浸式';
-      btn.addEventListener('click', () => exitImmersive(apiId));
+      btn.addEventListener('click', () => {
+        // 竞态防护：用户在 SPA 已切到别的 apiId 但 tick 还没清理掉这个浮层时点击 →
+        // 仅自清理本浮层，不影响新页面的沉浸态、也不污染新 apiId 的 cache。
+        const currentRoute = parseYapiInterfaceRoute();
+        if (!currentRoute || currentRoute.apiId !== apiId) {
+          removeExitImmersiveBtn();
+          return;
+        }
+        exitImmersive(apiId);
+      });
       document.body.appendChild(btn);
     };
 
