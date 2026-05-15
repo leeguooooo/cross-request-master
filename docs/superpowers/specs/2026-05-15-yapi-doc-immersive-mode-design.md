@@ -287,6 +287,7 @@ const tick = () => {
 | 用户退出后切走再切回同一接口 | `cache='exitedByUser'` 仍在 → 不自动重入。**这是设计意图**：退出意图通常持续整次浏览。刷新页面才能重置（spec §3 "退出语义" 列了此 trade-off） |
 | await fetchInterfaceDetail 期间 SPA 切到别的接口 | 旧请求返回时校验当前 URL，apiId 不匹配则丢弃结果（§5.5）|
 | fetchInterfaceDetail 网络失败 | 不写 cache，下一次 tick 重试；避免一次抖动让本会话永久失能 |
+| **混合 DOM 结构**：YApi 万一把 h2 包在自身 wrapper 里、但内容字段在 wrapper 外（罕见且不规范的写法） | **已知限制**：本期只能隐 h2 + wrapper，不能隐外层兄弟。判定方法：jsdom 单测 + 真实浏览器手测验证 YApi 不属于这种结构。若属于，追加"祖先 wrapper 的后续兄弟也打标"逻辑（不在本期范围）|
 
 ## 8. 测试策略
 
