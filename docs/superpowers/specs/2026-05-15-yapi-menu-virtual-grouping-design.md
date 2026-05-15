@@ -70,7 +70,25 @@ type CollapseState = Record<string, boolean>;  // key: "<catKey>:<month>" → co
 // e.g. { "383:文档:2026-04": true, "383:文档:2026-03": true }
 ```
 
-`catKey` 构造：`<projectId>:<catTextSlug>`，projectId 从 `parseYapiInterfaceRoute()` 或 URL `/project/(\d+)/` 提取，catTextSlug 是 cat 的 textContent trim（如 "文档"）。
+`catKey` 构造：`<projectId>:<catTextSlug>`，projectId 从 `parseYapiInterfaceRoute()` 或 URL `/project/(\d+)/` 提取。catTextSlug 由以下规则生成：
+
+```js
+function deriveCatKey(catLi) {
+  // 优先尝试稳定属性（YApi 暂未提供，但留扩展点）
+  const dataCatId = catLi.dataset?.catId || catLi.getAttribute?.('data-cat-id');
+  if (dataCatId) return dataCatId;
+  // 退化：从 .ant-tree-title 取干净 text，剥离尾部计数 / 状态 badge
+  const titleEl = catLi.querySelector('.ant-tree-title');
+  const raw = (titleEl?.textContent || '').trim();
+  // 剥离形如 " (28)" / " 28" / " - 28 项" 的尾部计数后缀
+  return raw.replace(/\s*[\(（]\s*\d+\s*[\)）]\s*$/, '')
+            .replace(/\s+\d+\s*(项|条)?$/, '')
+            .trim()
+            .slice(0, 50);
+}
+```
+
+实测验证（Chrome MCP 直读 DOM）：当前 YApi 版本 `.ant-tree-title` 文本就是干净 cat 名（"文档" / "系统" 等），无计数后缀。本期正则做防御性清洗以应对未来 YApi 改版。
 
 ## 5. 模块边界
 
@@ -78,14 +96,23 @@ type CollapseState = Record<string, boolean>;  // key: "<catKey>:<month>" → co
 
 ```js
 exports = {
-  extractMonth(title): string | null,         // "2026-04" or null
-  groupByMonth(items): GroupedResult,         // 排序好的分组结果
-  pickDefaultExpandedMonth(groups): string,   // 最新非空月份
+  extractMonth(title): string | null,           // "2026-04" or null
+  groupByMonth(items): GroupedResult,           // 排序好的分组结果
+  pickDefaultExpandedMonth(groups): string | null, // 最新非空月份；全空/全 null 返回 null
   // DOM 层（与 content-script 共用）
   GROUPING_MIN_INTERFACES: 5,
   buildHeaderLi(month, count, catKey, collapsed): HTMLLIElement,
+  // ↑ 必须在生成的 <li> 上设置：data-crm-cat-key=catKey、data-crm-month=month、
+  //   data-crm-collapsed=String(collapsed)、class="crm-month-header"
+  //   并含 .crm-month-toggle / .crm-month-label / .crm-month-count 三个 span
 };
 ```
+
+**Nullable 契约**：
+- `extractMonth("")` / `extractMonth(null)` → `null`
+- `pickDefaultExpandedMonth([])` → `null`
+- `pickDefaultExpandedMonth([{ month: null, items: [...] }])` → `null`
+- 调用方收到 `null` 时不展开任何月份（全部默认折叠状态）；§5.3 `processGroupingForCat` 的 `isCollapsed` 计算时把 `latestMonth === null` 当作"没有'最新月'参考"，所有 month group 都按 localStorage（无记录则全部折叠）处理
 
 ### 5.2 `content-script.js` 新增 `initYapiMenuGrouping()`
 
@@ -188,7 +215,23 @@ function toggleCollapse(catKey, month) {
   const key = `${catKey}:${month}`;
   state[key] = !state[key];   // 翻转
   setCollapseState(state);
-  scheduleGroupingTick();     // 重渲染
+  // 即时同步 DOM：避免用户感到 150ms debounce 的迟滞。
+  // 找到所有 data-crm-month==month 的 li，按新状态加/移 data-crm-month-hidden；
+  // 同时更新对应 header 的 data-crm-collapsed 属性（用于 CSS ▶/▼ 切换）。
+  const headerSelector = `.crm-month-header[data-crm-cat-key="${catKey}"][data-crm-month="${month}"]`;
+  document.querySelectorAll(headerSelector).forEach((h) => {
+    h.dataset.crmCollapsed = String(state[key]);
+  });
+  const liSelector = `li[data-crm-month="${month}"]`;
+  document.querySelectorAll(liSelector).forEach((li) => {
+    // 只动当前 catUl 范围的；用 closest 验证 cat 一致
+    const ownerCatLi = li.closest('li.interface-item-nav');
+    const ownerCatKey = ownerCatLi ? deriveCatKey(ownerCatLi) : null;
+    if (`${getProjectId()}:${ownerCatKey}` !== catKey) return;
+    if (state[key]) li.dataset.crmMonthHidden = '1';
+    else delete li.dataset.crmMonthHidden;
+  });
+  scheduleGroupingTick();     // 异步幂等校正（防止任何 DOM 状态漂移）
 }
 ```
 
