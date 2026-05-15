@@ -216,9 +216,11 @@ const CrossRequest = {
           display: none !important;
         }
         /* 收掉 YApi .caseContainer 顶部内边距 + 备注 h2 默认 margin-top，
-           让"备注"紧贴 tab bar，不留空白带 */
+           让备注 iframe 直接紧贴 tab bar，不留空白带；同时把"备注"标题文字隐掉，
+           因为沉浸态下视野里只有文档，没必要重复说"这是备注" */
         body.crm-doc-immersive .caseContainer { padding-top: 12px !important; }
         body.crm-doc-immersive .caseContainer > h2.interface-title { margin-top: 0 !important; }
+        body.crm-doc-immersive h2.interface-title[data-crm-section="notes"] { display: none !important; }
         #crm-exit-immersive {
           position: fixed; top: 16px; right: 16px;
           z-index: 2147483647;
