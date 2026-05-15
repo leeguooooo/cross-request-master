@@ -70,7 +70,7 @@ function isImmersiveDoc(data) {
   if (!data || typeof data !== 'object') return false;
   const desc = String(data.desc || '').trim();
   const markdown = String(data.markdown || '').trim();
-  if (/^<iframe\s+srcdoc=/.test(desc)) return true;
+  if (/^<iframe\s+srcdoc\s*=/.test(desc)) return true;
   if (/^>\s*⚠️\s*此文档由\s*HTML\s*源生成/.test(markdown)) return true;
   return false;
 }
@@ -276,7 +276,7 @@ const tick = () => {
 
 | 场景 | 行为 |
 |------|------|
-| `/api/interface/get` 网络失败 | cache="no"；用户看到完整 YApi 页面，无影响 |
+| `/api/interface/get` 网络失败 | 不写 cache（与 §5.5 一致）；下一次 tick 自然重试；用户看到完整 YApi 页面，无影响 |
 | `data.desc` 不是字符串 | `String(data.desc \|\| '')` 兜底；`startsWith` 永远安全 |
 | YApi 改了 DOM 结构 / 删除 `h2.interface-title` 类 | 找不到 h2 → 不打标 → CSS 选择器无匹配 → 退化为无操作（页面正常）|
 | 用户在沉浸态下导航到非文档接口 | tick 检测 URL 变化 → 移除 body 类 + 浮层按钮 → 新接口走自己的判定 |
@@ -344,6 +344,7 @@ const tick = () => {
 | 用户切窗口后回来浮层位置错 | `position: fixed` 不受滚动影响；OK |
 | 兄弟链打标走过头（一直打到 footer） | h2.interface-title 之间没有其他 h2，循环条件正确就行；新增的"备注"也是 h2.interface-title，自然终止 |
 | YApi DOM 是嵌套结构而非平级 | §5.2 双策略（兄弟链 + 祖先链）兜底 |
+| YApi DOM 是"混合"结构：h2 在自身 wrapper 里、但内容字段在 wrapper 外（罕见、不规范） | 已知限制：只能隐 h2 + wrapper，不能隐外部字段。如果手动验证发现 YApi 真的这么写，需要追加"祖先 wrapper 的后续兄弟也打标"逻辑；本期先用 jsdom 测试 + 浏览器手测验证 YApi 不属于这种结构 |
 | 浮层 `top:16px / right:16px` 跟 YApi 自家 toast / 通知重叠 | 已知小风险；本期接受，未来可改为底部或可拖动；YAPI 在 modal/toast 区另有 z-index 体系，但即便重叠也不影响功能（点退出按钮仍可用） |
 | 用户切走再回到同一文档想再看（已退出过） | 设计意图：保持退出态。刷新页面重置。文档里 §3 / §7 都明确 |
 
