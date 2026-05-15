@@ -208,6 +208,23 @@ const CrossRequest = {
         #${HEADER_MODAL_ID} .crm-btn.crm-danger { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
         #${HEADER_MODAL_ID} .crm-btn.crm-danger:hover { background: #fee2e2; }
         #${HEADER_MODAL_ID} .crm-tools { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; }
+
+        /* 沉浸式文档查看模式 */
+        body.crm-doc-immersive [data-crm-section="basic"],
+        body.crm-doc-immersive [data-crm-section="req"],
+        body.crm-doc-immersive [data-crm-section="res"] {
+          display: none !important;
+        }
+        #crm-exit-immersive {
+          position: fixed; top: 16px; right: 16px;
+          z-index: 2147483647;
+          padding: 6px 12px;
+          background: #fff; border: 1px solid #d0d7de;
+          border-radius: 6px; font-size: 12px; cursor: pointer;
+          color: #24292f;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        #crm-exit-immersive:hover { background: #f6f8fa; }
       `;
       (document.head || document.documentElement).appendChild(style);
     };
@@ -1745,6 +1762,91 @@ yapi login --base-url=${baseUrl} --browser`;
       }
     };
 
+    // ===== 沉浸式文档查看模式 =====
+    const IMMERSIVE_BTN_ID = 'crm-exit-immersive';
+    const IMMERSIVE_CLASS = 'crm-doc-immersive';
+    const immersiveCache = new Map();      // apiId -> 'yes' | 'no' | 'exitedByUser'
+    const immersiveInflight = new Set();
+
+    const tagSectionsIfPresent = () => {
+      const ns = (typeof window !== 'undefined' && window.YapiDocImmersive) || null;
+      if (!ns || typeof ns.tagSections !== 'function') return;
+      try {
+        ns.tagSections(document);
+      } catch (_e) {
+        // DOM 还没 ready 等情况，沉默退化
+      }
+    };
+
+    const removeExitImmersiveBtn = () => {
+      const btn = document.getElementById(IMMERSIVE_BTN_ID);
+      if (btn) btn.remove();
+    };
+
+    const ensureExitImmersiveBtn = (apiId) => {
+      if (document.getElementById(IMMERSIVE_BTN_ID)) return;
+      const btn = document.createElement('button');
+      btn.id = IMMERSIVE_BTN_ID;
+      btn.type = 'button';
+      btn.textContent = '↩ 退出沉浸式';
+      btn.addEventListener('click', () => exitImmersive(apiId));
+      document.body.appendChild(btn);
+    };
+
+    const enterImmersive = (apiId) => {
+      document.body.classList.add(IMMERSIVE_CLASS);
+      ensureExitImmersiveBtn(apiId);
+    };
+
+    const exitImmersive = (apiId) => {
+      document.body.classList.remove(IMMERSIVE_CLASS);
+      removeExitImmersiveBtn();
+      if (apiId) immersiveCache.set(apiId, 'exitedByUser');
+    };
+
+    const checkImmersive = async () => {
+      const route = parseYapiInterfaceRoute();
+      if (!route) {
+        if (document.body.classList.contains(IMMERSIVE_CLASS)) {
+          document.body.classList.remove(IMMERSIVE_CLASS);
+          removeExitImmersiveBtn();
+        }
+        return;
+      }
+      const apiId = route.apiId;
+      const cached = immersiveCache.get(apiId);
+      if (cached === 'exitedByUser') return;
+      if (cached === 'yes') {
+        tagSectionsIfPresent();
+        enterImmersive(apiId);
+        return;
+      }
+      if (cached === 'no') return;
+      if (immersiveInflight.has(apiId)) return;
+
+      const ns = (typeof window !== 'undefined' && window.YapiDocImmersive) || null;
+      if (!ns || typeof ns.isImmersiveDoc !== 'function') return;
+
+      immersiveInflight.add(apiId);
+      try {
+        const data = await fetchInterfaceDetail(location.origin, apiId);
+        // 竞态防护：await 期间 SPA 可能切到别的 apiId
+        const currentRoute = parseYapiInterfaceRoute();
+        if (!currentRoute || currentRoute.apiId !== apiId) return;
+
+        const isDoc = ns.isImmersiveDoc(data);
+        immersiveCache.set(apiId, isDoc ? 'yes' : 'no');
+        if (isDoc) {
+          tagSectionsIfPresent();
+          enterImmersive(apiId);
+        }
+      } catch (_e) {
+        // 网络失败：不写 cache，下次 tick 重试
+      } finally {
+        immersiveInflight.delete(apiId);
+      }
+    };
+
     const mountButtons = () => {
       const route = parseYapiInterfaceRoute();
       if (!route) return;
@@ -1800,11 +1902,16 @@ yapi login --base-url=${baseUrl} --browser`;
         lastHref = location.href;
         const old = document.getElementById(BTN_GROUP_ID);
         if (old) old.remove();
+        // URL 变化：清理上一文档的沉浸态
+        document.body.classList.remove(IMMERSIVE_CLASS);
+        removeExitImmersiveBtn();
       }
       mountButtons();
       mountPathParamButton();
       mountHeaderButton();
       ensureSendClickIntercept();
+      tagSectionsIfPresent();
+      checkImmersive();
     };
 
     tick();

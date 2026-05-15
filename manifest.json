@@ -45,7 +45,7 @@
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["content-script.js"],
+      "js": ["src/helpers/yapi-doc-immersive.js", "content-script.js"],
       "all_frames": true,
       "run_at": "document_start"
     }
