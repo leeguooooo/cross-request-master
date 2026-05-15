@@ -252,7 +252,8 @@ const CrossRequest = {
         .crm-month-header .crm-month-count { opacity: 0.6; }
         .crm-month-header[data-crm-collapsed="true"] .crm-month-toggle::before { content: "▶"; }
         .crm-month-header[data-crm-collapsed="false"] .crm-month-toggle::before { content: "▼"; }
-        .ant-tree-child-tree > li.ant-tree-treenode[data-crm-month-hidden] { display: none; }
+        /* :not(.crm-month-header) 防 header 自我隐藏 — header 也有 data-crm-month 但不应被折叠隐 */
+        .ant-tree-child-tree > li[data-crm-month-hidden]:not(.crm-month-header) { display: none !important; }
       `;
       (document.head || document.documentElement).appendChild(style);
     };
@@ -1918,7 +1919,8 @@ yapi login --base-url=${baseUrl} --browser`;
       document
         .querySelectorAll(`.crm-month-header[data-crm-cat-key="${ek}"][data-crm-month="${em}"]`)
         .forEach((h) => { h.dataset.crmCollapsed = String(state[key]); });
-      document.querySelectorAll(`li[data-crm-month="${em}"]`).forEach((li) => {
+      // :not(.crm-month-header) 排除 header 自身（header 也有 data-crm-month）
+      document.querySelectorAll(`li[data-crm-month="${em}"]:not(.crm-month-header)`).forEach((li) => {
         const ownerCatLi = li.closest('li.interface-item-nav');
         if (!ownerCatLi || buildCatKey(ownerCatLi) !== catKey) return;
         if (state[key]) li.dataset.crmMonthHidden = '1';

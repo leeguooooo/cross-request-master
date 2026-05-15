@@ -7,6 +7,12 @@
 
 ## [未发布]
 
+## [4.6.1] - 2026-05-15
+
+### 修复
+
+- **月份 header 自我隐藏导致折叠不可点** - 4.6.0 的 CSS 选择器 `.ant-tree-child-tree > li[data-crm-month-hidden]` 和 `toggleCollapse` 的 `querySelectorAll('li[data-crm-month="..."]')` 都会**同时命中 month header 自己**（header 也有 `data-crm-month` 属性）。折叠时 header 被加 `data-crm-month-hidden` 自我隐藏，用户看不到 header 也就点不了。本版本两处都加 `:not(.crm-month-header)` 排除 header，使 CSS / 点击事件正常。
+
 ## [4.6.0] - 2026-05-15
 
 ### 新增
