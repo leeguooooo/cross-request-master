@@ -231,6 +231,28 @@ const CrossRequest = {
           box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
         #crm-exit-immersive:hover { background: #f6f8fa; }
+
+        /* 左侧菜单按月份虚拟分级 header */
+        .crm-month-header {
+          padding: 6px 16px;
+          cursor: pointer;
+          user-select: none;
+          color: #586069;
+          font-size: 12px;
+          background: #fafbfc;
+          border-top: 1px solid #eaecef;
+          list-style: none;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .crm-month-header:hover { background: #f0f3f6; }
+        .crm-month-header .crm-month-toggle { display: inline-block; width: 12px; font-size: 10px; }
+        .crm-month-header .crm-month-label { flex: 1; }
+        .crm-month-header .crm-month-count { opacity: 0.6; }
+        .crm-month-header[data-crm-collapsed="true"] .crm-month-toggle::before { content: "▶"; }
+        .crm-month-header[data-crm-collapsed="false"] .crm-month-toggle::before { content: "▼"; }
+        .ant-tree-child-tree > li.ant-tree-treenode[data-crm-month-hidden] { display: none; }
       `;
       (document.head || document.documentElement).appendChild(style);
     };
@@ -1862,6 +1884,134 @@ yapi login --base-url=${baseUrl} --browser`;
       }
     };
 
+    // ===== YApi 左侧菜单按月份虚拟分级 =====
+    const GROUPING_DEBOUNCE_MS = 150;
+    const GROUPING_LS_KEY = 'crm-month-collapsed';
+    let groupingDebounceTimer = null;
+    let groupingObserver = null;
+
+    const getCollapseState = () => {
+      try { return JSON.parse(localStorage.getItem(GROUPING_LS_KEY) || '{}'); } catch (_e) { return {}; }
+    };
+    const setCollapseState = (state) => {
+      try { localStorage.setItem(GROUPING_LS_KEY, JSON.stringify(state)); } catch (_e) { /* quota / disabled */ }
+    };
+
+    const getProjectId = () => (location.pathname.match(/\/project\/(\d+)\//) || [])[1] || '';
+
+    const grpNs = () => (typeof window !== 'undefined' && window.YapiMenuGrouping) || null;
+
+    const buildCatKey = (catLi) => {
+      const ns = grpNs();
+      if (!ns) return '';
+      return `${getProjectId()}:${ns.deriveCatKey(catLi)}`;
+    };
+
+    const toggleCollapse = (catKey, month) => {
+      const state = getCollapseState();
+      const key = `${catKey}:${month}`;
+      state[key] = !state[key];
+      setCollapseState(state);
+      // 即时同步 DOM；CSS.escape 防 catKey 含特殊字符
+      const ek = CSS.escape(catKey);
+      const em = CSS.escape(month);
+      document
+        .querySelectorAll(`.crm-month-header[data-crm-cat-key="${ek}"][data-crm-month="${em}"]`)
+        .forEach((h) => { h.dataset.crmCollapsed = String(state[key]); });
+      document.querySelectorAll(`li[data-crm-month="${em}"]`).forEach((li) => {
+        const ownerCatLi = li.closest('li.interface-item-nav');
+        if (!ownerCatLi || buildCatKey(ownerCatLi) !== catKey) return;
+        if (state[key]) li.dataset.crmMonthHidden = '1';
+        else delete li.dataset.crmMonthHidden;
+      });
+      scheduleGroupingTick();
+    };
+
+    const processGroupingForCat = (catUl, catKey) => {
+      const ns = grpNs();
+      if (!ns) return;
+      // 过滤出真接口 li（排除已注入的 month-header）
+      const allLis = [...catUl.children].filter(
+        (li) => li.tagName === 'LI' && !li.classList.contains('crm-month-header'),
+      );
+      if (allLis.length < ns.GROUPING_MIN_INTERFACES) {
+        [...catUl.querySelectorAll('.crm-month-header')].forEach((h) => h.remove());
+        allLis.forEach((li) => {
+          delete li.dataset.crmMonth;
+          delete li.dataset.crmMonthHidden;
+        });
+        return;
+      }
+
+      const items = allLis.map((li) => ({
+        li,
+        title: (
+          li.querySelector('.ant-tree-title, .ant-tree-node-content-wrapper')?.textContent || ''
+        ).trim(),
+      }));
+      const groups = ns.groupByMonth(items);
+      const collapseState = getCollapseState();
+      const latestMonth = ns.pickDefaultExpandedMonth(groups);
+
+      groups.forEach(({ month, items: group }) => {
+        if (!month) return; // 无日期组不加 header
+        const headerId = `crm-mh-${catKey}-${month}`;
+        const firstLi = group[0].li;
+        const key = `${catKey}:${month}`;
+        const isCollapsed =
+          collapseState[key] !== undefined
+            ? Boolean(collapseState[key])
+            : latestMonth !== null
+              ? month !== latestMonth
+              : true; // 无 latestMonth → 全部默认折叠
+
+        let header = catUl.querySelector(`#${CSS.escape(headerId)}`);
+        if (!header) {
+          header = ns.buildHeaderLi(month, group.length, catKey, isCollapsed);
+          header.id = headerId;
+          header.addEventListener('click', () => toggleCollapse(catKey, month));
+          catUl.insertBefore(header, firstLi);
+        } else {
+          const countEl = header.querySelector('.crm-month-count');
+          if (countEl) countEl.textContent = String(group.length);
+          header.dataset.crmCollapsed = String(isCollapsed);
+        }
+        group.forEach(({ li }) => {
+          if (li.dataset.crmMonth !== month) li.dataset.crmMonth = month;
+          if (isCollapsed) li.dataset.crmMonthHidden = '1';
+          else delete li.dataset.crmMonthHidden;
+        });
+      });
+    };
+
+    const processAllExpandedCats = () => {
+      const sublists = document.querySelectorAll('.ant-tree-child-tree.ant-tree-child-tree-open');
+      sublists.forEach((ul) => {
+        const catLi = ul.closest('li.interface-item-nav');
+        if (!catLi) return;
+        const catKey = buildCatKey(catLi);
+        processGroupingForCat(ul, catKey);
+      });
+    };
+
+    const scheduleGroupingTick = () => {
+      if (groupingDebounceTimer) return;
+      groupingDebounceTimer = setTimeout(() => {
+        groupingDebounceTimer = null;
+        try { processAllExpandedCats(); } catch (_e) { /* sink */ }
+      }, GROUPING_DEBOUNCE_MS);
+    };
+
+    const initYapiMenuGrouping = () => {
+      if (groupingObserver) return true;
+      const root = document.querySelector('.interface-list');
+      if (!root) return false;
+      groupingObserver = new MutationObserver(scheduleGroupingTick);
+      groupingObserver.observe(root, { childList: true, subtree: true });
+      scheduleGroupingTick();
+      return true;
+    };
+
     const mountButtons = () => {
       const route = parseYapiInterfaceRoute();
       if (!route) return;
@@ -1927,6 +2077,7 @@ yapi login --base-url=${baseUrl} --browser`;
       ensureSendClickIntercept();
       tagSectionsIfPresent();
       checkImmersive();
+      initYapiMenuGrouping();
     };
 
     tick();

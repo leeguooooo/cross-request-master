@@ -7,6 +7,14 @@
 
 ## [未发布]
 
+## [4.6.0] - 2026-05-15
+
+### 新增
+
+- **左侧菜单按月份虚拟分级** - YApi 接口分类（cat）下接口数 ≥ 5 时，扩展自动识别接口标题中的 `[YYYY-MM-DD]` / `· YYYY-MM-DD ·` 日期信号，按 YYYY-MM 月份聚合成可折叠 header（例 `▼ 2026-05 (2)` / `▶ 2026-04 (3)`）。默认仅最新月份展开、其它折叠；状态写 localStorage 按 `<projectId>:<cat>:<month>` 维度记忆。不影响 YApi 原生 tree 的点击 / 路由 / 高亮行为，纯叠加。
+- 抗 React 重渲染：MutationObserver + 150ms debounce + 幂等注入；被 React 干掉的 header 自动重建。
+- header 点击即时同步 DOM（不等 debounce），避免 150ms 迟滞感。
+
 ## [4.5.21] - 2026-05-15
 
 ### 修复
