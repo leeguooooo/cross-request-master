@@ -1953,6 +1953,19 @@ yapi login --base-url=${baseUrl} --browser`;
       const collapseState = getCollapseState();
       const latestMonth = ns.pickDefaultExpandedMonth(groups);
 
+      // 幂等清理：移除当前 groups 月份集合之外的 stale header / dataset
+      // （处理某月份接口全部消失但 cat 仍 ≥ 5 的情形）
+      const liveMonths = new Set(groups.map((g) => g.month).filter(Boolean));
+      [...catUl.querySelectorAll('.crm-month-header')].forEach((h) => {
+        if (!liveMonths.has(h.dataset.crmMonth)) h.remove();
+      });
+      allLis.forEach((li) => {
+        if (li.dataset.crmMonth && !liveMonths.has(li.dataset.crmMonth)) {
+          delete li.dataset.crmMonth;
+          delete li.dataset.crmMonthHidden;
+        }
+      });
+
       groups.forEach(({ month, items: group }) => {
         if (!month) return; // 无日期组不加 header
         const headerId = `crm-mh-${catKey}-${month}`;
