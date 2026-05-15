@@ -228,9 +228,9 @@ yapi docs-sync
 - 如需跳过 Mermaid 渲染，使用 `--no-mermaid`
 - 如需回到经典风格，使用 `--mermaid-classic`
 
-#### HTML 源文件支持（0.6.0+）
+#### HTML 源文件支持（0.6.1+）
 
-`docs-sync` 默认会扫目录里的 `.md` 和 `.html` 两种文件。HTML 文件**跳过渲染管线**（不走 mermaid / pandoc / markdown-it），原样作为 YApi 接口文档的 `desc` 字段上传；同时往 `markdown` 字段写一段警告横幅 + 源码围栏，提示团队成员不要在 YApi 网页里直接编辑（会覆盖 desc）：
+`docs-sync` 默认会扫目录里的 `.md` 和 `.html` 两种文件。HTML 文件**跳过渲染管线**（不走 mermaid / pandoc / markdown-it），用 `<iframe srcdoc sandbox="allow-same-origin">` 包装后写入 YApi 的 `desc` 字段，让 HTML 在独立文档里渲染、不污染 YApi 页面 chrome；同时往 `markdown` 字段写一段警告横幅 + 源码围栏，提示团队成员不要在 YApi 网页里直接编辑（会覆盖 desc）：
 
 ```
 > ⚠️ 此文档由 HTML 源生成，请勿在 YApi 网页编辑（会覆盖 desc）。
@@ -242,13 +242,17 @@ yapi docs-sync
 ` ``
 ```
 
-跑 `yapi docs-sync` 后，YApi 网页看到的渲染描述就是 HTML 原文。
+跑 `yapi docs-sync` 后，YApi 网页看到的渲染描述就是 HTML 文档本身（嵌在 iframe 里）。
 
 约束：
 - HTML 必须 self-contained（CSS inline，图片用 base64 或外链 CDN），CLI 不会处理相对路径资源。
 - HTML 内容不做 XSS 净化，请确保来源可信。
+- iframe 高度固定为 `1500px`，超出部分 iframe 内部出现滚动条。
+- iframe 不开启 `allow-scripts`，HTML 里的 `<script>` 不会执行。
 - 如果同名 `.md` 和 `.html` 同时存在，CLI 会优先用 `.html` 并 warn，建议手动删除 `.md`。
 - watch 模式（`--watch`）会同时监听 `.md` 与 `.html` 文件变更。
+
+> **0.6.0 → 0.6.1 升级提示**：0.6.0 把 HTML 原样写入 `desc`，会被 YApi 直接 innerHTML 导致全局 CSS 污染。升级到 0.6.1 后跑一次 `yapi docs-sync --force` 强制覆盖已污染的文档。
 
 ### 兼容方式：使用 npx（MCP）
 

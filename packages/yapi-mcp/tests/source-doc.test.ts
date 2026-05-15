@@ -11,6 +11,7 @@ import {
   loadSourceDoc,
   renderSourceDocToHtml,
   resolveConflicts,
+  wrapHtmlForYApi,
 } from "../src/docs/source-doc";
 import type { DocsSyncOptions } from "../src/cli/types";
 
@@ -147,17 +148,47 @@ describe("resolveConflicts", () => {
 });
 
 describe("renderSourceDocToHtml", () => {
-  test("html doc → returns raw verbatim, no diagnostics", () => {
+  test("html doc → wrapped in iframe srcdoc, no diagnostics", () => {
     const doc: SourceDoc = { kind: "html", relPath: "x.html", raw: "<p>hi</p>", title: "" };
     const result = renderSourceDocToHtml(doc, {} as DocsSyncOptions, "[test]");
-    assert.equal(result.html, "<p>hi</p>");
+    assert.ok(result.html.startsWith("<iframe "));
+    assert.ok(result.html.includes('srcdoc="<p>hi</p>"'));
+    assert.ok(result.html.includes('sandbox="allow-same-origin"'));
     assert.equal(result.mermaidFailed, false);
     assert.equal(result.diagramFailed, false);
     assert.deepEqual(result.diagramMetrics, []);
   });
-  test("markdown doc → renders to HTML containing rendered content", () => {
+  test("markdown doc → renders to HTML containing rendered content (no iframe)", () => {
     const doc: SourceDoc = { kind: "markdown", relPath: "x.md", raw: "# Hello", title: "Hello" };
     const result = renderSourceDocToHtml(doc, {} as DocsSyncOptions, "[test]");
     assert.ok(result.html.includes("Hello"));
+    assert.ok(!result.html.includes("<iframe"));
+  });
+});
+
+describe("wrapHtmlForYApi", () => {
+  test("emits iframe with sandbox=allow-same-origin (no scripts)", () => {
+    const out = wrapHtmlForYApi("<p>x</p>");
+    assert.ok(out.includes('sandbox="allow-same-origin"'));
+    assert.ok(!out.includes("allow-scripts"));
+  });
+  test("emits fixed height 1500px", () => {
+    const out = wrapHtmlForYApi("<p>x</p>");
+    assert.ok(out.includes("height:1500px"));
+  });
+  test("encodes & for srcdoc attribute", () => {
+    const out = wrapHtmlForYApi("<a>a&b</a>");
+    assert.ok(out.includes("a&amp;b"));
+  });
+  test("encodes \" for srcdoc attribute", () => {
+    const out = wrapHtmlForYApi('<a href="x">y</a>');
+    assert.ok(out.includes('href=&quot;x&quot;'));
+    assert.ok(!out.includes('href="x"'));
+  });
+  test("encodes & before \" so &quot; is not double-escaped", () => {
+    // 顺序保护：必须 & 先于 " 转，否则 " 会先变 &quot; 再被 & 当成 &amp;quot;
+    const out = wrapHtmlForYApi('"');
+    assert.ok(out.includes("&quot;"));
+    assert.ok(!out.includes("&amp;quot;"));
   });
 });

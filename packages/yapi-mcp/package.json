@@ -1,6 +1,6 @@
 {
   "name": "@leeguoo/yapi-mcp",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "YApi CLI - Command-line tool for YApi API documentation management, search, and docs sync",
   "main": "dist/yapi-cli.js",
   "bin": {

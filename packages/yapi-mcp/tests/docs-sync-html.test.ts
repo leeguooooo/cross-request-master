@@ -52,7 +52,14 @@ describe("docs-sync HTML integration", () => {
     const upCall = captured.find((c) => c.url === "/api/interface/up");
     assert.ok(upCall, "expected interface/up to be called");
     assert.equal(upCall!.payload.id, 999);
-    assert.equal(upCall!.payload.desc, htmlRaw);
+    // desc 是 iframe srcdoc 包装，避免 HTML 全局样式污染 YApi 页面
+    const desc = String(upCall!.payload.desc);
+    assert.ok(desc.startsWith("<iframe "));
+    assert.ok(desc.includes('sandbox="allow-same-origin"'));
+    // srcdoc 里要含 attribute-encoded 的原始 HTML（& 和 " 已转义）
+    const encoded = htmlRaw.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+    assert.ok(desc.includes(encoded), `desc should contain encoded HTML; got: ${desc.slice(0, 200)}...`);
+    // markdown 字段保留警告横幅 + 原始 HTML 源
     assert.ok(String(upCall!.payload.markdown).includes("⚠️"));
     assert.ok(String(upCall!.payload.markdown).includes("```html"));
     assert.ok(String(upCall!.payload.markdown).includes(htmlRaw));

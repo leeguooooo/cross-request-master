@@ -114,6 +114,22 @@ export function extractDocTitle(kind: SourceDocKind, raw: string): string {
   return "";
 }
 
+const HTML_IFRAME_HEIGHT_PX = 1500;
+
+function encodeForSrcdocAttr(html: string): string {
+  // srcdoc 是 HTML attribute（双引号包裹），需要 attribute-context 转义：
+  // & 必须先转，再转 "。< 和 > 在 attribute 内不会闭合，无需转义。
+  return html.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+export function wrapHtmlForYApi(rawHtml: string): string {
+  // 用 iframe srcdoc + sandbox 把 HTML 隔离在独立文档里渲染，避免 <style> 全局选择器
+  // 和裸 <h1>/<body> 字号污染 YApi 页面 chrome（YApi 后端直接 innerHTML desc）。
+  // 不开 allow-scripts：HTML 文档应是 self-contained 静态内容。
+  const encoded = encodeForSrcdocAttr(rawHtml);
+  return `<iframe srcdoc="${encoded}" sandbox="allow-same-origin" style="width:100%;height:${HTML_IFRAME_HEIGHT_PX}px;border:0"></iframe>`;
+}
+
 export function renderSourceDocToHtml(
   doc: SourceDoc,
   options: DocsSyncOptions,
@@ -125,7 +141,12 @@ export function renderSourceDocToHtml(
   diagramMetrics: DiagramRenderMetric[];
 } {
   if (doc.kind === "html") {
-    return { html: doc.raw, mermaidFailed: false, diagramFailed: false, diagramMetrics: [] };
+    return {
+      html: wrapHtmlForYApi(doc.raw),
+      mermaidFailed: false,
+      diagramFailed: false,
+      diagramMetrics: [],
+    };
   }
   let mermaidFailed = false;
   let diagramFailed = false;

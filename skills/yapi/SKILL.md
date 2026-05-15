@@ -250,15 +250,17 @@ Notes:
 - If upload hits `413 Payload Too Large`, the CLI first retries that file with `--mermaid-classic`, then reports payload size, parsed server limit (when available), and the largest Mermaid block if it still fails.
 - Mermaid/PlantUML/Graphviz/D2 rendering depends on local tool availability; missing tools do not block basic sync.
 
-### HTML source files (0.6.0+)
+### HTML source files (0.6.1+)
 
-`docs-sync` picks up both `.md` and `.html` in the bound directory. HTML files **skip the rendering pipeline entirely** and are uploaded verbatim as the YApi `desc` field; the `markdown` field carries a warning banner + fenced HTML source so teammates won't accidentally edit the doc on the YApi web UI (which would clobber `desc`).
+`docs-sync` picks up both `.md` and `.html` in the bound directory. HTML files **skip the rendering pipeline entirely** and are wrapped in an `<iframe srcdoc sandbox="allow-same-origin">` before being written to the YApi `desc` field — this isolates the HTML's global `<style>` rules and heading sizes from YApi's page chrome. The `markdown` field carries a warning banner + fenced HTML source so teammates won't accidentally edit the doc on the YApi web UI (which would clobber `desc`).
 
 - HTML must be self-contained (inline CSS, base64 / CDN images); the CLI does not rewrite relative resource paths.
-- HTML content is **not** XSS-sanitized — trust the source.
+- HTML content is **not** XSS-sanitized — trust the source. The iframe is `allow-same-origin` only (no `allow-scripts`), so embedded `<script>` tags will not execute.
+- iframe height is fixed at `1500px`; overflow scrolls inside the iframe.
 - When both `foo.md` and `foo.html` exist in the directory, the CLI uses `.html` and warns; delete the `.md` to silence the warning.
 - Watch mode (`--watch`) monitors both `.md` and `.html` changes.
 - Hash compatibility: existing `.md` files keep their old hash exactly; upgrading from 0.5.x will not trigger spurious re-pushes.
+- **0.6.0 → 0.6.1 upgrade**: 0.6.0 wrote raw HTML into `desc` and polluted the YApi page styles. After upgrading to 0.6.1, run `yapi docs-sync --force` once to overwrite the affected docs with the iframe-wrapped version.
 
 ## Interface creation guardrails
 - Always set `req_body_type` (use `json` if unsure) and provide `res_body` (prefer JSON Schema) when creating/updating interfaces.
