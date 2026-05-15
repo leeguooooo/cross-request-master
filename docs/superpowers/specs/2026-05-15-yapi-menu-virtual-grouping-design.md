@@ -129,14 +129,21 @@ function setCollapseState(state) {
 
 function processGroupingForCat(catUl, catKey) { /* 见下文 */ }
 
+function getProjectId() {
+  return (location.pathname.match(/\/project\/(\d+)\//) || [])[1] || '';
+}
+
+function buildCatKey(catLi) {
+  // 走统一入口；deriveCatKey 见 §4
+  return `${getProjectId()}:${deriveCatKey(catLi)}`;
+}
+
 function processAllExpandedCats() {
   const sublists = document.querySelectorAll('.ant-tree-child-tree.ant-tree-child-tree-open');
   sublists.forEach((ul) => {
     const catLi = ul.closest('li.interface-item-nav');
     if (!catLi) return;
-    const projectId = (location.pathname.match(/\/project\/(\d+)\//) || [])[1] || '';
-    const catText = (catLi.querySelector('.ant-tree-title, .ant-tree-node-content-wrapper')?.textContent || '').trim().slice(0, 30);
-    const catKey = `${projectId}:${catText}`;
+    const catKey = buildCatKey(catLi);  // 统一调 deriveCatKey，避免 textContent 漂移
     processGroupingForCat(ul, catKey);
   });
 }
@@ -216,22 +223,21 @@ function toggleCollapse(catKey, month) {
   state[key] = !state[key];   // 翻转
   setCollapseState(state);
   // 即时同步 DOM：避免用户感到 150ms debounce 的迟滞。
-  // 找到所有 data-crm-month==month 的 li，按新状态加/移 data-crm-month-hidden；
-  // 同时更新对应 header 的 data-crm-collapsed 属性（用于 CSS ▶/▼ 切换）。
-  const headerSelector = `.crm-month-header[data-crm-cat-key="${catKey}"][data-crm-month="${month}"]`;
-  document.querySelectorAll(headerSelector).forEach((h) => {
-    h.dataset.crmCollapsed = String(state[key]);
-  });
-  const liSelector = `li[data-crm-month="${month}"]`;
-  document.querySelectorAll(liSelector).forEach((li) => {
-    // 只动当前 catUl 范围的；用 closest 验证 cat 一致
+  // 用 CSS.escape 转义属性值，防 catKey 含 `:` 等 CSS 选择器特殊字符。
+  // catKey 始终走 buildCatKey()/deriveCatKey，与异步 tick 用同一来源，避免双写冲突。
+  const ek = CSS.escape(catKey);
+  const em = CSS.escape(month);
+  document
+    .querySelectorAll(`.crm-month-header[data-crm-cat-key="${ek}"][data-crm-month="${em}"]`)
+    .forEach((h) => { h.dataset.crmCollapsed = String(state[key]); });
+  document.querySelectorAll(`li[data-crm-month="${em}"]`).forEach((li) => {
+    // 用 closest + buildCatKey 验证所属 cat 一致（同一来源 → 与 tick 不冲突）
     const ownerCatLi = li.closest('li.interface-item-nav');
-    const ownerCatKey = ownerCatLi ? deriveCatKey(ownerCatLi) : null;
-    if (`${getProjectId()}:${ownerCatKey}` !== catKey) return;
+    if (!ownerCatLi || buildCatKey(ownerCatLi) !== catKey) return;
     if (state[key]) li.dataset.crmMonthHidden = '1';
     else delete li.dataset.crmMonthHidden;
   });
-  scheduleGroupingTick();     // 异步幂等校正（防止任何 DOM 状态漂移）
+  scheduleGroupingTick();  // 异步幂等校正（同源 catKey，结果与即时写入一致，不会反转）
 }
 ```
 
