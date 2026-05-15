@@ -3,7 +3,7 @@
   "name": "Cross Request Master",
   "short_name": "CrossRequest",
   "description": "YApi 跨域请求扩展 - 开发者工具",
-  "version": "4.5.18",
+  "version": "4.5.19",
   "author": "leeguooooo",
   "homepage_url": "https://github.com/leeguooooo/cross-request-master",
   "action": {
@@ -21,8 +21,13 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "permissions": ["storage", "tabs"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -39,13 +44,21 @@
         "src/helpers/response-handler.js",
         "index.js"
       ],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["src/helpers/yapi-doc-immersive.js", "content-script.js"],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "src/helpers/yapi-doc-immersive.js",
+        "content-script.js"
+      ],
       "all_frames": true,
       "run_at": "document_start"
     }
