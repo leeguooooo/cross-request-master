@@ -233,3 +233,6 @@ pnpm format
 - 测试指南：`docs/TESTING.md`
 - 技术路线图：`docs/ROADMAP.md`
 - YApi 插件（Cursor / Claude Code）：`docs/yapi-plugin/README.md`
+---
+
+> Built by **leeguooooo** — field notes on AI agents, reverse engineering & Cloudflare Workers at **[blog.misonote.com](https://blog.misonote.com)** · follow on **[X @leeguooooo](https://x.com/leeguooooo)**
