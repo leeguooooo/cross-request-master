@@ -1794,7 +1794,7 @@ yapi login --base-url=${baseUrl} --browser`;
     // ===== 沉浸式文档查看模式 =====
     const IMMERSIVE_BTN_ID = 'crm-exit-immersive';
     const IMMERSIVE_CLASS = 'crm-doc-immersive';
-    const immersiveCache = new Map();      // apiId -> 'yes' | 'no' | 'exitedByUser'
+    const immersiveCache = new Map(); // apiId -> 'yes' | 'no' | 'exitedByUser'
     const immersiveInflight = new Set();
 
     const tagSectionsIfPresent = () => {
@@ -1892,10 +1892,18 @@ yapi login --base-url=${baseUrl} --browser`;
     let groupingObserver = null;
 
     const getCollapseState = () => {
-      try { return JSON.parse(localStorage.getItem(GROUPING_LS_KEY) || '{}'); } catch (_e) { return {}; }
+      try {
+        return JSON.parse(localStorage.getItem(GROUPING_LS_KEY) || '{}');
+      } catch (_e) {
+        return {};
+      }
     };
     const setCollapseState = (state) => {
-      try { localStorage.setItem(GROUPING_LS_KEY, JSON.stringify(state)); } catch (_e) { /* quota / disabled */ }
+      try {
+        localStorage.setItem(GROUPING_LS_KEY, JSON.stringify(state));
+      } catch (_e) {
+        /* quota / disabled */
+      }
     };
 
     const getProjectId = () => (location.pathname.match(/\/project\/(\d+)\//) || [])[1] || '';
@@ -1918,14 +1926,18 @@ yapi login --base-url=${baseUrl} --browser`;
       const em = CSS.escape(month);
       document
         .querySelectorAll(`.crm-month-header[data-crm-cat-key="${ek}"][data-crm-month="${em}"]`)
-        .forEach((h) => { h.dataset.crmCollapsed = String(state[key]); });
+        .forEach((h) => {
+          h.dataset.crmCollapsed = String(state[key]);
+        });
       // :not(.crm-month-header) 排除 header 自身（header 也有 data-crm-month）
-      document.querySelectorAll(`li[data-crm-month="${em}"]:not(.crm-month-header)`).forEach((li) => {
-        const ownerCatLi = li.closest('li.interface-item-nav');
-        if (!ownerCatLi || buildCatKey(ownerCatLi) !== catKey) return;
-        if (state[key]) li.dataset.crmMonthHidden = '1';
-        else delete li.dataset.crmMonthHidden;
-      });
+      document
+        .querySelectorAll(`li[data-crm-month="${em}"]:not(.crm-month-header)`)
+        .forEach((li) => {
+          const ownerCatLi = li.closest('li.interface-item-nav');
+          if (!ownerCatLi || buildCatKey(ownerCatLi) !== catKey) return;
+          if (state[key]) li.dataset.crmMonthHidden = '1';
+          else delete li.dataset.crmMonthHidden;
+        });
       scheduleGroupingTick();
     };
 
@@ -1934,7 +1946,7 @@ yapi login --base-url=${baseUrl} --browser`;
       if (!ns) return;
       // 过滤出真接口 li（排除已注入的 month-header）
       const allLis = [...catUl.children].filter(
-        (li) => li.tagName === 'LI' && !li.classList.contains('crm-month-header'),
+        (li) => li.tagName === 'LI' && !li.classList.contains('crm-month-header')
       );
       if (allLis.length < ns.GROUPING_MIN_INTERFACES) {
         [...catUl.querySelectorAll('.crm-month-header')].forEach((h) => h.remove());
@@ -1949,7 +1961,7 @@ yapi login --base-url=${baseUrl} --browser`;
         li,
         title: (
           li.querySelector('.ant-tree-title, .ant-tree-node-content-wrapper')?.textContent || ''
-        ).trim(),
+        ).trim()
       }));
       const groups = ns.groupByMonth(items);
       const collapseState = getCollapseState();
@@ -2013,7 +2025,11 @@ yapi login --base-url=${baseUrl} --browser`;
       if (groupingDebounceTimer) return;
       groupingDebounceTimer = setTimeout(() => {
         groupingDebounceTimer = null;
-        try { processAllExpandedCats(); } catch (_e) { /* sink */ }
+        try {
+          processAllExpandedCats();
+        } catch (_e) {
+          /* sink */
+        }
       }, GROUPING_DEBOUNCE_MS);
     };
 

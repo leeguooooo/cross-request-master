@@ -21,13 +21,8 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "permissions": [
-    "storage",
-    "tabs"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },
@@ -44,17 +39,12 @@
         "src/helpers/response-handler.js",
         "index.js"
       ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "matches": ["<all_urls>"]
     }
   ],
   "content_scripts": [
     {
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
+      "matches": ["http://*/*", "https://*/*"],
       "js": [
         "src/helpers/yapi-doc-immersive.js",
         "src/helpers/yapi-menu-grouping.js",
