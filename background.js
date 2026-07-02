@@ -267,7 +267,7 @@ async function handleCrossOriginRequest(request) {
 
   // 添加请求体（如果有）
   if (requestBody && method.toLowerCase() !== 'get' && method.toLowerCase() !== 'head') {
-    const isPlainObject = (val) => Object.prototype.toString.call(val) === '[object Object]';
+    const isPlainObject = (val) => Object.prototype.toString.call(val) === '[object Object]' || Object.prototype.toString.call(val) === '[object Array]';
 
     if (isPlainObject(requestBody) && !(requestBody instanceof FormData)) {
       // 检查 Content-Type 以决定如何序列化 body
