@@ -32,6 +32,18 @@ describe('serializeRequestBody', () => {
     });
   });
 
+  test('matches form content types case-insensitively', () => {
+    expect(
+      serializeRequestBody(
+        { a: '1' },
+        'Application/X-Www-Form-Urlencoded; Charset=UTF-8'
+      )
+    ).toEqual({
+      body: 'a=1',
+      contentType: 'Application/X-Www-Form-Urlencoded; Charset=UTF-8'
+    });
+  });
+
   test('serializes a plain object as JSON by default', () => {
     expect(serializeRequestBody({ a: '1' }, '')).toEqual({
       body: '{"a":"1"}',

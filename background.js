@@ -112,18 +112,19 @@ if (!sanitizeRequestHeaders) {
 if (!serializeRequestBody) {
   serializeRequestBody = function (body, contentType = '') {
     const normalizedContentType = String(contentType || '');
+    const comparableContentType = normalizedContentType.toLowerCase();
 
     if (Array.isArray(body)) {
       return {
         body: JSON.stringify(body),
-        contentType: normalizedContentType.toLowerCase().includes('application/json')
+        contentType: comparableContentType.includes('application/json')
           ? normalizedContentType
           : 'application/json'
       };
     }
 
     if (Object.prototype.toString.call(body) === '[object Object]') {
-      if (normalizedContentType.includes('application/x-www-form-urlencoded')) {
+      if (comparableContentType.includes('application/x-www-form-urlencoded')) {
         return {
           body: new URLSearchParams(body).toString(),
           contentType: normalizedContentType
