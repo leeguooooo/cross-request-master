@@ -2,16 +2,21 @@
 
 let safeLogResponse = null;
 let sanitizeRequestHeaders = null;
+let serializeRequestBody = null;
 
 try {
   /* global importScripts */
   importScripts('src/helpers/logger.js');
   importScripts('src/helpers/request-headers.js');
+  importScripts('src/helpers/request-body.js');
   if (self.CrossRequestHelpers && self.CrossRequestHelpers.safeLogResponse) {
     safeLogResponse = self.CrossRequestHelpers.safeLogResponse;
   }
   if (self.CrossRequestHelpers && self.CrossRequestHelpers.sanitizeRequestHeaders) {
     sanitizeRequestHeaders = self.CrossRequestHelpers.sanitizeRequestHeaders;
+  }
+  if (self.CrossRequestHelpers && self.CrossRequestHelpers.serializeRequestBody) {
+    serializeRequestBody = self.CrossRequestHelpers.serializeRequestBody;
   }
 } catch (helperError) {
   console.warn('[Background] safeLogResponse helper 加载失败:', helperError);
@@ -101,6 +106,38 @@ if (!sanitizeRequestHeaders) {
     });
 
     return { sanitizedHeaders, droppedHeaders };
+  };
+}
+
+if (!serializeRequestBody) {
+  serializeRequestBody = function (body, contentType = '') {
+    const normalizedContentType = String(contentType || '');
+    const comparableContentType = normalizedContentType.toLowerCase();
+
+    if (Array.isArray(body)) {
+      return {
+        body: JSON.stringify(body),
+        contentType: comparableContentType.includes('application/json')
+          ? normalizedContentType
+          : 'application/json'
+      };
+    }
+
+    if (Object.prototype.toString.call(body) === '[object Object]') {
+      if (comparableContentType.includes('application/x-www-form-urlencoded')) {
+        return {
+          body: new URLSearchParams(body).toString(),
+          contentType: normalizedContentType
+        };
+      }
+
+      return {
+        body: JSON.stringify(body),
+        contentType: normalizedContentType || 'application/json'
+      };
+    }
+
+    return { body, contentType: normalizedContentType };
   };
 }
 
@@ -267,21 +304,14 @@ async function handleCrossOriginRequest(request) {
 
   // 添加请求体（如果有）
   if (requestBody && method.toLowerCase() !== 'get' && method.toLowerCase() !== 'head') {
-    const isPlainObject = (val) => Object.prototype.toString.call(val) === '[object Object]';
-
-    if (isPlainObject(requestBody) && !(requestBody instanceof FormData)) {
-      // 检查 Content-Type 以决定如何序列化 body
-      const contentType = fetchOptions.headers.get('Content-Type') || '';
-
-      if (contentType.includes('application/x-www-form-urlencoded')) {
-        // 对于 form-urlencoded，使用 URLSearchParams
-        fetchOptions.body = new URLSearchParams(requestBody).toString();
-      } else {
-        // 默认使用 JSON
-        fetchOptions.body = JSON.stringify(requestBody);
-        if (!fetchOptions.headers.has('Content-Type')) {
-          fetchOptions.headers.set('Content-Type', 'application/json');
-        }
+    if (typeof requestBody === 'object' && !(requestBody instanceof FormData)) {
+      const serialized = serializeRequestBody(
+        requestBody,
+        fetchOptions.headers.get('Content-Type') || ''
+      );
+      fetchOptions.body = serialized.body;
+      if (serialized.contentType) {
+        fetchOptions.headers.set('Content-Type', serialized.contentType);
       }
     } else {
       fetchOptions.body = requestBody;
