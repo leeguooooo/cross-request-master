@@ -75,7 +75,7 @@ test('installs yapi automatically when missing', async () => {
       error.stderr = 'missing';
       throw error;
     }
-    if (key === 'npm install -g @leeguoo/yapi-mcp') {
+    if (key === 'npm install -g @leeguoo/yapi-mcp@0.6.1') {
       return { code: 0, stdout: 'installed', stderr: '' };
     }
     if (key === 'which yapi' && calls.filter((call) => call === 'which yapi').length === 2) {
@@ -94,7 +94,7 @@ test('installs yapi automatically when missing', async () => {
     'which node',
     'which npm',
     'which yapi',
-    'npm install -g @leeguoo/yapi-mcp',
+    'npm install -g @leeguoo/yapi-mcp@0.6.1',
     'which yapi',
   ]);
 });
@@ -104,7 +104,7 @@ test('returns install failure when npm installation fails', async () => {
     'which node': { ok: true, stdout: '/usr/bin/node\n' },
     'which npm': { ok: true, stdout: '/usr/bin/npm\n' },
     'which yapi': { ok: false, stderr: 'missing' },
-    'npm install -g @leeguoo/yapi-mcp': { ok: false, stderr: 'EACCES' },
+    'npm install -g @leeguoo/yapi-mcp@0.6.1': { ok: false, stderr: 'EACCES' },
   });
 
   const result = await ensureYapi({ exec });

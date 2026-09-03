@@ -23,7 +23,7 @@ yapi login --base-url=https://your-yapi-domain.com --browser
 Compatibility path when the user also wants to write `~/.yapi/config.toml` in one step:
 
 ```bash
-npm install -g @leeguoo/yapi-mcp
+npm install -g @leeguoo/yapi-mcp@0.6.1
 yapi install-skill --yapi-base-url=https://your-yapi-domain.com --yapi-auth-mode=global --yapi-email=YOUR_EMAIL --force
 ```
 
@@ -36,16 +36,16 @@ Prefer `yapi` command. If missing, fallback to one-shot npx without forcing glob
 ```bash
 yapi -h
 # fallback:
-npx -y -p @leeguoo/yapi-mcp yapi -h
+npx -y -p @leeguoo/yapi-mcp@0.6.1 yapi -h
 ```
 
-In command examples below, `yapi` can be replaced by `npx -y -p @leeguoo/yapi-mcp yapi`.
+In command examples below, `yapi` can be replaced by `npx -y -p @leeguoo/yapi-mcp@0.6.1 yapi`.
 When CLI version is newer than the installed skill snapshot, `yapi` warns and asks to rerun:
 
 ```bash
 npx skills add leeguooooo/cross-request-master -y -g
 # compatibility:
-npx -y -p @leeguoo/yapi-mcp yapi install-skill --force
+npx -y -p @leeguoo/yapi-mcp@0.6.1 yapi install-skill --force
 ```
 
 ## Setup / auth bootstrap
