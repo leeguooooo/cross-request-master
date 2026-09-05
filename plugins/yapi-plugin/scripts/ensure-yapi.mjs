@@ -60,11 +60,11 @@ export async function ensureYapi({ exec = defaultExec } = {}) {
   }
 
   try {
-    await exec('npm', ['install', '-g', '@leeguoo/yapi-mcp']);
+    await exec('npm', ['install', '-g', '@leeguoo/yapi-mcp@0.6.1']);
   } catch (error) {
     return createCommandError(
       'CLI_INSTALL_FAILED',
-      'Unable to install @leeguoo/yapi-mcp automatically with npm.',
+      'Unable to install @leeguoo/yapi-mcp@0.6.1 automatically with npm.',
       {
         stderr: error.stderr ?? '',
       }
